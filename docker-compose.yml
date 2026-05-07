@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    container_name: tech2_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: *Soporte01
+      POSTGRES_DB: tech_two_solution_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://*Soporte01@db:5432/tech_two_solution_db
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+
+volumes:
+  pgdata:
