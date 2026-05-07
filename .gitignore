@@ -1,0 +1,14 @@
+# Dependencias
+node_modules/
+dist/
+.next/
+
+# Variables de entorno (Seguridad)
+.env
+
+# Base de datos local (si Docker crea una carpeta de datos)
+pgdata/
+
+# Logs y otros
+npm-debug.log*
+.DS_Store

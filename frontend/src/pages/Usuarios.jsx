@@ -1,0 +1,325 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  UserPlus, Trash2, ArrowLeft, 
+  CheckCircle, X, Edit2, KeyRound, Power, Shield, Lock
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext'; // Importamos Auth
+
+const Usuarios = () => {
+  const navigate = useNavigate();
+  const { usuario } = useAuth(); // Obtenemos el usuario logueado
+  
+  // 1. ESTADOS PRINCIPALES
+  const [showModal, setShowModal] = useState(false);
+  const [editandoId, setEditandoId] = useState(null); 
+  const [isSaving, setIsSaving] = useState(false);
+  const [toast, setToast] = useState({ show: false, mensaje: "" });
+
+  // --- CONTROL DE SEGURIDAD NIVEL 0 ---
+  // Si el usuario no es admin, bloqueamos el renderizado inmediatamente
+  const esAdmin = usuario?.rol === 'admin';
+
+  // 2. CARGAR USUARIOS
+  const [usuarios, setUsuarios] = useState(() => {  
+    const saved = localStorage.getItem('posfactura_usuarios_list');
+    if (saved) return JSON.parse(saved);
+    
+    const semilla = [
+      { id: 1, nombre: 'Admin Junior', username: 'admin', email: 'admin@techtwosolution.com', password: '1234', rol: 'admin', estado: 'activo' }
+    ];
+    localStorage.setItem('posfactura_usuarios_list', JSON.stringify(semilla));
+    return semilla;
+  });
+
+      const getRolesDinámicos = () => {
+        const savedRoles = localStorage.getItem('posfactura_roles_config');
+        if (savedRoles) {
+          const config = JSON.parse(savedRoles);
+          return Object.keys(config).map(key => ({
+            id: key,
+            nombre: key.charAt(0).toUpperCase() + key.slice(1)
+          }));
+        }
+        return [
+          { id: 'admin', nombre: 'Administrador' },
+          { id: 'vendedor', nombre: 'Vendedor' },
+          { id: 'cajero', nombre: 'Cajero' }
+        ];
+      };
+      
+      const rolesDinámicos = getRolesDinámicos();
+
+  const [nuevoUsuario, setNuevoUsuario] = useState({ 
+    nombre: '', username: '', email: '', password: '', rol: 'vendedor', estado: 'activo'
+  });
+
+  useEffect(() => {
+    if (esAdmin) {
+      localStorage.setItem('posfactura_usuarios_list', JSON.stringify(usuarios));
+    }
+  }, [usuarios, esAdmin]);
+
+  // Si no es admin, mostramos pantalla de error de seguridad
+  if (!esAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] animate-in fade-in zoom-in duration-300">
+        <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl border border-slate-200 text-center max-w-lg">
+          <div className="h-24 w-24 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
+            <Shield size={48} strokeWidth={2.5} />
+          </div>
+          <h2 className="text-3xl font-black text-slate-800 uppercase italic tracking-tighter">Acceso Denegado</h2>
+          <p className="text-slate-500 font-bold mt-4 leading-relaxed">
+            Esta sección contiene datos sensibles de seguridad. Solo el personal de administración puede gestionar cuentas de acceso.
+          </p>
+          <button 
+            onClick={() => navigate('/')}
+            className="mt-8 flex items-center gap-2 bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-brand transition-all mx-auto"
+          >
+            <ArrowLeft size={16} /> Volver al Inicio
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const mostrarToast = (mensaje) => {
+    setToast({ show: true, mensaje });
+    setTimeout(() => setToast({ show: false, mensaje: "" }), 3000);
+  };
+
+  const prepararEdicion = (user) => {
+    setEditandoId(user.id);
+    setNuevoUsuario({
+      nombre: user.nombre,
+      username: user.username,
+      email: user.email,
+      password: user.password,
+      rol: user.rol,
+      estado: user.estado || 'activo'
+    });
+    setShowModal(true);
+  };
+
+  const toggleEstadoRapido = (id) => {
+    const listaActualizada = usuarios.map(u => {
+      if (u.id === id) {
+        if (u.username === 'admin') return u; 
+        const nuevoEstado = u.estado === 'activo' ? 'inactivo' : 'activo';
+        mostrarToast(`Usuario ${nuevoEstado === 'activo' ? 'activado' : 'suspendido'}`);
+        return { ...u, estado: nuevoEstado };
+      }
+      return u;
+    });
+    setUsuarios(listaActualizada);
+  };
+
+  const guardarUsuario = (e) => {
+    e.preventDefault();
+    setIsSaving(true);
+    
+    setTimeout(() => {
+      if (editandoId) {
+        const listaActualizada = usuarios.map(u => 
+          u.id === editandoId ? { ...nuevoUsuario, id: editandoId } : u
+        );
+        setUsuarios(listaActualizada);
+        mostrarToast("Usuario actualizado correctamente");
+      } else {
+        const usuarioCreado = { 
+          ...nuevoUsuario, 
+          id: Date.now(), 
+          username: nuevoUsuario.email.split('@')[0].toLowerCase() 
+        };
+        setUsuarios([...usuarios, usuarioCreado]);
+        mostrarToast(`Acceso creado para @${usuarioCreado.username}`);
+      }
+      setIsSaving(false);
+      setShowModal(false);
+      setEditandoId(null);
+      setNuevoUsuario({ nombre: '', username: '', email: '', password: '', rol: 'vendedor', estado: 'activo' });
+    }, 600);
+  };
+
+  return (
+    <div className="space-y-6 relative animate-in fade-in duration-500">
+      {toast.show && (
+        <div className="fixed top-10 right-10 bg-slate-900 text-white px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 z-[100] border border-slate-700 animate-in slide-in-from-right-5">
+          <div className="h-8 w-8 bg-emerald-500 rounded-full flex items-center justify-center">
+            <CheckCircle size={18} className="text-white" />
+          </div>
+          <span className="font-black text-xs uppercase tracking-widest">{toast.mensaje}</span>
+        </div>
+      )}
+
+      <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <button onClick={() => navigate('/')} className="h-14 w-14 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all text-slate-400 shadow-sm flex items-center justify-center">
+            <ArrowLeft size={24} />
+          </button>
+          <div>
+            <h1 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase leading-none">Cuentas de Acceso</h1>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
+              <Shield size={12} className="text-brand" /> Control de Seguridad 
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex gap-3">
+          <button 
+            onClick={() => navigate('/roles')} 
+            className="bg-white text-slate-600 border border-slate-200 px-6 py-4 rounded-[1.5rem] font-black flex items-center gap-3 hover:bg-slate-50 transition-all text-xs uppercase tracking-widest shadow-sm"
+          >
+            <Shield size={18} className="text-slate-400" /> Roles
+          </button>
+          <button 
+            onClick={() => { setEditandoId(null); setNuevoUsuario({ nombre: '', username: '', email: '', password: '', rol: 'vendedor', estado: 'activo' }); setShowModal(true); }} 
+            className="bg-brand text-white px-8 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 text-xs uppercase tracking-widest"
+          >
+            <UserPlus size={18} /> Nuevo Registro
+          </button>
+        </div>
+      </header>
+
+      <div className="bg-white border border-slate-200 rounded-[3rem] overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador</th>
+                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Nivel / Rol</th>
+                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Estado</th>
+                <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 font-bold">
+              {usuarios.map(user => (
+                <tr key={user.id} className={`hover:bg-slate-50/30 transition-colors group ${user.estado === 'inactivo' ? 'opacity-50' : ''}`}>
+                  <td className="px-10 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-black text-sm border-2 transition-all ${user.estado === 'activo' ? 'bg-brand/5 border-brand/10 text-brand group-hover:bg-brand group-hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
+                        {user.nombre.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-800 text-sm italic uppercase tracking-tight">{user.nombre}</p>
+                        <p className="text-[10px] text-slate-400 font-bold tracking-widest lowercase">{user.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-10 py-6">
+                    <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                      user.rol === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'
+                    }`}>
+                      {user.rol}
+                    </span>
+                  </td>
+                  <td className="px-10 py-6">
+                    <button 
+                      onClick={() => toggleEstadoRapido(user.id)}
+                      className={`mx-auto flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${
+                        user.estado === 'activo' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'
+                      }`}
+                    >
+                      <div className={`h-2 w-2 rounded-full ${user.estado === 'activo' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                      <span className="text-[9px] font-black uppercase tracking-widest">{user.estado}</span>
+                    </button>
+                  </td>
+                  <td className="px-10 py-6 text-right">
+                    <div className="flex items-center justify-end gap-3 text-slate-400">
+                      <button onClick={() => prepararEdicion(user)} className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-indigo-50 hover:text-brand transition-all">
+                         <Edit2 size={18} />
+                      </button>
+                      {user.username !== 'admin' && (
+                        <button onClick={() => setUsuarios(usuarios.filter(u => u.id !== user.id))} className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-red-50 hover:text-red-500 transition-all">
+                          <Trash2 size={18} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[150] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3.5rem] p-12 max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-white/20">
+            <div className="flex justify-between items-center mb-10">
+              <div>
+                <h2 className="text-3xl font-black text-slate-800 italic uppercase tracking-tighter">
+                  {editandoId ? 'Editar Perfil' : 'Alta de Usuario'}
+                </h2>
+                <div className="h-1.5 w-12 bg-brand rounded-full mt-2"></div>
+              </div>
+              <button onClick={() => setShowModal(false)} className="h-12 w-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-all"><X size={24} /></button>
+            </div>
+
+            <form onSubmit={guardarUsuario} className="space-y-5">
+              <div className="grid grid-cols-1 gap-5">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nombre Completo</label>
+                  <input required value={nuevoUsuario.nombre} onChange={e => setNuevoUsuario({...nuevoUsuario, nombre: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" placeholder="Ej. Juan Perez" />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Email de Acceso</label>
+                  <input required type="email" value={nuevoUsuario.email} onChange={e => setNuevoUsuario({...nuevoUsuario, email: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" placeholder="usuario@one-red.com" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Contraseña</label>
+                    <div className="relative">
+                      <input required type="password" value={nuevoUsuario.password} onChange={e => setNuevoUsuario({...nuevoUsuario, password: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" />
+                      <KeyRound className="absolute right-5 top-5 text-slate-300" size={18} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nivel (Rol)</label>
+                    <select value={nuevoUsuario.rol} onChange={e => setNuevoUsuario({...nuevoUsuario, rol: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-black text-[10px] uppercase text-slate-700 bg-white transition-all cursor-pointer">
+                      {rolesDinámicos.map(rol => (
+                        <option key={rol.id} value={rol.id}>{rol.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 mt-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-2xl ${nuevoUsuario.estado === 'activo' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
+                      <Power size={20} />
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-black text-slate-800 uppercase tracking-widest">Estatus de Cuenta</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase italic">¿Puede entrar al sistema?</span>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setNuevoUsuario({...nuevoUsuario, estado: nuevoUsuario.estado === 'activo' ? 'inactivo' : 'activo'})}
+                    className={`w-14 h-7 rounded-full transition-all relative shadow-inner ${nuevoUsuario.estado === 'activo' ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                  >
+                    <div className={`absolute top-1 bg-white h-5 w-5 rounded-full shadow-md transition-all ${nuevoUsuario.estado === 'activo' ? 'right-1' : 'left-1'}`}></div>
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" disabled={isSaving} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black shadow-2xl hover:bg-brand transition-all uppercase text-xs tracking-[0.3em] mt-8 active:scale-95 flex items-center justify-center gap-3">
+                {isSaving ? (
+                  <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  editandoId ? 'Actualizar Credenciales' : 'Habilitar Nuevo Usuario'
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Usuarios;

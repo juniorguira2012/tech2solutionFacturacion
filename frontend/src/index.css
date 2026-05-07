@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  /* Tus colores personalizados para el sistema */
+  --color-brand: #4f46e5;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  
+  --radius-lg: 0.75rem;
+}
+
+/* Tailwind v4 ya incluye las directivas base, 
+   no hace falta poner @tailwind base/components/utilities 
+   si ya tienes el @import "tailwindcss"
+*/
+
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Forzamos esquema claro para un sistema administrativo, 
+     a menos que luego quieras implementar modo oscuro */
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  /* El fondo gris suave que ayuda a resaltar las tarjetas blancas */
+  @apply bg-slate-50 text-slate-900;
+}
+
+/* Quitamos los estilos de Vite que centran el contenido */
+#root {
+  width: 100%;
+}
