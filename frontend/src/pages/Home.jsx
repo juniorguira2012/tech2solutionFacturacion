@@ -40,7 +40,7 @@ const Home = () => {
       return d1.getFullYear() === d2.getFullYear() &&
              d1.getMonth() === d2.getMonth() &&
              d1.getDate() === d2.getDate();
-    } catch (e) { return false; }
+    } catch { return false; }
   };
 
   // KPI: VENTAS DEL DÍA (Personalizado: Si es admin ve todo, si es cajero solo lo suyo)

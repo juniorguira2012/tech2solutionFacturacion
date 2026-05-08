@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
 const VentasContext = createContext();
@@ -7,7 +8,7 @@ export const VentasProvider = ({ children }) => {
     try {
         const saved = localStorage.getItem('posfacura_ventas');
         return (saved && saved !== "undefined") ? JSON.parse(saved) : [];
-    } catch (error) {
+    } catch {
         return [];
     }
   });

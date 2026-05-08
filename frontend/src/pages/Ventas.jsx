@@ -1,5 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable react-hooks/purity */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Search as SearchIcon, Plus as PlusIcon, Minus as MinusIcon, 
@@ -90,7 +88,6 @@ const Ventas = () => {
 
   try {
     // 3. Preparar datos dinámicos desde configuración
-    const itbisConfig = Number(localStorage.getItem('posfactura_itbis')) || 18;
     const clienteActual = clientes.find(c => c.id.toString() === clienteId.toString()) || { nombre: "Consumidor Final", rnc: "" };
 
     const nuevaVenta = { 
@@ -162,7 +159,6 @@ const Ventas = () => {
   // --- FILTRADO DE CLIENTES (CORREGIDO) ---
   useEffect(() => {
   if (!busquedaCliente.trim()) {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setResultadosClientes([]);
     return;
   }
@@ -179,7 +175,7 @@ const Ventas = () => {
       const consumidor = clientes.find(c => c.nombre.toLowerCase().includes("consumidor"));
       setClienteId(consumidor ? consumidor.id.toString() : clientes[0].id.toString());
     }
-  }, [clientes]);
+  }, [clientes, clienteId]);
 
   // --- MANEJO DE FACTURAS PAUSADAS ---
   const [facturasAbiertas, setFacturasAbiertas] = useState(() => {

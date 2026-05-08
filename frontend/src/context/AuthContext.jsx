@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const AuthContext = createContext();
@@ -66,7 +67,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       return { success: false, message: 'Credenciales incorrectas.' };
-    } catch (e) {
+    } catch {
       return { success: false, message: 'Error técnico en el login.' };
     }
   }, []);

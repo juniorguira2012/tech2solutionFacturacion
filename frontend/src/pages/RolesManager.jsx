@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Shield, Save, CheckCircle, Lock, Eye, Edit3, RotateCcw, ShieldCheck, AlertCircle } from 'lucide-react';
 
 const RolesManager = () => {

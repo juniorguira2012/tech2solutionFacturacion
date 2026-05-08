@@ -1,24 +1,26 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductsModule } from './products/products.module';
 
-
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'todobien777', // La que reseteamos en WSL
-      database: 'tech_two_solution_db',
+      host: process.env.DATABASE_HOST || 'localhost',
+      port: parseInt(process.env.DATABASE_PORT || '5432', 10),
+      username: process.env.DATABASE_USER || 'postgres',
+      password: process.env.DATABASE_PASSWORD || 'postgres',
+      database: process.env.DATABASE_NAME || 'tech_two_solution_db',
       autoLoadEntities: true,
-      synchronize: true, // Esto creará las tablas automáticamente al guardar cambios
+      synchronize: process.env.NODE_ENV !== 'production', // Deshabilitar en producción
     }),
     ProductsModule,
   ],
 })
 export class AppModule {}
-

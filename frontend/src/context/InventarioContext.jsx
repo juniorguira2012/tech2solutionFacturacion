@@ -1,16 +1,40 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 
 const InventarioContext = createContext();
 
 export const InventarioProvider = ({ children }) => {
   const [productos, setProductos] = useState([]);
+  const { usuario } = useAuth();
   const API_URL = 'http://localhost:3000/products';
+
+  const getInventoryPermission = () => {
+    if (usuario?.rol === 'admin') return 'full';
+
+    try {
+      const savedRoles = localStorage.getItem('posfactura_roles_config');
+      const config = savedRoles ? JSON.parse(savedRoles) : {};
+      return config[usuario?.rol]?.modules?.inventario || 'none';
+    } catch {
+      return 'none';
+    }
+  };
+
+  const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'x-user-role': usuario?.rol || '',
+    'x-inventory-permission': getInventoryPermission(),
+  });
 
   // 1. Cargar productos desde el Backend al iniciar
   useEffect(() => {
     fetch(API_URL)
-      .then(res => res.json())
-      .then(data => setProductos(data))
+      .then(res => {
+        if (!res.ok) throw new Error('No se pudo cargar el inventario');
+        return res.json();
+      })
+      .then(data => setProductos(Array.isArray(data) ? data : []))
       .catch(err => console.error("Error cargando productos:", err));
   }, []);
 
@@ -18,11 +42,11 @@ export const InventarioProvider = ({ children }) => {
   const agregarProducto = async (nuevoProducto) => {
   try {
     // ELIMINAMOS el ID para que Postgres asigne el suyo (1, 2, 3...)
-    const { id, ...datosParaEnviar } = nuevoProducto; 
+    const { id: _id, ...datosParaEnviar } = nuevoProducto; 
 
     const res = await fetch('http://localhost:3000/products', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         ...datosParaEnviar,
         precio: Number(datosParaEnviar.precio), // Forzamos que sea número
@@ -38,19 +62,28 @@ export const InventarioProvider = ({ children }) => {
 
     const productoGuardado = await res.json();
     setProductos(prev => [...prev, productoGuardado]);
+    return true;
   } catch (error) {
     console.error("Error en agregarProducto:", error);
     alert("No se pudo guardar el producto. Revisa la consola del backend.");
+    return false;
   }
 };
 
   // 3. Eliminar del Backend
   const eliminarProducto = async (id) => {
     try {
-      await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('No se pudo eliminar el producto');
       setProductos(prev => prev.filter(p => p.id !== id));
+      return true;
     } catch (err) {
       console.error("No se pudo eliminar:", err);
+      alert("No se pudo eliminar el producto.");
+      return false;
     }
   };
 
@@ -59,13 +92,21 @@ export const InventarioProvider = ({ children }) => {
     try {
       const res = await fetch(`${API_URL}/${editado.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(editado)
       });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        console.error("Error del servidor:", errorData);
+        throw new Error('No se pudo actualizar el producto');
+      }
       const data = await res.json();
       setProductos(prev => prev.map(p => p.id === data.id ? data : p));
+      return true;
     } catch (err) {
       console.error("No se pudo actualizar:", err);
+      alert("No se pudo actualizar el producto.");
+      return false;
     }
   };
 

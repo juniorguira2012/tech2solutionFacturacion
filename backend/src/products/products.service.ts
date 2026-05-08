@@ -21,14 +21,15 @@ export class ProductsService {
   // Obtener todos los productos (Lo que usará tu tabla de Inventario)
   async findAll() {
     return await this.productRepository.find({
-      order: { id: 'DESC' } // Los más nuevos primero
+      order: { id: 'DESC' }, // Los más nuevos primero
     });
   }
 
   // Obtener uno solo
   async findOne(id: number) {
     const producto = await this.productRepository.findOneBy({ id });
-    if (!producto) throw new NotFoundException(`Producto con ID ${id} no encontrado`);
+    if (!producto)
+      throw new NotFoundException(`Producto con ID ${id} no encontrado`);
     return producto;
   }
 
@@ -38,7 +39,8 @@ export class ProductsService {
       id: id,
       ...updateProductDto,
     });
-    if (!producto) throw new NotFoundException(`No se pudo actualizar: ID ${id} no existe`);
+    if (!producto)
+      throw new NotFoundException(`No se pudo actualizar: ID ${id} no existe`);
     return await this.productRepository.save(producto);
   }
 

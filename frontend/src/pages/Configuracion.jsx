@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { 
   Printer, Percent, Database, Save, 
   Download, Upload, ArrowRight, Users, 
@@ -10,16 +10,6 @@ import { useAuth } from '../context/AuthContext';
 const Configuracion = () => {
   const navigate = useNavigate();
   const { usuario } = useAuth();
-
-  // 1. CARGAR PERMISOS (Sin bloqueo total, para permitir ajustes básicos)
-  const permisos = useMemo(() => {
-    const savedRoles = localStorage.getItem('posfactura_roles_config');
-    if (savedRoles && usuario) {
-      const config = JSON.parse(savedRoles);
-      return config[usuario.rol]?.modules || {};
-    }
-    return {};
-  }, [usuario]);
 
   // --- ESTADOS ---
   const [itbis, setItbis] = useState(localStorage.getItem('posfactura_itbis') || 18);

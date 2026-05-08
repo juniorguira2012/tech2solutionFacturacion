@@ -79,7 +79,8 @@ const Clientes = () => {
     if (isEditing) {
       actualizarCliente(formData);
     } else {
-      agregarCliente({ ...formData, id: Date.now() });
+      const nextId = Math.max(0, ...clientes.map(c => Number(c.id) || 0)) + 1;
+      agregarCliente({ ...formData, id: nextId });
     }
     cerrarModal();
   };
