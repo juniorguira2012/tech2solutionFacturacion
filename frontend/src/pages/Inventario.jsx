@@ -3,9 +3,9 @@ import {
   Package, Search, Edit3, Trash2, Plus, X, 
   FileText, BarChart3, AlertTriangle, Lock,
   Warehouse, MapPin, Settings,
-  PlusCircle, MinusCircle, Tags, ArrowLeftRight,
+  PlusCircle, MinusCircle, Tags, ArrowLeftRight, CheckCircle,
   ClipboardList, Bell, Layers3, Image,
-  Ruler, Braces, Plug
+  Ruler, Braces, Plug, Upload, LayoutGrid, List
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import { useAuth } from '../context/AuthContext';
@@ -21,11 +21,27 @@ const Inventario = () => {
   } = useInventario();
   const { usuario } = useAuth();
 
+  const [toast, setToast] = useState({ show: false, mensaje: '', tipo: 'success' });
+  const mostrarToast = (mensaje, tipo = 'success') => {
+    setToast({ show: true, mensaje, tipo });
+    setTimeout(() => setToast({ show: false, mensaje: '', tipo: 'success' }), 3000);
+  };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
+  const [catFormData, setCatFormData] = useState({ nombre: '', color: '#4f46e5' });
   const [isEditing, setIsEditing] = useState(false);
   const [seccionActiva, setSeccionActiva] = useState(() => {
     return localStorage.getItem('posfactura_inventario_tab') || 'productos';
   });
+
+  const [vista, setVista] = useState(() => {
+    return localStorage.getItem('posfactura_inventario_vista') || 'grid';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('posfactura_inventario_vista', vista);
+  }, [vista]);
 
   useEffect(() => {
     localStorage.setItem('posfactura_inventario_tab', seccionActiva);
@@ -200,6 +216,20 @@ const Inventario = () => {
     if (guardado) cerrarModal();
   };
 
+  const guardarCategoria = (e) => {
+    e.preventDefault();
+    if (!catFormData.nombre.trim()) return;
+    
+    if (categorias.find(c => c.nombre.toLowerCase() === catFormData.nombre.toLowerCase())) {
+      mostrarToast("La categoría ya existe", "warning");
+      return;
+    }
+
+    setCategorias(prev => [...prev, catFormData]);
+    setIsCatModalOpen(false);
+    mostrarToast("Categoría creada con éxito");
+  };
+
   const abrirEditar = (prod) => {
     if (permisoInventario !== 'full') return;
     const campos = prod.camposPersonalizados || [];
@@ -362,6 +392,33 @@ const Inventario = () => {
                 </div>
 
                 <div className="flex gap-2">
+                  <div className="flex bg-slate-100 p-1 rounded-lg mr-2">
+                    <button 
+                      onClick={() => setVista('grid')}
+                      className={`p-1.5 rounded-md transition-all ${vista === 'grid' ? 'bg-white text-brand shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                      title="Vista de tarjetas"
+                    >
+                      <LayoutGrid size={16} />
+                    </button>
+                    <button 
+                      onClick={() => setVista('lista')}
+                      className={`p-1.5 rounded-md transition-all ${vista === 'lista' ? 'bg-white text-brand shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                      title="Vista de lista"
+                    >
+                      <List size={16} />
+                    </button>
+                  </div>
+
+                  {permisoInventario === 'full' && (
+                    <button 
+                      onClick={() => mostrarToast("Módulo de importación próximamente (Excel/CSV)", "warning")}
+                      title="Importar productos"
+                      className="h-9 w-9 flex items-center justify-center bg-amber-500 text-white rounded-lg font-black shadow-sm hover:bg-amber-600 transition-all active:scale-95"
+                    >
+                      <Upload size={16} />
+                    </button>
+                  )}
+
                   <button 
                     onClick={exportarAExcel}
                     title="Exportar productos filtrados"
@@ -445,10 +502,8 @@ const Inventario = () => {
                 </div>
                 <button 
                   onClick={() => {
-                    const nombre = prompt("Nombre de la nueva categoría:");
-                    if (nombre && !categorias.find(c => c.nombre === nombre)) {
-                      setCategorias(prev => [...prev, { nombre, color: '#4f46e5' }]);
-                    }
+                    setCatFormData({ nombre: '', color: '#4f46e5' });
+                    setIsCatModalOpen(true);
                   }}
                   className="flex items-center gap-2 bg-brand text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-indigo-600 transition-all active:scale-95"
                 >
@@ -519,7 +574,8 @@ const Inventario = () => {
           )}
 
           {!loading && productosFiltrados.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 p-3">
+            vista === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 p-3">
               {productosFiltrados.map(prod => {
                 const imagenProducto = obtenerImagenProducto(prod);
                 const stockActual = Number(prod.stock) || 0;
@@ -657,7 +713,141 @@ const Inventario = () => {
                 );
               })}
             </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 text-[9px] uppercase font-black tracking-widest italic">
+                    <tr>
+                      <th className="px-6 py-4">Producto</th>
+                      <th className="px-6 py-4">Categoría / Almacén</th>
+                      <th className="px-6 py-4 text-center">Stock</th>
+                      <th className="px-6 py-4 text-right">Precio</th>
+                      {permisoInventario === 'full' && <th className="px-6 py-4 text-right">Acciones</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {productosFiltrados.map(prod => {
+                      const stockActual = Number(prod.stock) || 0;
+                      const bajoStock = stockActual <= LOW_STOCK_THRESHOLD;
+                      const esServicio = prod.categoria === 'Servicios';
+                      const estaActivo = prod.isActive !== false;
+                      const colorCat = categorias.find(c => c.nombre === prod.categoria)?.color || '#e2e8f0';
+
+                      return (
+                        <tr key={prod.id} className={`hover:bg-slate-50/50 transition-colors ${!estaActivo ? 'bg-red-50/20' : ''}`}>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0">
+                                {obtenerImagenProducto(prod) ? (
+                                  <img src={obtenerImagenProducto(prod)} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center text-slate-300">
+                                    <Package size={16} />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-black text-slate-800 uppercase text-xs truncate">{prod.nombre}</p>
+                                <p className="text-[9px] text-slate-400 font-bold tracking-tight italic">#{prod.codigo || 'S/C'}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col gap-1">
+                              <span className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-600">
+                                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colorCat }}></div>
+                                {prod.categoria}
+                              </span>
+                              <span className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase">
+                                <Warehouse size={10} /> {prod.almacen}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ${
+                              bajoStock && !esServicio ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'
+                            }`}>
+                              {stockActual} {prod.unidadMedida}
+                              {bajoStock && !esServicio && <AlertTriangle size={10} />}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <p className="font-black text-slate-900 italic text-xs">RD$ {formatPrice(prod.precio)}</p>
+                          </td>
+                          {permisoInventario === 'full' && (
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex justify-end gap-1">
+                                <button 
+                                  onClick={() => abrirEditar(prod)} 
+                                  className="p-2 text-brand hover:bg-indigo-50 rounded-lg transition-all"
+                                >
+                                  <Edit3 size={16} />
+                                </button>
+                                {estaActivo ? (
+                                  <button 
+                                    onClick={() => { if (window.confirm('¿Eliminar?')) actualizarProducto({ ...prod, isActive: false }) }} 
+                                    className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-all"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                ) : (
+                                  <button onClick={() => actualizarProducto({ ...prod, isActive: true })} className="px-3 py-1 text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-all">Activar</button>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
           )}
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className={`fixed top-10 right-10 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-[200] border animate-in slide-in-from-right-5 ${
+          toast.tipo === 'success' ? 'bg-emerald-500 text-white border-emerald-400' : 
+          toast.tipo === 'warning' ? 'bg-amber-500 text-white border-amber-400' : 'bg-slate-900 text-white border-slate-700'
+        }`}>
+          {toast.tipo === 'success' ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
+          <span className="font-black text-[10px] uppercase tracking-widest">{toast.mensaje}</span>
+        </div>
+      )}
+
+      {/* Modal Nueva Categoría */}
+      {isCatModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300 border border-white/20">
+            <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter italic">Nueva Categoría</h2>
+              <button onClick={() => setIsCatModalOpen(false)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 shadow-sm transition-all"><X size={20} /></button>
+            </div>
+            <form onSubmit={guardarCategoria} className="p-8 space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nombre</label>
+                <input autoFocus required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white" placeholder="Ej. Accesorios"
+                  value={catFormData.nombre} onChange={e => setCatFormData({...catFormData, nombre: e.target.value})} />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Color Distintivo</label>
+                <div className="flex gap-3">
+                  <input type="color" className="h-14 w-14 rounded-2xl border border-slate-100 cursor-pointer p-1 bg-white"
+                    value={catFormData.color} onChange={e => setCatFormData({...catFormData, color: e.target.value})} />
+                  <input className="flex-1 p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-mono text-xs text-slate-500 uppercase"
+                    value={catFormData.color} onChange={e => setCatFormData({...catFormData, color: e.target.value})} />
+                </div>
+              </div>
+
+              <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-brand transition-all uppercase text-[10px] tracking-[0.2em] mt-4">
+                Crear Categoría
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
