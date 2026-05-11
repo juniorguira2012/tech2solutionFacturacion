@@ -18,6 +18,7 @@ import { ProductsModule } from './products/products.module';
       password: process.env.DATABASE_PASSWORD || 'postgres',
       database: process.env.DATABASE_NAME || 'tech_two_solution_db',
       autoLoadEntities: true,
+      logging: true, // <--- AÑADE ESTO para ver el SQL en la terminal
       synchronize: process.env.NODE_ENV !== 'production', // Deshabilitar en producción
     }),
     ProductsModule,

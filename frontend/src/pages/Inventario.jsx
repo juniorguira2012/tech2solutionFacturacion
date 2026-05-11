@@ -1,32 +1,124 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Package, Search, Edit3, Trash2, Plus, X, 
   FileText, BarChart3, AlertTriangle, Lock,
   Warehouse, MapPin, Settings,
-  PlusCircle, MinusCircle
+  PlusCircle, MinusCircle, Tags, ArrowLeftRight,
+  ClipboardList, Bell, Layers3, Image,
+  Ruler, Braces, Plug
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import { useAuth } from '../context/AuthContext';
 
 const Inventario = () => {
-  const { productos, agregarProducto, actualizarProducto, eliminarProducto } = useInventario();
+  const {
+    productos,
+    loading,
+    errorConexion,
+    agregarProducto,
+    actualizarProducto,
+    recargarInventario,
+  } = useInventario();
   const { usuario } = useAuth();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [seccionActiva, setSeccionActiva] = useState(() => {
+    return localStorage.getItem('posfactura_inventario_tab') || 'productos';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('posfactura_inventario_tab', seccionActiva);
+  }, [seccionActiva]);
+
+  const [filtroProducto, setFiltroProducto] = useState('todos');
   const [searchTerm, setSearchTerm] = useState("");
+  const [almacenFiltro, setAlmacenFiltro] = useState('todos');
+  const [ubicacionFiltro, setUbicacionFiltro] = useState('todas');
   const [camposPersonalizados, setCamposPersonalizados] = useState([]);
   const [nuevoCampo, setNuevoCampo] = useState({ nombre: '', valor: '' });
-  const [formErrors, setFormErrors] = useState({}); // Nuevo estado para errores de formulario
 
   // Constantes para opciones de select (mejora de mantenibilidad)
-  const CATEGORIAS = ['General', 'Hardware', 'Software', 'Electrónica', 'Servicios', 'Alimentos', 'Bebidas', 'Limpieza'];
+  const [categorias, setCategorias] = useState(() => {
+    const saved = localStorage.getItem('posfactura_categorias');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migración: Si eran strings, los convertimos a objetos con color
+      return parsed.map(c => typeof c === 'string' ? { nombre: c, color: '#4f46e5' } : c);
+    }
+    return [
+      { nombre: 'General', color: '#64748b' },
+      { nombre: 'Hardware', color: '#4f46e5' },
+      { nombre: 'Software', color: '#8b5cf6' },
+      { nombre: 'Electrónica', color: '#ec4899' },
+      { nombre: 'Servicios', color: '#0ea5e9' },
+      { nombre: 'Alimentos', color: '#10b981' },
+      { nombre: 'Bebidas', color: '#f59e0b' },
+      { nombre: 'Limpieza', color: '#ef4444' }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('posfactura_categorias', JSON.stringify(categorias));
+  }, [categorias]);
+
   const ALMACENES = ['Principal', 'Secundario', 'Temporal', 'Externo'];
   const UNIDADES_MEDIDA = ['Unidad', 'Kilogramo', 'Litro', 'Metro', 'Caja', 'Paquete', 'Bulto'];
   const MOVIMIENTOS_INVENTARIO = ['Entrada', 'Salida', 'Ajuste', 'Devolución'];
 
   // Umbral de stock bajo (configurable)
   const LOW_STOCK_THRESHOLD = 5;
+
+  const seccionesInventario = [
+    { id: 'productos', label: 'Producto', icon: Package },
+    { id: 'categoria', label: 'Categoría', icon: Tags },
+    { id: 'movimiento', label: 'Movimiento de inventario', icon: ArrowLeftRight },
+    { id: 'almacen', label: 'Almacén', icon: Warehouse },
+    { id: 'conteo', label: 'Conteo Físico', icon: ClipboardList },
+    { id: 'alerta', label: 'Alerta', icon: Bell },
+    { id: 'lotes', label: 'Lotes Unidades', icon: Layers3 },
+    { id: 'unidades', label: 'Unidades', icon: Ruler },
+    { id: 'campos', label: 'Campos Personalizados', icon: Braces },
+    { id: 'integraciones', label: 'Integraciones', icon: Plug },
+  ];
+
+  const filtrosProducto = [
+    { id: 'todos', label: 'Todos' },
+    { id: 'productos', label: 'Productos' },
+    { id: 'servicios', label: 'Servicios' },
+    { id: 'activos', label: 'Activos' },
+    { id: 'eliminados', label: 'Eliminados' },
+  ];
+
+  const formatPrice = (value) => {
+    const price = Number(value);
+    return Number.isFinite(price)
+      ? price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : '0.00';
+  };
+
+  const obtenerImagenProducto = (producto) => {
+    const campoImagen = producto.camposPersonalizados?.find(campo => campo.nombre === 'imagenProducto');
+    return producto.imagen || campoImagen?.valor || '';
+  };
+
+  const prepararCamposPersonalizados = (campos, imagen) => {
+    const camposSinImagen = campos.filter(campo => campo.nombre !== 'imagenProducto');
+    return imagen
+      ? [...camposSinImagen, { id: 'imagenProducto', nombre: 'imagenProducto', valor: imagen }]
+      : camposSinImagen;
+  };
+
+  const handleImagenUpload = (event) => {
+    const archivo = event.target.files?.[0];
+    if (!archivo) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormData(prev => ({ ...prev, imagen: reader.result || '' }));
+    };
+    reader.readAsDataURL(archivo);
+  };
 
   const [formData, setFormData] = useState({
     nombre: '', 
@@ -40,6 +132,7 @@ const Inventario = () => {
     unidadMedida: 'Unidad',
     movimientoInventario: 'Entrada',
     descripcion: '',
+    imagen: '',
     camposPersonalizados: []
   });
 
@@ -54,26 +147,15 @@ const Inventario = () => {
     return 'none'; // Por defecto, acceso denegado si no hay configuración o usuario
   }, [usuario]);
 
-  // Si por alguna razón llega aquí y no tiene permiso ni de ver, mostramos aviso
-  if (permisoInventario === 'none') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-200">
-          <Lock size={60} className="text-slate-300 mx-auto mb-6" />
-          <h2 className="text-2xl font-black text-slate-800 uppercase italic">Acceso Restringido</h2>
-          <p className="text-slate-500 font-medium mt-2">No tienes permisos para gestionar el inventario.</p>
-        </div>
-      </div>
-    );
-  }
-
   // --- FUNCIÓN DE EXPORTACIÓN (Actualizada) ---
   const exportarAExcel = () => {
-    if (productos.length === 0) return alert("No hay productos para exportar.");
-    const encabezados = ["Código", "Producto", "Categoría", "Almacén", "Pasillo", "Fila", "Precio", "Stock", "Unidad", "Movimiento", "Descripción"];
-    const filas = productos.map(p => [
+    if (productosFiltrados.length === 0) return alert("No hay productos para exportar.");
+    const encabezados = ["Código", "Producto", "Tipo", "Estado", "Categoría", "Almacén", "Pasillo", "Fila", "Precio", "Stock", "Unidad", "Movimiento", "Imagen", "Descripción"];
+    const filas = productosFiltrados.map(p => [
       `"${p.codigo || ''}"`,
       `"${p.nombre}"`,
+      `"${p.categoria === 'Servicios' ? 'Servicio' : 'Producto'}"`,
+      `"${p.isActive === false ? 'Eliminado' : 'Activo'}"`,
       `"${p.categoria || 'General'}"`,
       `"${p.almacen || 'Principal'}"`,
       `"${p.pasillo || ''}"`,
@@ -82,6 +164,7 @@ const Inventario = () => {
       `"${p.stock}"`,
       `"${p.unidadMedida || 'Unidad'}"`,
       `"${p.movimientoInventario || 'Entrada'}"`,
+      `"${obtenerImagenProducto(p)}"`,
       `"${p.descripcion || ''}"`
     ].join(","));
 
@@ -106,8 +189,9 @@ const Inventario = () => {
       ...formData, 
       precio: parseFloat(formData.precio), 
       stock: parseInt(formData.stock),
-      camposPersonalizados: camposPersonalizados
+      camposPersonalizados: prepararCamposPersonalizados(camposPersonalizados, formData.imagen)
     };
+    delete dataProcesada.imagen;
 
     const guardado = isEditing
       ? await actualizarProducto(dataProcesada)
@@ -118,8 +202,12 @@ const Inventario = () => {
 
   const abrirEditar = (prod) => {
     if (permisoInventario !== 'full') return;
-    setFormData(prod);
-    setCamposPersonalizados(prod.camposPersonalizados || []);
+    const campos = prod.camposPersonalizados || [];
+    setFormData({
+      ...prod,
+      imagen: obtenerImagenProducto(prod),
+    });
+    setCamposPersonalizados(campos.filter(campo => campo.nombre !== 'imagenProducto'));
     setIsEditing(true);
     setIsModalOpen(true);
   };
@@ -139,6 +227,7 @@ const Inventario = () => {
       unidadMedida: 'Unidad',
       movimientoInventario: 'Entrada',
       descripcion: '',
+      imagen: '',
       camposPersonalizados: []
     });
     setCamposPersonalizados([]);
@@ -156,165 +245,421 @@ const Inventario = () => {
     setCamposPersonalizados(camposPersonalizados.filter(campo => campo.id !== id));
   };
 
-const productosFiltrados = productos.filter(p => {
-  // Usamos ?. y || "" para que si el nombre viene null de la DB, no rompa el sistema
-  const nombre = p.nombre?.toLowerCase() || "";
-  const codigo = p.codigo?.toLowerCase() || "";
-  const categoria = p.categoria?.toLowerCase() || "";
-  const almacen = p.almacen?.toLowerCase() || "";
-  const pasillo = p.pasillo?.toLowerCase() || "";
-  const fila = p.fila?.toLowerCase() || "";
-  const descripcion = p.descripcion?.toLowerCase() || "";
-  const query = searchTerm.toLowerCase();
-  
-  return nombre.includes(query) || 
-         codigo.includes(query) || 
-         categoria.includes(query) || 
-         almacen.includes(query) || 
-         pasillo.includes(query) || 
-         fila.includes(query) || 
-         descripcion.includes(query);
-});
+  const almacenesDisponibles = useMemo(() => {
+    const nombres = new Set([...ALMACENES, ...productos.map(p => p.almacen || 'Principal')]);
+    return Array.from(nombres).sort((a, b) => a.localeCompare(b));
+  }, [productos]);
+
+  const ubicacionesDisponibles = useMemo(() => {
+    const ubicaciones = productos
+      .filter(p => almacenFiltro === 'todos' || (p.almacen || 'Principal') === almacenFiltro)
+      .map(p => {
+        const pasillo = p.pasillo || 'Sin pasillo';
+        const fila = p.fila || 'Sin fila';
+        return `${pasillo} / ${fila}`;
+      });
+
+    return Array.from(new Set(ubicaciones)).sort((a, b) => a.localeCompare(b));
+  }, [productos, almacenFiltro]);
+
+  const productosFiltrados = useMemo(() => productos.filter(p => {
+    // Usamos ?. y || "" para que si el nombre viene null de la DB, no rompa el sistema
+    const nombre = p.nombre?.toLowerCase() || "";
+    const codigo = p.codigo?.toLowerCase() || "";
+    const categoria = p.categoria?.toLowerCase() || "";
+    const almacen = p.almacen || 'Principal';
+    const almacenBusqueda = almacen.toLowerCase();
+    const pasillo = p.pasillo || 'Sin pasillo';
+    const fila = p.fila || 'Sin fila';
+    const pasilloBusqueda = pasillo.toLowerCase();
+    const filaBusqueda = fila.toLowerCase();
+    const descripcion = p.descripcion?.toLowerCase() || "";
+    const query = searchTerm.toLowerCase();
+    const coincideBusqueda = nombre.includes(query) || 
+           codigo.includes(query) || 
+           categoria.includes(query) || 
+           almacenBusqueda.includes(query) || 
+           pasilloBusqueda.includes(query) || 
+           filaBusqueda.includes(query) || 
+           descripcion.includes(query);
+    const coincideAlmacen = almacenFiltro === 'todos' || almacen === almacenFiltro;
+    const coincideUbicacion = ubicacionFiltro === 'todas' || `${pasillo} / ${fila}` === ubicacionFiltro;
+    const esServicio = p.categoria === 'Servicios';
+    const estaActivo = p.isActive !== false;
+    const coincideTipoProducto =
+      filtroProducto === 'todos' ||
+      (filtroProducto === 'productos' && !esServicio) ||
+      (filtroProducto === 'servicios' && esServicio) ||
+      (filtroProducto === 'activos' && estaActivo) ||
+      (filtroProducto === 'eliminados' && !estaActivo);
+    
+    return coincideBusqueda && coincideAlmacen && coincideUbicacion && coincideTipoProducto;
+  }), [productos, searchTerm, almacenFiltro, ubicacionFiltro, filtroProducto]);
+
+  const limpiarFiltros = () => {
+    setSearchTerm("");
+    setFiltroProducto('todos');
+    setAlmacenFiltro('todos');
+    setUbicacionFiltro('todas');
+  };
+
+  // Si por alguna razón llega aquí y no tiene permiso ni de ver, mostramos aviso
+  if (permisoInventario === 'none') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-200">
+          <Lock size={60} className="text-slate-300 mx-auto mb-6" />
+          <h2 className="text-2xl font-black text-slate-800 uppercase italic">Acceso Restringido</h2>
+          <p className="text-slate-500 font-medium mt-2">No tienes permisos para gestionar el inventario.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight italic uppercase">Inventario Avanzado</h1>
-          <p className="text-slate-500 font-medium">Gestión completa de stock con ubicación y personalización.</p>
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-10 border-b border-slate-100">
+          {seccionesInventario.map(seccion => {
+            const Icon = seccion.icon;
+            const activo = seccionActiva === seccion.id;
+
+            return (
+              <button
+                key={seccion.id}
+                type="button"
+                onClick={() => setSeccionActiva(seccion.id)}
+                className={`h-14 px-2 flex flex-col items-center justify-center gap-1 border-r border-b xl:border-b-0 border-slate-100 transition-all ${
+                  activo ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                }`}
+              >
+                <Icon size={15} />
+                <span className="text-[8px] font-black uppercase tracking-wider text-center leading-tight">{seccion.label}</span>
+              </button>
+            );
+          })}
         </div>
-        
-        <div className="flex gap-3">
-          <button 
-            onClick={exportarAExcel}
-            className="flex items-center gap-2 bg-emerald-500 text-white px-5 py-3 rounded-xl font-black shadow-lg shadow-emerald-100 hover:bg-emerald-600 transition-all active:scale-95 text-xs uppercase tracking-widest"
-          >
-            <FileText size={18} /> <span className="hidden md:inline">Exportar</span>
-          </button>
-          
-          {/* SOLO MOSTRAR SI TIENE CONTROL TOTAL */}
-          {permisoInventario === 'full' && (
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 bg-brand text-white px-5 py-3 rounded-xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-600 transition-all active:scale-95 text-xs uppercase tracking-widest"
-            >
-              <Plus size={18} /> <span className="hidden md:inline">Nuevo Producto</span>
-            </button>
+
+        <div className="p-3 space-y-3">
+          {seccionActiva === 'productos' ? (
+            <>
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {filtrosProducto.map(filtro => (
+                    <button
+                      key={filtro.id}
+                      type="button"
+                      onClick={() => setFiltroProducto(filtro.id)}
+                      className={`px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${
+                        filtroProducto === filtro.id
+                          ? 'bg-brand text-white border-brand shadow-sm'
+                          : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-800'
+                      }`}
+                    >
+                      {filtro.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex gap-2">
+                  <button 
+                    onClick={exportarAExcel}
+                    title="Exportar productos filtrados"
+                    className="h-9 w-9 flex items-center justify-center bg-emerald-500 text-white rounded-lg font-black shadow-sm hover:bg-emerald-600 transition-all active:scale-95"
+                  >
+                    <FileText size={16} />
+                  </button>
+
+                  {permisoInventario === 'full' && (
+                    <button 
+                      onClick={() => setIsModalOpen(true)}
+                      title="Nuevo producto"
+                      className="h-9 w-9 flex items-center justify-center bg-brand text-white rounded-lg font-black shadow-sm hover:bg-indigo-600 transition-all active:scale-95"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col xl:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                  <input 
+                    type="text" 
+                    placeholder="Buscar por nombre, código, categoría, almacén, pasillo..." 
+                    className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 outline-none focus:border-brand transition-all font-bold text-xs"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+
+                <select
+                  value={almacenFiltro}
+                  onChange={(e) => {
+                    setAlmacenFiltro(e.target.value);
+                    setUbicacionFiltro('todas');
+                  }}
+                  className="min-w-44 h-9 px-3 rounded-lg border border-slate-200 outline-none focus:border-brand transition-all font-black text-[10px] uppercase text-slate-600 bg-white"
+                >
+                  <option value="todos">Todos los almacenes</option>
+                  {almacenesDisponibles.map(almacen => (
+                    <option key={almacen} value={almacen}>{almacen}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={ubicacionFiltro}
+                  onChange={(e) => setUbicacionFiltro(e.target.value)}
+                  className="min-w-44 h-9 px-3 rounded-lg border border-slate-200 outline-none focus:border-brand transition-all font-black text-[10px] uppercase text-slate-600 bg-white"
+                >
+                  <option value="todas">Todas las ubicaciones</option>
+                  {ubicacionesDisponibles.map(ubicacion => (
+                    <option key={ubicacion} value={ubicacion}>{ubicacion}</option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={limpiarFiltros}
+                  className="h-9 px-3 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5"
+                >
+                  <X size={12} /> Limpiar
+                </button>
+
+                {permisoInventario === 'view' && (
+                  <div className="h-9 flex items-center justify-center gap-1.5 text-amber-500 bg-amber-50 px-3 rounded-lg border border-amber-100 italic font-black text-[9px] uppercase">
+                    <Lock size={12} /> Solo Lectura
+                  </div>
+                )}
+              </div>
+            </>
+          ) : seccionActiva === 'categoria' ? (
+            <div className="space-y-4 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-brand/10 text-brand rounded-lg">
+                    <Tags size={18} />
+                  </div>
+                  <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest italic">Categoría de productos</h2>
+                </div>
+                <button 
+                  onClick={() => {
+                    const nombre = prompt("Nombre de la nueva categoría:");
+                    if (nombre && !categorias.find(c => c.nombre === nombre)) {
+                      setCategorias(prev => [...prev, { nombre, color: '#4f46e5' }]);
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-brand text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-indigo-600 transition-all active:scale-95"
+                >
+                  <Plus size={14} /> Nueva categoría
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                {categorias.map(cat => (
+                  <div key={cat.nombre} className="bg-white border border-slate-200 p-4 rounded-xl flex items-center justify-between group hover:border-brand/30 transition-all relative overflow-hidden">
+                    <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: cat.color }}></div>
+                    <span className="text-[11px] font-black uppercase text-slate-600 tracking-tight ml-2">
+                      {cat.nombre}
+                    </span>
+                    <button 
+                      onClick={() => {
+                        if (window.confirm(`¿Seguro que deseas eliminar la categoría "${cat.nombre}"?`)) {
+                          setCategorias(prev => prev.filter(c => c.nombre !== cat.nombre));
+                        }
+                      }}
+                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 text-slate-500 bg-slate-50 border border-slate-100 rounded-xl p-4">
+              <Settings size={18} />
+              <p className="text-xs font-black uppercase tracking-widest">
+                Esta sección se diseñará en la próxima fase.
+              </p>
+            </div>
           )}
         </div>
-      </header>
+      </section>
 
-      {/* Buscador */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-        <div className="relative max-w-md flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Buscar por nombre, código, categoría, almacén, pasillo..." 
-            className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 outline-none focus:border-brand transition-all font-bold text-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        {permisoInventario === 'view' && (
-           <div className="hidden md:flex items-center gap-2 text-amber-500 bg-amber-50 px-4 py-2 rounded-xl border border-amber-100 italic font-black text-[10px] uppercase">
-             <Lock size={14} /> Modo Solo Lectura
-           </div>
-        )}
-      </div>
+      {/* Listado de Productos (Solo visible en la sección de productos) */}
+      {seccionActiva === 'productos' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {errorConexion && (
+            <div className="m-4 flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-red-600">
+              <div className="flex items-center gap-2 text-sm font-black">
+                <AlertTriangle size={18} />
+                {errorConexion}
+              </div>
+              <button
+                onClick={recargarInventario}
+                className="rounded-lg bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-red-500 border border-red-100 hover:bg-red-100 transition-all"
+              >
+                Reintentar
+              </button>
+            </div>
+          )}
 
-      {/* Tabla de Productos */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 text-[9px] uppercase font-black tracking-[0.2em]">
-            <tr>
-              <th className="px-6 py-4">Producto</th>
-              <th className="px-6 py-4">Ubicación</th>
-              <th className="px-6 py-4">Categoría</th>
-              <th className="px-6 py-4">Precio</th>
-              <th className="px-6 py-4">Stock</th>
-              <th className="px-6 py-4">Unidad</th>
-              {permisoInventario === 'full' && <th className="px-6 py-4 text-right">Acciones</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-sm">
-            {productosFiltrados.map(prod => (
-              <tr key={prod.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-slate-100 text-slate-400 rounded-lg group-hover:bg-brand/10 group-hover:text-brand transition-colors">
-                      <Package size={18} />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-black text-slate-700 uppercase text-xs tracking-tight">{prod.nombre}</span>
-                      <span className="text-[9px] text-slate-400 font-bold tracking-tighter italic">#{prod.codigo || 'S/C'}</span>
-                      {prod.descripcion && (
-                        <span className="text-[8px] text-slate-300 font-medium">{prod.descripcion.substring(0, 30)}...</span>
+          {loading && (
+            <div className="px-6 py-12 text-center text-slate-400 font-black uppercase tracking-widest text-xs">
+              Cargando inventario...
+            </div>
+          )}
+
+          {!loading && !errorConexion && productosFiltrados.length === 0 && (
+            <div className="px-6 py-12 text-center text-slate-400 font-black uppercase tracking-widest text-xs">
+              No hay productos para mostrar
+            </div>
+          )}
+
+          {!loading && productosFiltrados.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 p-3">
+              {productosFiltrados.map(prod => {
+                const imagenProducto = obtenerImagenProducto(prod);
+                const stockActual = Number(prod.stock) || 0;
+                const bajoStock = stockActual <= LOW_STOCK_THRESHOLD;
+                const esServicio = prod.categoria === 'Servicios';
+                const estaActivo = prod.isActive !== false;
+                const colorCat = categorias.find(c => c.nombre === prod.categoria)?.color || '#e2e8f0';
+
+                return (
+                  <article
+                    key={prod.id}
+                    className={`group rounded-xl border bg-white shadow-sm overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-md relative ${
+                      estaActivo ? 'border-slate-200' : 'border-red-100 bg-red-50/20'
+                    }`}
+                  >
+                    {/* Indicador lateral de categoría */}
+                    <div className="absolute left-0 top-0 bottom-0 w-1 z-10" style={{ backgroundColor: colorCat }}></div>
+                    
+                    <div className="relative aspect-[2.5/1] bg-slate-50 overflow-hidden border-b border-slate-100">
+                      {imagenProducto ? (
+                        <img
+                          src={imagenProducto}
+                          alt={prod.nombre}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-slate-200 gap-2">
+                          <Package size={20} strokeWidth={1.5} />
+                          <span className="text-[7px] font-black uppercase tracking-[0.2em]">S/I</span>
+                        </div>
                       )}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1">
-                      <Warehouse size={12} className="text-slate-400" />
-                      <span className="text-[9px] font-black text-slate-500 uppercase">{prod.almacen || 'Principal'}</span>
-                    </div>
-                    {(prod.pasillo || prod.fila) && (
-                      <div className="flex items-center gap-1">
-                        <MapPin size={12} className="text-slate-400" />
-                        <span className="text-[9px] font-bold text-slate-400">
-                          P{prod.pasillo || '?'} - F{prod.fila || '?'}
+
+                      <div className="absolute left-2 top-2 flex flex-wrap gap-1">
+                        <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider shadow-sm ${
+                          esServicio ? 'bg-sky-500 text-white' : 'bg-slate-900 text-white'
+                        }`}>
+                          {esServicio ? 'Servicio' : 'Producto'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider shadow-sm ${
+                          estaActivo ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+                        }`}>
+                          {estaActivo ? 'Activo' : 'Eliminado'}
                         </span>
                       </div>
-                    )}
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="px-2.5 py-1 bg-white text-slate-500 rounded-md text-[9px] font-black border border-slate-200 uppercase tracking-tighter shadow-sm">
-                    {prod.categoria}
-                  </span>
-                </td>
-                <td className="px-6 py-4 font-black text-slate-800 italic">
-                  RD$ {(prod.precio || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </td>
-                <td className="px-6 py-4">
-                  <div className={`flex items-center gap-2 font-black text-xs ${prod.stock <= 5 ? 'text-red-500 bg-red-50 px-3 py-1 rounded-lg border border-red-100 w-fit' : 'text-emerald-600'}`}>
-                    <BarChart3 size={14} />
-                    {prod.stock} {prod.unidadMedida || 'UDS'}
-                    {prod.stock <= 5 && <AlertTriangle size={12} className="animate-pulse" />}
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[9px] font-bold uppercase">
-                    {prod.unidadMedida || 'Unidad'}
-                  </span>
-                </td>
-                
-                {/* ACCIONES: Solo si es FULL */}
-                {permisoInventario === 'full' && (
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button 
-                        onClick={() => abrirEditar(prod)} 
-                        className="p-2 text-slate-400 hover:text-brand hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-lg transition-all"
-                      >
-                        <Edit3 size={18}/>
-                      </button>
-                      <button 
-                        onClick={() => { if(window.confirm('¿Eliminar producto?')) eliminarProducto(prod.id) }} 
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-lg transition-all"
-                      >
-                        <Trash2 size={18}/>
-                      </button>
+
+                      {bajoStock && !esServicio && (
+                        <div className="absolute right-2 top-2 h-7 w-7 rounded-lg bg-red-500 text-white flex items-center justify-center shadow-sm">
+                          <AlertTriangle size={13} />
+                        </div>
+                      )}
                     </div>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+                    <div className="p-3 space-y-2.5">
+                      <div className="min-h-12">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="font-black text-slate-800 uppercase text-xs tracking-tight truncate">{prod.nombre}</h3>
+                            <p className="text-[9px] text-slate-400 font-bold tracking-tight italic">#{prod.codigo || 'S/C'}</p>
+                          </div>
+                          <p className="font-black text-slate-900 italic text-xs whitespace-nowrap">RD$ {formatPrice(prod.precio)}</p>
+                        </div>
+                        {prod.descripcion && (
+                          <p className="mt-1 text-[10px] text-slate-400 font-medium line-clamp-1">{prod.descripcion}</p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className={`rounded-lg border px-2.5 py-1.5 ${
+                          bajoStock && !esServicio ? 'bg-red-50 border-red-100 text-red-500' : 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                        }`}>
+                          <p className="text-[8px] font-black uppercase tracking-wider opacity-70">Existencia</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <BarChart3 size={12} />
+                            <span className="text-base font-black">{stockActual}</span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-slate-600">
+                          <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Unidad</p>
+                          <p className="mt-0.5 text-[10px] font-black uppercase truncate">{prod.unidadMedida || 'Unidad'}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[9px]">
+                        <div className="rounded-lg border border-slate-100 px-2.5 py-1.5">
+                          <p className="font-black uppercase tracking-wider text-slate-400">Categoría</p>
+                          <p className="mt-0.5 font-black text-slate-700 uppercase truncate">{prod.categoria || 'General'}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-100 px-2.5 py-1.5">
+                          <p className="font-black uppercase tracking-wider text-slate-400">Movimiento</p>
+                          <p className="mt-0.5 font-black text-slate-700 uppercase truncate">{prod.movimientoInventario || 'Entrada'}</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-100 px-2.5 py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Warehouse size={11} className="text-slate-400" />
+                          <span className="text-[9px] font-black text-slate-600 uppercase truncate">{prod.almacen || 'Principal'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <MapPin size={11} className="text-slate-400" />
+                          <span className="text-[9px] font-bold text-slate-400 uppercase truncate">
+                            Pasillo {prod.pasillo || '?'} · Fila {prod.fila || '?'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {permisoInventario === 'full' && (
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <button 
+                            onClick={() => abrirEditar(prod)} 
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-brand bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-all"
+                          >
+                            <Edit3 size={12}/> Editar
+                          </button>
+                          {estaActivo ? (
+                            <button 
+                              onClick={() => { if(window.confirm('¿Mover producto a eliminados?')) actualizarProducto({ ...prod, isActive: false }) }} 
+                              className="h-8 w-8 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-all"
+                            >
+                              <Trash2 size={13}/>
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => actualizarProducto({ ...prod, isActive: true })} 
+                              className="px-3 h-8 text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 transition-all"
+                            >
+                              Activar
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal Expandido */}
       {isModalOpen && permisoInventario === 'full' && (
@@ -340,22 +685,59 @@ const productosFiltrados = productos.filter(p => {
                       value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
                   </div>
                   <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em] ml-1">Tipo</label>
+                    <select
+                      className="w-full px-5 py-3 rounded-2xl border border-slate-200 outline-none focus:border-brand shadow-sm transition-all bg-white font-bold text-slate-700 cursor-pointer text-sm"
+                      value={formData.categoria === 'Servicios' ? 'servicio' : 'producto'}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        categoria: e.target.value === 'servicio' ? 'Servicios' : 'General',
+                        stock: e.target.value === 'servicio' ? '0' : formData.stock,
+                      })}
+                    >
+                      <option value="producto">Producto</option>
+                      <option value="servicio">Servicio</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em] ml-1">Código / SKU</label>
                     <input className="w-full px-5 py-3 rounded-2xl border border-slate-200 outline-none focus:border-brand shadow-sm transition-all font-bold text-slate-700 text-sm"
                       value={formData.codigo} onChange={(e) => setFormData({...formData, codigo: e.target.value})} />
                   </div>
-                  <div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em] ml-1">Imagen</label>
+                    <div className="grid grid-cols-1 md:grid-cols-[88px_1fr] gap-3 items-center">
+                      <div className="h-20 w-20 rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
+                        {formData.imagen ? (
+                          <img src={formData.imagen} alt="Vista previa" className="h-full w-full object-cover" />
+                        ) : (
+                          <Image size={22} className="text-slate-300" />
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <input
+                          className="w-full px-5 py-3 rounded-2xl border border-slate-200 outline-none focus:border-brand shadow-sm transition-all font-bold text-slate-700 text-sm"
+                          placeholder="Pegar URL de imagen"
+                          value={formData.imagen}
+                          onChange={(e) => setFormData({...formData, imagen: e.target.value})}
+                        />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImagenUpload}
+                          className="block w-full text-xs font-bold text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:tracking-widest file:text-white hover:file:bg-brand"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em] ml-1">Categoría</label>
                     <select className="w-full px-5 py-3 rounded-2xl border border-slate-200 outline-none focus:border-brand shadow-sm transition-all bg-white font-bold text-slate-700 cursor-pointer text-sm"
-                      value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})}>
-                      <option value="General">General</option>
-                      <option value="Hardware">Hardware</option>
-                      <option value="Software">Software</option>
-                      <option value="Electrónica">Electrónica</option>
-                      <option value="Servicios">Servicios</option>
-                      <option value="Alimentos">Alimentos</option>
-                      <option value="Bebidas">Bebidas</option>
-                      <option value="Limpieza">Limpieza</option>
+                      value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})}
+                    >
+                      {categorias.map(cat => (
+                        <option key={cat.nombre} value={cat.nombre}>{cat.nombre}</option>
+                      ))}
                     </select>
                   </div>
                 </div>

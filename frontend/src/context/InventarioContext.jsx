@@ -6,8 +6,14 @@ const InventarioContext = createContext();
 
 export const InventarioProvider = ({ children }) => {
   const [productos, setProductos] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [errorConexion, setErrorConexion] = useState(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
   const { usuario } = useAuth();
-  const API_URL = 'http://localhost:3000/products';
+  const API_BASE_URL =
+    import.meta.env.VITE_API_URL ||
+    `http://${window.location.hostname || '127.0.0.1'}:3000`;
+  const API_URL = `${API_BASE_URL}/products`;
 
   const getInventoryPermission = () => {
     if (usuario?.rol === 'admin') return 'full';
@@ -29,14 +35,39 @@ export const InventarioProvider = ({ children }) => {
 
   // 1. Cargar productos desde el Backend al iniciar
   useEffect(() => {
-    fetch(API_URL)
+    // Si no hay usuario, no intentamos cargar para evitar errores de cabeceras vacías
+    if (!usuario) return;
+
+    console.log("Iniciando carga de inventario desde:", API_URL);
+    setLoading(true);
+    setErrorConexion(null);
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+
+    fetch(API_URL, { signal: controller.signal })
       .then(res => {
-        if (!res.ok) throw new Error('No se pudo cargar el inventario');
+        if (!res.ok) throw new Error(`El servidor respondió con error: ${res.status}`);
         return res.json();
       })
-      .then(data => setProductos(Array.isArray(data) ? data : []))
-      .catch(err => console.error("Error cargando productos:", err));
-  }, []);
+      .then(data => {
+        console.log("Productos recibidos con éxito:", data);
+        setProductos(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Fallo crítico al conectar con el Backend:", err);
+        const mensaje =
+          err.name === 'AbortError'
+            ? `El backend no respondió a tiempo en ${API_URL}.`
+            : `No se pudo conectar con el servidor en ${API_URL}.`;
+        setErrorConexion(mensaje);
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
+        setLoading(false);
+      });
+  }, [usuario, refreshIndex]); // Re-ejecutar si el usuario cambia o si se fuerza una recarga
 
   // 2. Agregar producto al Backend
   const agregarProducto = async (nuevoProducto) => {
@@ -44,7 +75,7 @@ export const InventarioProvider = ({ children }) => {
     // ELIMINAMOS el ID para que Postgres asigne el suyo (1, 2, 3...)
     const { id: _id, ...datosParaEnviar } = nuevoProducto; 
 
-    const res = await fetch('http://localhost:3000/products', {
+    const res = await fetch(API_URL, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
@@ -113,30 +144,34 @@ export const InventarioProvider = ({ children }) => {
  // 5. Descontar Stock (Ventas) 
 const descontarStock = async (itemsCarrito) => {
   try {
-    // Usamos un for...of para manejar las peticiones asíncronas una por una
-    for (const item of itemsCarrito) {
-      // 1. Buscamos el producto actual en nuestro estado local
-      const prod = productos.find(p => p.id === item.id);
-      
-      if (prod) {
-        // 2. Calculamos los nuevos valores
-        const nuevoStock = prod.stock - item.cantidad;
-        const nuevosVendidos = (prod.vendidos || 0) + item.cantidad;
+    const promesasActualizacion = itemsCarrito.map(item => {
+      const productoOriginal = productos.find(p => p.id === item.id);
+      if (!productoOriginal) return null;
 
-        // 3. Enviamos SOLO los datos necesarios al backend
-        // IMPORTANTE: Asegúrate de que item.id sea el número pequeño de la DB
-        await actualizarProducto({
-          id: prod.id,
-          stock: nuevoStock,
-          vendidos: nuevosVendidos
-        });
-      }
-    }
-    
-    // Opcional: Recargar productos desde el servidor para estar 100% sincronizados
-    const res = await fetch(API_URL);
-    const data = await res.json();
-    setProductos(data);
+      const nuevoStock = productoOriginal.stock - item.cantidad;
+      const nuevosVendidos = (productoOriginal.vendidos || 0) + item.cantidad;
+
+      return fetch(`${API_URL}/${item.id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ stock: nuevoStock, vendidos: nuevosVendidos })
+      }).then(res => {
+        if (!res.ok) throw new Error(`Error al actualizar producto ${item.id}`);
+        return res.json();
+      });
+    }).filter(p => p !== null);
+
+    // Esperamos a que todas las peticiones terminen
+    const productosActualizadosServidor = await Promise.all(promesasActualizacion);
+
+    // Actualizamos el estado local basándonos en la respuesta del servidor
+    const nuevosProductos = productos.map(p => {
+      const actualizado = productosActualizadosServidor.find(upd => upd.id === p.id);
+      return actualizado ? actualizado : p;
+    });
+
+    // Actualizamos el estado de React UNA SOLA VEZ con todos los cambios
+    setProductos(nuevosProductos);
 
   } catch (error) {
     console.error("Error masivo al descontar stock:", error);
@@ -144,7 +179,16 @@ const descontarStock = async (itemsCarrito) => {
 };
 
   return (
-    <InventarioContext.Provider value={{ productos, agregarProducto, descontarStock, actualizarProducto, eliminarProducto }}>
+    <InventarioContext.Provider value={{ 
+      productos, 
+      loading, 
+      errorConexion,
+      agregarProducto, 
+      descontarStock, 
+      actualizarProducto, 
+      eliminarProducto,
+      recargarInventario: () => setRefreshIndex(prev => prev + 1)
+    }}>
       {children}
     </InventarioContext.Provider>
   );

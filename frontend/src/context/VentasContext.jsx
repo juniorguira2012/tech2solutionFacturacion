@@ -17,16 +17,23 @@ export const VentasProvider = ({ children }) => {
     localStorage.setItem('posfacura_ventas', JSON.stringify(historialVentas));
   }, [historialVentas]);
 
-  const registrarVenta = (nuevaVenta) => {
-    setHistorialVentas(prev => [
-      {
+  const registrarVenta = async (nuevaVenta) => {
+    try {
+      const ventaProcesada = {
         ...nuevaVenta,
-        id: Date.now(),
-        // CAMBIO: Guardamos ISO completo para que el Home lo compare matemáticamente
-        fecha: new Date().toISOString() 
-      }, 
-      ...prev
-    ]);
+        id: `V-${Date.now()}`,
+        fecha: new Date().toISOString()
+      };
+
+      // Por ahora simulamos una espera de red
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+      setHistorialVentas(prev => [ventaProcesada, ...prev]);
+      return { success: true, venta: ventaProcesada };
+    } catch (error) {
+      console.error("Error al registrar venta:", error);
+      return { success: false, error };
+    }
   };
 
   return (
