@@ -112,8 +112,8 @@ export const InventarioProvider = ({ children }) => {
   // 2. Agregar producto al Backend
   const agregarProducto = async (nuevoProducto) => {
   try {
-    // ELIMINAMOS el ID para que Postgres asigne el suyo (1, 2, 3...)
-    const { id: _id, ...datosParaEnviar } = nuevoProducto; 
+    // ELIMINAMOS el ID y la imagen (ya que va dentro de camposPersonalizados)
+    const { id: _id, imagen, ...datosParaEnviar } = nuevoProducto; 
 
     const res = await fetch(API_URL, {
       method: 'POST',
@@ -161,10 +161,17 @@ export const InventarioProvider = ({ children }) => {
   // 4. Actualizar en el Backend
   const actualizarProducto = async (editado) => {
     try {
-      const res = await fetch(`${API_URL}/${editado.id}`, {
+      // Extraemos id para la URL e imagen para no enviarla como columna raíz
+      const { id, imagen, ...datosParaEnviar } = editado;
+
+      const res = await fetch(`${API_URL}/${id}`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
-        body: JSON.stringify(editado)
+        body: JSON.stringify({
+          ...datosParaEnviar,
+          precio: Number(datosParaEnviar.precio),
+          stock: Number(datosParaEnviar.stock)
+        })
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
