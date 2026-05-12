@@ -684,14 +684,7 @@ const Inventario = () => {
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No se encontraron lotes registrados</p>
             </div>
           </div>
-          ) : (
-            <div className="flex items-center gap-3 text-slate-500 bg-slate-50 border border-slate-100 rounded-xl p-4">
-              <Settings size={18} />
-              <p className="text-xs font-black uppercase tracking-widest">
-                Esta sección se diseñará en la próxima fase.
-              </p>
-            </div>
-          )}
+          ) : null}
         </div>
       </section>
 
