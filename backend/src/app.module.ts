@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductsModule } from './products/products.module';
+import { InventoryCountsModule } from './inventory-counts/inventory-counts.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ProductsModule } from './products/products.module';
       synchronize: process.env.NODE_ENV !== 'production', // Deshabilitar en producción
     }),
     ProductsModule,
+    InventoryCountsModule,
   ],
 })
 export class AppModule {}

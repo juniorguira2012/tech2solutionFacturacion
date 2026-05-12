@@ -9,10 +9,14 @@ import {
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import { useAuth } from '../context/AuthContext';
+import AlmacenSection from './inventario/AlmacenSection';
+import CategoriasSection from './inventario/CategoriasSection';
+import MovimientosSection from './inventario/MovimientosSection';
+import ConteoFisicoSection from './inventario/ConteoFisicoSection';
 
 const Inventario = () => {
   const {
-    productos,
+    productos, 
     loading,
     errorConexion,
     agregarProducto,
@@ -28,9 +32,8 @@ const Inventario = () => {
   };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
-  const [catFormData, setCatFormData] = useState({ nombre: '', color: '#4f46e5' });
   const [isEditing, setIsEditing] = useState(false);
+
   const [seccionActiva, setSeccionActiva] = useState(() => {
     return localStorage.getItem('posfactura_inventario_tab') || 'productos';
   });
@@ -51,8 +54,57 @@ const Inventario = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [almacenFiltro, setAlmacenFiltro] = useState('todos');
   const [ubicacionFiltro, setUbicacionFiltro] = useState('todas');
+  const [filtroLote, setFiltroLote] = useState('Todos');
+  const [searchTermLote, setSearchTermLote] = useState("");
   const [camposPersonalizados, setCamposPersonalizados] = useState([]);
   const [nuevoCampo, setNuevoCampo] = useState({ nombre: '', valor: '' });
+
+  const [unidadesMedida, setUnidadesMedida] = useState(() => {
+    try {
+      const saved = localStorage.getItem('posfactura_unidades_medida');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [
+      { id: 1, codigo: 'CJ', nombre: 'Caja', activo: true },
+      { id: 2, codigo: 'LB', nombre: 'Libra', activo: true },
+      { id: 3, codigo: 'UND', nombre: 'Unidad', activo: true },
+    ];
+  });
+
+  const [editingUnidadId, setEditingUnidadId] = useState(null);
+  const [unidadDraft, setUnidadDraft] = useState({ codigo: '', nombre: '' });
+
+  useEffect(() => {
+    try { localStorage.setItem('posfactura_unidades_medida', JSON.stringify(unidadesMedida)); } catch (e) {}
+  }, [unidadesMedida]);
+
+  const agregarUnidad = () => {
+    const nuevo = { id: Date.now(), codigo: (unidadDraft.codigo || 'UND').toUpperCase(), nombre: unidadDraft.nombre || 'Nueva Unidad', activo: true };
+    setUnidadesMedida(prev => [...prev, nuevo]);
+    setUnidadDraft({ codigo: '', nombre: '' });
+    setEditingUnidadId(null);
+  };
+
+  const comenzarEditarUnidad = (u) => {
+    setEditingUnidadId(u.id);
+    setUnidadDraft({ codigo: u.codigo, nombre: u.nombre });
+  };
+
+  const guardarUnidadEditada = (id) => {
+    setUnidadesMedida(prev => prev.map(u => u.id === id ? { ...u, codigo: (unidadDraft.codigo||u.codigo).toUpperCase(), nombre: unidadDraft.nombre || u.nombre } : u));
+    setEditingUnidadId(null);
+    setUnidadDraft({ codigo: '', nombre: '' });
+  };
+
+  const cancelarEdicionUnidad = () => {
+    setEditingUnidadId(null);
+    setUnidadDraft({ codigo: '', nombre: '' });
+  };
+
+  const toggleUnidadActivo = (id) => {
+    setUnidadesMedida(prev => prev.map(u => u.id === id ? { ...u, activo: !u.activo } : u));
+  };
+
 
   // Constantes para opciones de select (mejora de mantenibilidad)
   const [categorias, setCategorias] = useState(() => {
@@ -216,20 +268,6 @@ const Inventario = () => {
     if (guardado) cerrarModal();
   };
 
-  const guardarCategoria = (e) => {
-    e.preventDefault();
-    if (!catFormData.nombre.trim()) return;
-    
-    if (categorias.find(c => c.nombre.toLowerCase() === catFormData.nombre.toLowerCase())) {
-      mostrarToast("La categoría ya existe", "warning");
-      return;
-    }
-
-    setCategorias(prev => [...prev, catFormData]);
-    setIsCatModalOpen(false);
-    mostrarToast("Categoría creada con éxito");
-  };
-
   const abrirEditar = (prod) => {
     if (permisoInventario !== 'full') return;
     const campos = prod.camposPersonalizados || [];
@@ -370,7 +408,7 @@ const Inventario = () => {
           })}
         </div>
 
-        <div className="p-3 space-y-3">
+        <div className="p-3 space-y-3" style={{ display: seccionActiva === 'unidades' ? 'none' : undefined }}>
           {seccionActiva === 'productos' ? (
             <>
               <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-2">
@@ -492,46 +530,88 @@ const Inventario = () => {
               </div>
             </>
           ) : seccionActiva === 'categoria' ? (
-            <div className="space-y-4 animate-in fade-in duration-300">
-              <div className="flex items-center justify-between bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-brand/10 text-brand rounded-lg">
-                    <Tags size={18} />
-                  </div>
-                  <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest italic">Categoría de productos</h2>
-                </div>
-                <button 
-                  onClick={() => {
-                    setCatFormData({ nombre: '', color: '#4f46e5' });
-                    setIsCatModalOpen(true);
-                  }}
-                  className="flex items-center gap-2 bg-brand text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-indigo-600 transition-all active:scale-95"
-                >
-                  <Plus size={14} /> Nueva categoría
-                </button>
+            <CategoriasSection categorias={categorias} setCategorias={setCategorias} mostrarToast={mostrarToast} />
+          ) : seccionActiva === 'movimiento' ? (
+            <MovimientosSection />
+          ) : seccionActiva === 'almacen' ? (
+            <AlmacenSection mostrarToast={mostrarToast} />
+          ) : seccionActiva === 'conteo' ? (
+            <ConteoFisicoSection mostrarToast={mostrarToast} />
+        ) : seccionActiva === 'alerta' ? (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="flex items-center gap-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+              <div className="p-2 bg-amber-500 text-white rounded-lg shadow-sm">
+                <Bell size={18} />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-                {categorias.map(cat => (
-                  <div key={cat.nombre} className="bg-white border border-slate-200 p-4 rounded-xl flex items-center justify-between group hover:border-brand/30 transition-all relative overflow-hidden">
-                    <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: cat.color }}></div>
-                    <span className="text-[11px] font-black uppercase text-slate-600 tracking-tight ml-2">
-                      {cat.nombre}
-                    </span>
-                    <button 
-                      onClick={() => {
-                        if (window.confirm(`¿Seguro que deseas eliminar la categoría "${cat.nombre}"?`)) {
-                          setCategorias(prev => prev.filter(c => c.nombre !== cat.nombre));
-                        }
-                      }}
-                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
+              <div>
+                <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest italic">Alertas Inventario</h2>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Productos con existencias críticas</p>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {productos.filter(p => (Number(p.stock) || 0) <= LOW_STOCK_THRESHOLD && p.categoria !== 'Servicios').map(p => (
+                <article key={p.id} className="p-4 bg-white border border-red-100 rounded-xl flex items-center gap-3 shadow-sm hover:shadow-md transition-all">
+                  <AlertTriangle className="text-red-500 shrink-0" size={20} />
+                  <div className="min-w-0">
+                    <h4 className="text-[10px] font-black uppercase text-slate-700 truncate">{p.nombre}</h4>
+                    <p className="text-[9px] font-bold text-red-500 italic uppercase">Stock crítico: {p.stock} uds</p>
+                  </div>
+                </article>
+              ))}
+              {productos.filter(p => (Number(p.stock) || 0) <= LOW_STOCK_THRESHOLD && p.categoria !== 'Servicios').length === 0 && (
+                <div className="col-span-full py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No hay alertas de stock en este momento</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : seccionActiva === 'lotes' ? (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="flex items-center gap-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+              <div className="p-2 bg-indigo-600 text-white rounded-lg shadow-sm">
+                <Layers3 size={18} />
+              </div>
+              <div>
+                <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest italic">Lotes</h2>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Gestión y trazabilidad de lotes de productos</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+              <div className="flex flex-wrap gap-1.5">
+                {['Todos', 'Activos', 'Cuarentena', 'Por vencer', 'Vencidos', 'Retirados'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFiltroLote(f)}
+                    className={`px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${
+                      filtroLote === f
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                <input 
+                  type="text" 
+                  placeholder="Buscar por número de lote..." 
+                  className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 outline-none focus:border-brand transition-all font-bold text-xs"
+                  value={searchTermLote}
+                  onChange={(e) => setSearchTermLote(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="py-20 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+              <Layers3 size={40} className="mx-auto mb-4 text-slate-200" />
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No se encontraron lotes registrados</p>
+            </div>
+          </div>
           ) : (
             <div className="flex items-center gap-3 text-slate-500 bg-slate-50 border border-slate-100 rounded-xl p-4">
               <Settings size={18} />
@@ -542,6 +622,63 @@ const Inventario = () => {
           )}
         </div>
       </section>
+
+      {seccionActiva === 'unidades' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4">
+          <div className="flex items-center gap-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+            <div className="p-2 bg-indigo-600 text-white rounded-lg shadow-sm">
+              <Ruler size={18} />
+            </div>
+            <div>
+              <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest italic">Unidades de medida</h2>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Gestiona tipos de unidad (editar o desactivar)</p>
+            </div>
+            <div className="ml-auto">
+              <button type="button" onClick={() => { setEditingUnidadId('new'); setUnidadDraft({codigo:'', nombre:''}); }} className="h-9 px-3 rounded-lg bg-emerald-500 text-white font-black flex items-center gap-2">
+                <Plus size={14}/> Nueva unidad
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2 mt-4">
+            {unidadesMedida.map(u => (
+              <div key={u.id} className="flex items-center gap-3 p-3 bg-white border rounded-xl">
+                {editingUnidadId === u.id ? (
+                  <>
+                    <input className="w-24 px-3 py-2 border rounded-lg" value={unidadDraft.codigo} onChange={(e)=>setUnidadDraft({...unidadDraft, codigo:e.target.value})}/>
+                    <input className="flex-1 px-3 py-2 border rounded-lg" value={unidadDraft.nombre} onChange={(e)=>setUnidadDraft({...unidadDraft, nombre:e.target.value})}/>
+                    <button onClick={()=>guardarUnidadEditada(u.id)} className="px-3 py-2 bg-emerald-500 text-white rounded-lg"><CheckCircle size={14}/></button>
+                    <button onClick={cancelarEdicionUnidad} className="px-3 py-2 bg-red-50 text-red-500 rounded-lg"><X size={14}/></button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-24">
+                      <span className="text-xs font-black">{u.nombre}</span>
+                      <div className="text-[10px] text-slate-400 uppercase">{u.codigo}</div>
+                    </div>
+                    <div className="flex-1 text-sm text-slate-600">{u.activo ? 'Activo' : 'Desactivado'}</div>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button onClick={()=>comenzarEditarUnidad(u)} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg"><Edit3 size={14}/></button>
+                      <button onClick={()=>toggleUnidadActivo(u.id)} className={`px-3 py-2 rounded-lg ${u.activo ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                        {u.activo ? <Trash2 size={14}/> : <CheckCircle size={14}/>} 
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+
+            {editingUnidadId === 'new' && (
+              <div className="flex items-center gap-3 p-3 bg-white border rounded-xl">
+                <input className="w-24 px-3 py-2 border rounded-lg" placeholder="Código" value={unidadDraft.codigo} onChange={(e)=>setUnidadDraft({...unidadDraft, codigo:e.target.value})}/>
+                <input className="flex-1 px-3 py-2 border rounded-lg" placeholder="Nombre" value={unidadDraft.nombre} onChange={(e)=>setUnidadDraft({...unidadDraft, nombre:e.target.value})}/>
+                <button onClick={()=>agregarUnidad()} className="px-3 py-2 bg-emerald-500 text-white rounded-lg"><Plus size={14}/></button>
+                <button onClick={()=>cancelarEdicionUnidad()} className="px-3 py-2 bg-red-50 text-red-500 rounded-lg"><X size={14}/></button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Listado de Productos (Solo visible en la sección de productos) */}
       {seccionActiva === 'productos' && (
@@ -818,39 +955,6 @@ const Inventario = () => {
         </div>
       )}
 
-      {/* Modal Nueva Categoría */}
-      {isCatModalOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300 border border-white/20">
-            <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter italic">Nueva Categoría</h2>
-              <button onClick={() => setIsCatModalOpen(false)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 shadow-sm transition-all"><X size={20} /></button>
-            </div>
-            <form onSubmit={guardarCategoria} className="p-8 space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nombre</label>
-                <input autoFocus required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white" placeholder="Ej. Accesorios"
-                  value={catFormData.nombre} onChange={e => setCatFormData({...catFormData, nombre: e.target.value})} />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Color Distintivo</label>
-                <div className="flex gap-3">
-                  <input type="color" className="h-14 w-14 rounded-2xl border border-slate-100 cursor-pointer p-1 bg-white"
-                    value={catFormData.color} onChange={e => setCatFormData({...catFormData, color: e.target.value})} />
-                  <input className="flex-1 p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-mono text-xs text-slate-500 uppercase"
-                    value={catFormData.color} onChange={e => setCatFormData({...catFormData, color: e.target.value})} />
-                </div>
-              </div>
-
-              <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-brand transition-all uppercase text-[10px] tracking-[0.2em] mt-4">
-                Crear Categoría
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Modal Expandido */}
       {isModalOpen && permisoInventario === 'full' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto">
@@ -982,13 +1086,9 @@ const Inventario = () => {
                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em] ml-1">Unidad de Medida</label>
                     <select className="w-full px-5 py-3 rounded-2xl border border-slate-200 outline-none focus:border-brand shadow-sm transition-all bg-white font-bold text-slate-700 cursor-pointer text-sm"
                       value={formData.unidadMedida} onChange={(e) => setFormData({...formData, unidadMedida: e.target.value})}>
-                      <option value="Unidad">Unidad</option>
-                      <option value="Kilogramo">Kilogramo</option>
-                      <option value="Litro">Litro</option>
-                      <option value="Metro">Metro</option>
-                      <option value="Caja">Caja</option>
-                      <option value="Paquete">Paquete</option>
-                      <option value="Bulto">Bulto</option>
+                      {unidadesMedida.filter(u => u.activo).map(u => (
+                        <option key={u.id} value={u.nombre}>{u.nombre} ({u.codigo})</option>
+                      ))}
                     </select>
                   </div>
                   <div>
