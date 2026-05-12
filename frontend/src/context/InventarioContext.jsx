@@ -9,6 +9,46 @@ export const InventarioProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [errorConexion, setErrorConexion] = useState(null);
   const [refreshIndex, setRefreshIndex] = useState(0);
+
+  // Estados compartidos de configuración
+  const [categorias, setCategorias] = useState(() => {
+    const saved = localStorage.getItem('posfactura_categorias');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return parsed.map(c => typeof c === 'string' ? { nombre: c, color: '#4f46e5' } : c);
+    }
+    return [
+      { nombre: 'General', color: '#64748b' },
+      { nombre: 'Hardware', color: '#4f46e5' },
+      { nombre: 'Software', color: '#8b5cf6' },
+      { nombre: 'Electrónica', color: '#ec4899' },
+      { nombre: 'Servicios', color: '#0ea5e9' },
+      { nombre: 'Alimentos', color: '#10b981' },
+      { nombre: 'Bebidas', color: '#f59e0b' },
+      { nombre: 'Limpieza', color: '#ef4444' }
+    ];
+  });
+
+  const [unidadesMedida, setUnidadesMedida] = useState(() => {
+    try {
+      const saved = localStorage.getItem('posfactura_unidades_medida');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [
+      { id: 1, codigo: 'CJ', nombre: 'Caja', activo: true },
+      { id: 2, codigo: 'LB', nombre: 'Libra', activo: true },
+      { id: 3, codigo: 'UND', nombre: 'Unidad', activo: true },
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('posfactura_categorias', JSON.stringify(categorias));
+  }, [categorias]);
+
+  useEffect(() => {
+    localStorage.setItem('posfactura_unidades_medida', JSON.stringify(unidadesMedida));
+  }, [unidadesMedida]);
+
   const { usuario } = useAuth();
   const API_BASE_URL =
     import.meta.env.VITE_API_URL ||
@@ -187,6 +227,10 @@ const descontarStock = async (itemsCarrito) => {
       descontarStock, 
       actualizarProducto, 
       eliminarProducto,
+      categorias,
+      setCategorias,
+      unidadesMedida,
+      setUnidadesMedida,
       recargarInventario: () => setRefreshIndex(prev => prev + 1)
     }}>
       {children}
