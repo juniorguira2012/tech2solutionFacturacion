@@ -102,7 +102,7 @@ const Inventario = () => {
     setUnidadDraft({ codigo: '', nombre: '' });
   };
 
-  const [toggleUnidadActivo = (id) => {
+  const toggleUnidadActivo = (id) => {
     setUnidadesMedida(prev => prev.map(u => u.id === id ? { ...u, activo: !u.activo } : u));
   };
 
