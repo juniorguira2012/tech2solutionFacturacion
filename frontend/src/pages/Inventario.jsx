@@ -681,6 +681,25 @@ const Inventario = () => {
         </div>
       )}
 
+      {seccionActiva === 'campos' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4">
+          <div className="flex items-center gap-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mb-4">
+            <div className="p-2 bg-indigo-600 text-white rounded-lg shadow-sm">
+              <Braces size={18} />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-xs font-black text-slate-800 uppercase tracking-widest italic">Campos Personalizados</h2>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Define los atributos que tus productos y servicios necesitan: VIN, año modelo, talla, principio activo, lo que sea relevante para los negocios.</p>
+            </div>
+            <div className="ml-auto">
+              <button type="button" className="h-9 px-3 rounded-lg bg-emerald-500 text-white font-black flex items-center gap-2">
+                <Plus size={14}/> Nuevo Campo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Listado de Productos (Solo visible en la sección de productos) */}
       {seccionActiva === 'productos' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
