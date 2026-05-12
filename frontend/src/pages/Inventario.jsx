@@ -58,6 +58,7 @@ const Inventario = () => {
   const [searchTermLote, setSearchTermLote] = useState("");
   const [camposPersonalizados, setCamposPersonalizados] = useState([]);
   const [nuevoCampo, setNuevoCampo] = useState({ nombre: '', valor: '' });
+  const [showNuevoCampo, setShowNuevoCampo] = useState(false);
 
   const [unidadesMedida, setUnidadesMedida] = useState(() => {
     try {
@@ -1126,34 +1127,44 @@ const Inventario = () => {
                   <Settings size={16} /> Campos Personalizados
                 </h3>
                 
-                {/* Agregar nuevo campo */}
-                <div className="flex gap-3 items-end">
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em] ml-1">Nombre del Campo</label>
-                    <input 
-                      className="w-full px-5 py-3 rounded-2xl border border-slate-200 outline-none focus:border-brand shadow-sm transition-all font-bold text-slate-700 text-sm"
-                      placeholder="Ej: Marca, Modelo, Color..."
-                      value={nuevoCampo.nombre}
-                      onChange={(e) => setNuevoCampo({...nuevoCampo, nombre: e.target.value})}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em] ml-1">Valor</label>
-                    <input 
-                      className="w-full px-5 py-3 rounded-2xl border border-slate-200 outline-none focus:border-brand shadow-sm transition-all font-bold text-slate-700 text-sm"
-                      placeholder="Valor del campo..."
-                      value={nuevoCampo.valor}
-                      onChange={(e) => setNuevoCampo({...nuevoCampo, valor: e.target.value})}
-                    />
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={agregarCampoPersonalizado}
-                    className="px-4 py-3 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-bold text-sm flex items-center gap-2"
-                  >
-                    <PlusCircle size={16} />
+                <p className="text-[10px] text-slate-500">Define los atributos que tus productos y servicios necesitan: VIN, año modelo, talla, principio activo, lo que sea relevante para los negocios.</p>
+
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setShowNuevoCampo(prev => !prev)} className="px-4 py-3 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-bold text-sm flex items-center gap-2">
+                    <PlusCircle size={16} /> Nuevo Campo
                   </button>
                 </div>
+
+                {showNuevoCampo && (
+                  <div className="flex gap-3 items-end mt-3">
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em] ml-1">Nombre del Campo</label>
+                      <input 
+                        className="w-full px-5 py-3 rounded-2xl border border-slate-200 outline-none focus:border-brand shadow-sm transition-all font-bold text-slate-700 text-sm"
+                        placeholder="Ej: Marca, Modelo, Color..."
+                        value={nuevoCampo.nombre}
+                        onChange={(e) => setNuevoCampo({...nuevoCampo, nombre: e.target.value})}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-[0.2em] ml-1">Valor</label>
+                      <input 
+                        className="w-full px-5 py-3 rounded-2xl border border-slate-200 outline-none focus:border-brand shadow-sm transition-all font-bold text-slate-700 text-sm"
+                        placeholder="Valor del campo..."
+                        value={nuevoCampo.valor}
+                        onChange={(e) => setNuevoCampo({...nuevoCampo, valor: e.target.value})}
+                      />
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => { agregarCampoPersonalizado(); setShowNuevoCampo(false); }}
+                      className="px-4 py-3 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-bold text-sm flex items-center gap-2"
+                    >
+                      <PlusCircle size={16} /> Agregar
+                    </button>
+                    <button type="button" onClick={() => setShowNuevoCampo(false)} className="px-4 py-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-100 transition-all font-bold text-sm">Cancelar</button>
+                  </div>
+                )}
 
                 {/* Lista de campos personalizados */}
                 {camposPersonalizados.length > 0 && (
