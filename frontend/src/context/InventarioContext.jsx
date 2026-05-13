@@ -65,6 +65,7 @@ export const InventarioProvider = ({ children }) => {
 
   const getAuthHeaders = () => ({
     'Content-Type': 'application/json',
+    'x-user-id': usuario?.id || '', // Aseguramos que el ID del usuario se envíe
     'x-user-role': usuario?.rol || '',
     'x-inventory-permission': getInventoryPermission(),
   });

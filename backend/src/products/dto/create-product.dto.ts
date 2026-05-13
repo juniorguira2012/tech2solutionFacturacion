@@ -19,6 +19,14 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  modelo?: string;
+
+  @IsOptional()
+  @IsString()
+  serie?: string;
+
+  @IsOptional()
+  @IsString()
   categoria?: string;
 
   @Type(() => Number)

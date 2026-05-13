@@ -19,6 +19,12 @@ export class Product {
   @Column({ nullable: true })
   codigo: string;
 
+  @Column({ nullable: true })
+  modelo: string;
+
+  @Column({ nullable: true })
+  serie: string;
+
   @Column({ default: 'General' })
   categoria: string;
 

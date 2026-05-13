@@ -21,7 +21,7 @@ export class InventoryCountsService {
 
   async create(
     createInventoryCountDto: CreateInventoryCountDto,
-    usuario: any,
+    usuario: { id: string; rol: string }, // Tipo más específico para el objeto usuario
   ): Promise<InventoryCount> {
     try {
       const inventoryCount = this.inventoryCountRepository.create({
@@ -33,8 +33,9 @@ export class InventoryCountsService {
 
       return await this.inventoryCountRepository.save(inventoryCount);
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error desconocido';
       throw new BadRequestException(
-        `Error al crear conteo de inventario: ${error.message}`,
+        `Error al crear conteo de inventario: ${message}`,
       );
     }
   }
@@ -49,8 +50,9 @@ export class InventoryCountsService {
 
       return await query.orderBy('ic.createdAt', 'DESC').getMany();
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error desconocido';
       throw new BadRequestException(
-        `Error al buscar conteos: ${error.message}`,
+        `Error al buscar conteos: ${message}`,
       );
     }
   }
@@ -71,8 +73,9 @@ export class InventoryCountsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
+      const message = error instanceof Error ? error.message : 'Error desconocido';
       throw new BadRequestException(
-        `Error al buscar conteo: ${error.message}`,
+        `Error al buscar conteo: ${message}`,
       );
     }
   }
@@ -137,8 +140,9 @@ export class InventoryCountsService {
       ) {
         throw error;
       }
+      const message = error instanceof Error ? error.message : 'Error desconocido';
       throw new BadRequestException(
-        `Error al agregar producto al conteo: ${error.message}`,
+        `Error al agregar producto al conteo: ${message}`,
       );
     }
   }
@@ -175,8 +179,9 @@ export class InventoryCountsService {
       ) {
         throw error;
       }
+      const message = error instanceof Error ? error.message : 'Error desconocido';
       throw new BadRequestException(
-        `Error al actualizar item del conteo: ${error.message}`,
+        `Error al actualizar item del conteo: ${message}`,
       );
     }
   }
@@ -222,8 +227,9 @@ export class InventoryCountsService {
       ) {
         throw error;
       }
+      const message = error instanceof Error ? error.message : 'Error desconocido';
       throw new BadRequestException(
-        `Error al publicar ajustes: ${error.message}`,
+        `Error al publicar ajustes: ${message}`,
       );
     }
   }
@@ -239,8 +245,9 @@ export class InventoryCountsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
+      const message = error instanceof Error ? error.message : 'Error desconocido';
       throw new BadRequestException(
-        `Error al cancelar conteo: ${error.message}`,
+        `Error al cancelar conteo: ${message}`,
       );
     }
   }

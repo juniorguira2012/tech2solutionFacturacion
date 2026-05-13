@@ -37,8 +37,8 @@ export class ProductsService {
  // products.service.ts
 
 async update(id: number, updateProductDto: UpdateProductDto) {
-  // Buscamos y cargamos los datos. NestJS ValidationPipe con whitelist: true
-  // ya debería encargarse de filtrar campos no deseados.
+  // Eliminamos la lógica de desestructurar createdAt/updatedAt ya que el DTO
+  // no los contiene y causaba error de TypeScript.
   const producto = await this.productRepository.preload({
     id: id,
     ...updateProductDto,

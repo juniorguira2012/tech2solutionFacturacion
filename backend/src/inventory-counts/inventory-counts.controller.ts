@@ -69,7 +69,7 @@ export class InventoryCountsController {
   @Post()
   async createInventoryCount(
     @Body() dto: CreateInventoryCountDto,
-    @Headers('x-user-id') userId: string,
+    @Headers('x-user-id') userId: string | undefined, // Puede ser undefined si el header no se envía
     @Headers('x-user-role') userRole: string,
     @Headers('x-inventory-permission') permission: string,
   ) {
@@ -77,6 +77,9 @@ export class InventoryCountsController {
       throw new UnauthorizedException(
         'Solo usuarios con permiso "full" pueden crear conteos',
       );
+    }
+    if (!userId) { // Verificamos que el userId exista
+      throw new UnauthorizedException('Usuario no identificado');
     }
 
     return this.service.create({
@@ -128,13 +131,16 @@ export class InventoryCountsController {
   async addCountItem(
     @Param('id') id: string,
     @Body() dto: AddCountItemDto,
-    @Headers('x-user-id') userId: string,
+    @Headers('x-user-id') userId: string | undefined, // Puede ser undefined
     @Headers('x-inventory-permission') permission: string,
   ) {
     if (permission !== 'full') {
       throw new UnauthorizedException(
         'Solo usuarios con permiso "full" pueden agregar items al conteo',
       );
+    }
+    if (!userId) { // Verificamos que el userId exista
+      throw new UnauthorizedException('Usuario no identificado');
     }
 
     return this.service.addProductToCount(Number(id), dto);
@@ -149,13 +155,16 @@ export class InventoryCountsController {
     @Param('id') id: string,
     @Param('itemId') itemId: string,
     @Body() dto: UpdateCountItemDto,
-    @Headers('x-user-id') userId: string,
+    @Headers('x-user-id') userId: string | undefined, // Puede ser undefined
     @Headers('x-inventory-permission') permission: string,
   ) {
     if (permission !== 'full') {
       throw new UnauthorizedException(
         'Solo usuarios con permiso "full" pueden actualizar items',
       );
+    }
+    if (!userId) { // Verificamos que el userId exista
+      throw new UnauthorizedException('Usuario no identificado');
     }
 
     if (typeof dto.cantidadContada !== 'number' || dto.cantidadContada < 0) {
@@ -173,13 +182,16 @@ export class InventoryCountsController {
   @HttpCode(HttpStatus.OK)
   async publishInventoryCount(
     @Param('id') id: string,
-    @Headers('x-user-id') userId: string,
+    @Headers('x-user-id') userId: string | undefined, // Puede ser undefined
     @Headers('x-inventory-permission') permission: string,
   ) {
     if (permission !== 'full') {
       throw new UnauthorizedException(
         'Solo usuarios con permiso "full" pueden publicar conteos',
       );
+    }
+    if (!userId) { // Verificamos que el userId exista
+      throw new UnauthorizedException('Usuario no identificado');
     }
 
     return this.service.publishAdjustments(Number(id));
@@ -193,7 +205,7 @@ export class InventoryCountsController {
   async cancelInventoryCount(
     @Param('id') id: string,
     @Headers('x-user-id') userId: string,
-    @Headers('x-inventory-permission') permission: string,
+    @Headers('x-inventory-permission') permission: string, // Este es el header de permiso, no el userId
   ) {
     if (permission !== 'full') {
       throw new UnauthorizedException(
@@ -201,6 +213,9 @@ export class InventoryCountsController {
       );
     }
 
+    if (!userId) { // Verificamos que el userId exista
+      throw new UnauthorizedException('Usuario no identificado');
+    }
     return this.service.cancelCount(Number(id));
   }
 }

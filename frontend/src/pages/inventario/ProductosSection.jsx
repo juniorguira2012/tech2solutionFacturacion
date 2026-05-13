@@ -72,9 +72,18 @@ const ProductosSection = ({ mostrarToast }) => {
   const [filtroProducto, setFiltroProducto] = useState('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [almacenFiltro, setAlmacenFiltro] = useState('todos');
-  const [camposPersonalizados, setCamposPersonalizados] = useState([]);
-  const [nuevoCampo, setNuevoCampo] = useState({ nombre: '', valor: '' });
+
+  // Cargar configuración global de campos personalizados (Atributos Adicionales)
+  const camposConfigGlobal = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('posfactura_campos_personalizados');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  }, []);
+
+  // Estados para nuevos campos manuales
   const [showNuevoCampo, setShowNuevoCampo] = useState(false);
+  const [nuevoCampo, setNuevoCampo] = useState({ nombre: '', valor: '' });
 
   // ─── Estado del modal de confirmación ──────────────────────────────────────
   const [confirm, setConfirm] = useState({
@@ -95,6 +104,7 @@ const ProductosSection = ({ mostrarToast }) => {
 
   const [formData, setFormData] = useState({
     nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
+    modelo: '', serie: '',
     almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad',
     movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
   });
@@ -107,6 +117,8 @@ const ProductosSection = ({ mostrarToast }) => {
       precio: prod.precio,
       stock: prod.stock,
       codigo: prod.codigo || '',
+      modelo: prod.modelo || '',
+      serie: prod.serie || '',
       almacen: prod.almacen || 'Principal',
       pasillo: prod.pasillo || '',
       fila: prod.fila || '',
@@ -116,7 +128,6 @@ const ProductosSection = ({ mostrarToast }) => {
       imagen: prod.imagen || '',
       camposPersonalizados: prod.camposPersonalizados || []
     });
-    setCamposPersonalizados(prod.camposPersonalizados || []);
     setIsEditing(true);
     setIsModalOpen(true);
   };
@@ -175,6 +186,20 @@ const ProductosSection = ({ mostrarToast }) => {
 const handleSave = async (e) => {
   e.preventDefault();
 
+  // Validar si el código ya existe para evitar duplicados
+  if (formData.codigo?.trim()) {
+    const codigoNormalizado = formData.codigo.trim().toLowerCase();
+    const productoExistente = productos.find(p => 
+      p.codigo?.trim().toLowerCase() === codigoNormalizado && 
+      (!isEditing || p.id !== Number(formData.id))
+    );
+
+    if (productoExistente) {
+      mostrarToast?.(`El código "${formData.codigo}" ya está en uso por: ${productoExistente.nombre}`, 'warning');
+      return;
+    }
+  }
+
   // 1. Limpieza de metadatos (evita que NestJS/PostgreSQL exploten con Error 500)
   const { createdAt, updatedAt, countItems, ...datosBase } = formData;
 
@@ -184,10 +209,6 @@ const handleSave = async (e) => {
     id: isEditing ? Number(formData.id) : undefined, 
     precio: parseFloat(formData.precio) || 0,
     stock: parseInt(formData.stock) || 0,
-    // Aseguramos que camposPersonalizados sea siempre un array
-    camposPersonalizados: Array.isArray(camposPersonalizados) 
-      ? camposPersonalizados.filter(c => c.nombre !== 'imagenProducto')
-      : []
   };
 
   try {
@@ -247,12 +268,14 @@ const handleEliminar = (prod) => {
   const cerrarModal = () => {
     setIsModalOpen(false);
     setIsEditing(false);
+    setShowNuevoCampo(false);
+    setNuevoCampo({ nombre: '', valor: '' });
     setFormData({
       nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
+      modelo: '', serie: '',
       almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad',
       movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
     });
-    setCamposPersonalizados([]);
   };
 
   const productosFiltrados = useMemo(() => productos.filter(p => {
@@ -423,6 +446,14 @@ const handleEliminar = (prod) => {
                   <input className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm" value={formData.codigo} onChange={(e) => setFormData({...formData, codigo: e.target.value})}/>
                 </div>
                 <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Modelo</label>
+                  <input className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm" value={formData.modelo} onChange={(e) => setFormData({...formData, modelo: e.target.value})}/>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Serie / Serial</label>
+                  <input className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm" value={formData.serie} onChange={(e) => setFormData({...formData, serie: e.target.value})}/>
+                </div>
+                <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Categoría</label>
                   <select className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm" value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})}>
                     {categorias.map(cat => <option key={cat.nombre} value={cat.nombre}>{cat.nombre}</option>)}
@@ -465,30 +496,97 @@ const handleEliminar = (prod) => {
               </div>
 
               <div className="space-y-4 pt-4 border-t">
-                <h3 className="text-sm font-black text-slate-600 uppercase flex items-center gap-2"><Settings size={16}/> Campos Personalizados</h3>
-                <button type="button" onClick={() => setShowNuevoCampo(!showNuevoCampo)} className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase hover:bg-emerald-600 transition-colors">
-                  Nuevo Campo
-                </button>
-                {showNuevoCampo && (
-                  <div className="flex gap-3 items-end">
-                    <input className="flex-1 px-4 py-2 rounded-xl border text-sm font-bold" placeholder="Nombre" value={nuevoCampo.nombre} onChange={(e) => setNuevoCampo({...nuevoCampo, nombre: e.target.value})}/>
-                    <input className="flex-1 px-4 py-2 rounded-xl border text-sm font-bold" placeholder="Valor" value={nuevoCampo.valor} onChange={(e) => setNuevoCampo({...nuevoCampo, valor: e.target.value})}/>
-                    <button type="button" onClick={() => {
-                      if (nuevoCampo.nombre) {
-                        setCamposPersonalizados([...camposPersonalizados, { ...nuevoCampo, id: Date.now() }]);
-                        setNuevoCampo({ nombre: '', valor: '' });
-                        setShowNuevoCampo(false);
-                      }
-                    }} className="px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase">Añadir</button>
+                <h3 className="text-sm font-black text-slate-600 uppercase flex items-center gap-2">
+                  <Settings size={16}/> Atributos Adicionales
+                </h3>
+                
+                {/* 1. Campos configurados Globalmente */}
+                {camposConfigGlobal.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {camposConfigGlobal.map(campo => (
+                      <div key={campo.id}>
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
+                          {campo.etiqueta} {campo.obligatorio && '*'}
+                        </label>
+                        <input 
+                          type={campo.tipo === 'numero' ? 'number' : 'text'}
+                          required={campo.obligatorio}
+                          className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm"
+                          value={formData.camposPersonalizados?.find(c => c.nombre === campo.clave)?.valor || ''}
+                          onChange={(e) => {
+                            const otros = formData.camposPersonalizados.filter(c => c.nombre !== campo.clave);
+                            setFormData({
+                              ...formData,
+                              camposPersonalizados: [...otros, { nombre: campo.clave, valor: e.target.value }]
+                            });
+                          }}
+                        />
+                      </div>
+                    ))}
                   </div>
+                ) : (
+                  <p className="text-[10px] font-bold text-slate-400 italic">No hay atributos adicionales configurados.</p>
                 )}
-                <div className="space-y-2">
-                  {camposPersonalizados.map(c => (
-                    <div key={c.id} className="flex justify-between p-2 bg-slate-50 rounded-lg border text-xs">
-                      <span className="font-black uppercase">{c.nombre}: <span className="font-bold normal-case text-slate-600">{c.valor}</span></span>
-                      <button type="button" onClick={() => setCamposPersonalizados(camposPersonalizados.filter(cp => cp.id !== c.id))} className="text-red-500"><MinusCircle size={14}/></button>
+
+                {/* 2. Sección de Campos Manuales (Ad-hoc) */}
+                <div className="mt-6 pt-4 border-t border-dashed border-slate-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Otros Detalles Específicos</h4>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowNuevoCampo(!showNuevoCampo)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-[9px] font-black uppercase hover:bg-brand hover:text-white transition-all"
+                    >
+                      {showNuevoCampo ? <X size={12}/> : <Plus size={12}/>}
+                      {showNuevoCampo ? 'Cancelar' : 'Nuevo Campo'}
+                    </button>
+                  </div>
+
+                  {showNuevoCampo && (
+                    <div className="flex gap-3 items-end bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-4 animate-in slide-in-from-top-2">
+                      <div className="flex-1">
+                        <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Nombre del campo</label>
+                        <input className="w-full px-4 py-2 rounded-xl border text-xs font-bold" placeholder="Ej: Color" value={nuevoCampo.nombre} onChange={(e) => setNuevoCampo({...nuevoCampo, nombre: e.target.value})}/>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Valor</label>
+                        <input className="w-full px-4 py-2 rounded-xl border text-xs font-bold" placeholder="Ej: Azul" value={nuevoCampo.valor} onChange={(e) => setNuevoCampo({...nuevoCampo, valor: e.target.value})}/>
+                      </div>
+                      <button type="button" onClick={() => {
+                        if (nuevoCampo.nombre && nuevoCampo.valor) {
+                          setFormData({
+                            ...formData,
+                            camposPersonalizados: [...formData.camposPersonalizados, { ...nuevoCampo, id: Date.now() }]
+                          });
+                          setNuevoCampo({ nombre: '', valor: '' });
+                          setShowNuevoCampo(false);
+                        }
+                      }} className="px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-[9px] uppercase h-[38px]">Añadir</button>
                     </div>
-                  ))}
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {formData.camposPersonalizados
+                      .filter(cp => !camposConfigGlobal.some(cg => cg.clave === cp.nombre))
+                      .map((c, index) => (
+                        <div key={index} className="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-xl shadow-sm group">
+                          <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{c.nombre}</span>
+                            <span className="text-xs font-bold text-slate-700">{c.valor}</span>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const filtrados = formData.camposPersonalizados.filter((_, i) => formData.camposPersonalizados.indexOf(c) !== i);
+                              setFormData({ ...formData, camposPersonalizados: filtrados });
+                            }} 
+                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <MinusCircle size={14}/>
+                          </button>
+                        </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
