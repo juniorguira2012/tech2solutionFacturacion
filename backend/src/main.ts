@@ -1,10 +1,16 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { json, urlencoded } from 'express';
 
 // backend/src/main.ts
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Aumentar límites para soportar imágenes en Base64
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ limit: '50mb', extended: true }));
+
   app.enableCors({
     origin: (origin, callback) => {
       const allowedOrigins = [

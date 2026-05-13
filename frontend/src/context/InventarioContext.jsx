@@ -10,7 +10,11 @@ export const InventarioProvider = ({ children }) => {
   const [errorConexion, setErrorConexion] = useState(null);
   const [refreshIndex, setRefreshIndex] = useState(0);
 
-  // Estados compartidos de configuración
+  const { usuario } = useAuth();
+  const API_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000`;
+  const API_URL = `${API_BASE_URL}/products`;
+
+  // --- Estados de configuración (Categorías y Unidades) ---
   const [categorias, setCategorias] = useState(() => {
     const saved = localStorage.getItem('posfactura_categorias');
     if (saved) {
@@ -49,22 +53,14 @@ export const InventarioProvider = ({ children }) => {
     localStorage.setItem('posfactura_unidades_medida', JSON.stringify(unidadesMedida));
   }, [unidadesMedida]);
 
-  const { usuario } = useAuth();
-  const API_BASE_URL =
-    import.meta.env.VITE_API_URL ||
-    `http://${window.location.hostname || '127.0.0.1'}:3000`;
-  const API_URL = `${API_BASE_URL}/products`;
-
+  // --- Helpers ---
   const getInventoryPermission = () => {
     if (usuario?.rol === 'admin') return 'full';
-
     try {
       const savedRoles = localStorage.getItem('posfactura_roles_config');
       const config = savedRoles ? JSON.parse(savedRoles) : {};
       return config[usuario?.rol]?.modules?.inventario || 'none';
-    } catch {
-      return 'none';
-    }
+    } catch { return 'none'; }
   };
 
   const getAuthHeaders = () => ({
@@ -73,12 +69,9 @@ export const InventarioProvider = ({ children }) => {
     'x-inventory-permission': getInventoryPermission(),
   });
 
-  // 1. Cargar productos desde el Backend al iniciar
+  // 1. Cargar productos
   useEffect(() => {
-    // Si no hay usuario, no intentamos cargar para evitar errores de cabeceras vacías
     if (!usuario) return;
-
-    console.log("Iniciando carga de inventario desde:", API_URL);
     setLoading(true);
     setErrorConexion(null);
 
@@ -87,157 +80,139 @@ export const InventarioProvider = ({ children }) => {
 
     fetch(API_URL, { signal: controller.signal })
       .then(res => {
-        if (!res.ok) throw new Error(`El servidor respondió con error: ${res.status}`);
+        if (!res.ok) throw new Error(`Error: ${res.status}`);
         return res.json();
       })
       .then(data => {
-        console.log("Productos recibidos con éxito:", data);
         setProductos(Array.isArray(data) ? data : []);
-        setLoading(false);
       })
       .catch(err => {
-        console.error("Fallo crítico al conectar con el Backend:", err);
-        const mensaje =
-          err.name === 'AbortError'
-            ? `El backend no respondió a tiempo en ${API_URL}.`
-            : `No se pudo conectar con el servidor en ${API_URL}.`;
-        setErrorConexion(mensaje);
+        setErrorConexion(err.name === 'AbortError' ? "Tiempo de espera agotado" : "Error de conexión");
       })
       .finally(() => {
         window.clearTimeout(timeoutId);
         setLoading(false);
       });
-  }, [usuario, refreshIndex]); // Re-ejecutar si el usuario cambia o si se fuerza una recarga
+  }, [usuario, refreshIndex, API_URL]);
 
-  // 2. Agregar producto al Backend
+  // 2. Agregar Producto
   const agregarProducto = async (nuevoProducto) => {
-  try {
-    // ELIMINAMOS el ID y la imagen (ya que va dentro de camposPersonalizados)
-    const { id: _id, imagen, ...datosParaEnviar } = nuevoProducto; 
+    try {
+      // Ahora que el backend acepta 'imagen' y payloads grandes, la incluimos
+      const { id, createdAt, updatedAt, ...datosParaEnviar } = nuevoProducto;
 
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({
-        ...datosParaEnviar,
-        precio: Number(datosParaEnviar.precio), // Forzamos que sea número
-        stock: Number(datosParaEnviar.stock)    // Forzamos que sea número
-      })
-    });
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ...datosParaEnviar,
+          precio: Number(datosParaEnviar.precio) || 0,
+          stock: Number(datosParaEnviar.stock) || 0
+        })
+      });
+      
+      const data = await res.json(); // Intentamos obtener la respuesta del servidor incluso si falló
 
-    if (!res.ok) {
-      const errorData = await res.json();
-      console.error("Error del servidor:", errorData);
-      throw new Error('Error al guardar en la base de datos');
+      if (!res.ok) {
+        // Imprimimos el error real del backend para saber qué campo falló
+        console.error("Error detallado del servidor (400) al crear:", data);
+        // Si el backend envía un mensaje (de ValidationPipe), lo usamos
+        const mensaje = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+        throw new Error(mensaje || 'Error al crear producto');
+      }
+
+      setProductos(prev => [...prev, data]);
+      return true;
+    } catch (err) {
+      console.error("Error al agregar producto:", err);
+      return false;
     }
+  };
 
-    const productoGuardado = await res.json();
-    setProductos(prev => [...prev, productoGuardado]);
-    return true;
-  } catch (error) {
-    console.error("Error en agregarProducto:", error);
-    alert("No se pudo guardar el producto. Revisa la consola del backend.");
-    return false;
-  }
-};
-
-  // 3. Eliminar del Backend
+  // 3. Eliminar Producto
   const eliminarProducto = async (id) => {
     try {
       const res = await fetch(`${API_URL}/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
-      if (!res.ok) throw new Error('No se pudo eliminar el producto');
+      if (!res.ok) throw new Error('No se pudo eliminar');
       setProductos(prev => prev.filter(p => p.id !== id));
       return true;
     } catch (err) {
-      console.error("No se pudo eliminar:", err);
-      alert("No se pudo eliminar el producto.");
+      console.error(err);
       return false;
     }
   };
 
-  // 4. Actualizar en el Backend
+  // 4. Actualizar Producto (CORREGIDO: nombre y limpieza de datos)
   const actualizarProducto = async (editado) => {
     try {
-      // Extraemos id para la URL e imagen para no enviarla como columna raíz
-      const { id, imagen, ...datosParaEnviar } = editado;
+      // IMPORTANTE: Quitamos createdAt, updatedAt y countItems porque NestJS da 500 si se los envías
+      // También quitamos vendidos e id del body para evitar conflictos
+      const { id, createdAt, updatedAt, countItems, vendidos, ...datosParaEnviar } = editado;
 
       const res = await fetch(`${API_URL}/${id}`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
         body: JSON.stringify({
           ...datosParaEnviar,
-          precio: Number(datosParaEnviar.precio),
-          stock: Number(datosParaEnviar.stock)
+          precio: Number(editado.precio) || 0,
+          stock: Number(editado.stock) || 0
         })
       });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        console.error("Error del servidor:", errorData);
-        throw new Error('No se pudo actualizar el producto');
-      }
+
+      // Intentamos obtener la respuesta del servidor incluso si falló
       const data = await res.json();
+
+      if (!res.ok) {
+        // Imprimimos el error real del backend para saber qué campo falló
+        console.error("Error detallado del servidor (400):", data);
+        // Si el backend envía un mensaje (de ValidationPipe), lo usamos
+        const mensaje = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+        throw new Error(mensaje || 'Error en el servidor');
+      }
+      
       setProductos(prev => prev.map(p => p.id === data.id ? data : p));
       return true;
     } catch (err) {
-      console.error("No se pudo actualizar:", err);
-      alert("No se pudo actualizar el producto.");
+      console.error("Error al actualizar:", err);
       return false;
     }
   };
 
- // 5. Descontar Stock (Ventas) 
-const descontarStock = async (itemsCarrito) => {
-  try {
-    const promesasActualizacion = itemsCarrito.map(item => {
-      const productoOriginal = productos.find(p => p.id === item.id);
-      if (!productoOriginal) return null;
+  // 5. Descontar Stock
+  const descontarStock = async (itemsCarrito) => {
+    try {
+      const promesas = itemsCarrito.map(item => {
+        const prod = productos.find(p => p.id === item.id);
+        if (!prod) return null;
+        return fetch(`${API_URL}/${item.id}`, {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ 
+            stock: (prod.stock - item.cantidad), 
+            vendidos: (prod.vendidos || 0) + item.cantidad 
+          })
+        }).then(res => res.json());
+      }).filter(p => p !== null);
 
-      const nuevoStock = productoOriginal.stock - item.cantidad;
-      const nuevosVendidos = (productoOriginal.vendidos || 0) + item.cantidad;
-
-      return fetch(`${API_URL}/${item.id}`, {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ stock: nuevoStock, vendidos: nuevosVendidos })
-      }).then(res => {
-        if (!res.ok) throw new Error(`Error al actualizar producto ${item.id}`);
-        return res.json();
-      });
-    }).filter(p => p !== null);
-
-    // Esperamos a que todas las peticiones terminen
-    const productosActualizadosServidor = await Promise.all(promesasActualizacion);
-
-    // Actualizamos el estado local basándonos en la respuesta del servidor
-    const nuevosProductos = productos.map(p => {
-      const actualizado = productosActualizadosServidor.find(upd => upd.id === p.id);
-      return actualizado ? actualizado : p;
-    });
-
-    // Actualizamos el estado de React UNA SOLA VEZ con todos los cambios
-    setProductos(nuevosProductos);
-
-  } catch (error) {
-    console.error("Error masivo al descontar stock:", error);
-  }
-};
+      const resultados = await Promise.all(promesas);
+      setProductos(prev => prev.map(p => {
+        const actualizado = resultados.find(r => r.id === p.id);
+        return actualizado || p;
+      }));
+    } catch (error) {
+      console.error("Error al descontar stock:", error);
+    }
+  };
 
   return (
     <InventarioContext.Provider value={{ 
-      productos, 
-      loading, 
-      errorConexion,
-      agregarProducto, 
-      descontarStock, 
-      actualizarProducto, 
-      eliminarProducto,
-      categorias,
-      setCategorias,
-      unidadesMedida,
-      setUnidadesMedida,
+      productos, loading, errorConexion, categorias, setCategorias,
+      unidadesMedida, setUnidadesMedida, agregarProducto, eliminarProducto,
+      actualizarProducto, // <--- CAMBIADO DE 'ducto' A 'actualizarProducto'
+      descontarStock,
       recargarInventario: () => setRefreshIndex(prev => prev + 1)
     }}>
       {children}

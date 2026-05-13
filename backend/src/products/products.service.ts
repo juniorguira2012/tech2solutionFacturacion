@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
@@ -34,15 +34,27 @@ export class ProductsService {
   }
 
   // Actualizar datos
-  async update(id: number, updateProductDto: UpdateProductDto) {
-    const producto = await this.productRepository.preload({
-      id: id,
-      ...updateProductDto,
-    });
-    if (!producto)
-      throw new NotFoundException(`No se pudo actualizar: ID ${id} no existe`);
+ // products.service.ts
+
+async update(id: number, updateProductDto: UpdateProductDto) {
+  // Buscamos y cargamos los datos. NestJS ValidationPipe con whitelist: true
+  // ya debería encargarse de filtrar campos no deseados.
+  const producto = await this.productRepository.preload({
+    id: id,
+    ...updateProductDto,
+  });
+
+  if (!producto)
+    throw new NotFoundException(`No se pudo actualizar: ID ${id} no existe`);
+
+  try {
     return await this.productRepository.save(producto);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Error desconocido';
+    console.error("Error en DB:", message);
+    throw new BadRequestException(`Error de persistencia: ${message}`);
   }
+}
 
   // Eliminar (Borrado físico)
   async remove(id: number) {

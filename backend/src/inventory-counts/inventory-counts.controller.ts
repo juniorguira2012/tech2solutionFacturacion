@@ -10,11 +10,12 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
-  Inject,
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Type } from 'class-transformer';
 import { IsString, IsNumber, IsOptional, Min, Max } from 'class-validator';
+import { InventoryCountsService } from './inventory-counts.service';
 
 // DTOs
 export class CreateInventoryCountDto {
@@ -27,8 +28,9 @@ export class CreateInventoryCountDto {
 }
 
 export class AddCountItemDto {
-  @IsString()
-  productoId: string;
+  @Type(() => Number)
+  @IsNumber()
+  productoId: number;
 
   @IsNumber()
   @Min(0)
@@ -57,7 +59,7 @@ export class UpdateCountItemDto {
 @Controller('inventory-counts')
 export class InventoryCountsController {
   constructor(
-    @Inject('InventoryCountsService') private readonly service: any,
+    private readonly service: InventoryCountsService,
   ) {}
 
   /**
@@ -65,17 +67,12 @@ export class InventoryCountsController {
    * Solo usuarios con permiso 'full' pueden crear
    */
   @Post()
-  @UseGuards(null) // Aplicar InventoryWriteGuard cuando esté disponible
   async createInventoryCount(
     @Body() dto: CreateInventoryCountDto,
     @Headers('x-user-id') userId: string,
     @Headers('x-user-role') userRole: string,
     @Headers('x-inventory-permission') permission: string,
   ) {
-    if (!userId) {
-      throw new UnauthorizedException('Usuario no identificado');
-    }
-
     if (permission !== 'full') {
       throw new UnauthorizedException(
         'Solo usuarios con permiso "full" pueden crear conteos',
@@ -84,9 +81,7 @@ export class InventoryCountsController {
 
     return this.service.create({
       ...dto,
-      usuarioId: userId,
-      usuarioRole: userRole,
-    });
+    }, { id: userId, rol: userRole });
   }
 
   /**
@@ -104,7 +99,7 @@ export class InventoryCountsController {
       );
     }
 
-    return this.service.findAll({ almacen });
+    return this.service.findAll(almacen);
   }
 
   /**
@@ -121,7 +116,7 @@ export class InventoryCountsController {
       );
     }
 
-    return this.service.findById(id);
+    return this.service.findOne(Number(id));
   }
 
   /**
@@ -136,17 +131,13 @@ export class InventoryCountsController {
     @Headers('x-user-id') userId: string,
     @Headers('x-inventory-permission') permission: string,
   ) {
-    if (!userId) {
-      throw new UnauthorizedException('Usuario no identificado');
-    }
-
     if (permission !== 'full') {
       throw new UnauthorizedException(
         'Solo usuarios con permiso "full" pueden agregar items al conteo',
       );
     }
 
-    return this.service.addItem(id, dto, userId);
+    return this.service.addProductToCount(Number(id), dto);
   }
 
   /**
@@ -161,10 +152,6 @@ export class InventoryCountsController {
     @Headers('x-user-id') userId: string,
     @Headers('x-inventory-permission') permission: string,
   ) {
-    if (!userId) {
-      throw new UnauthorizedException('Usuario no identificado');
-    }
-
     if (permission !== 'full') {
       throw new UnauthorizedException(
         'Solo usuarios con permiso "full" pueden actualizar items',
@@ -175,7 +162,7 @@ export class InventoryCountsController {
       throw new BadRequestException('La cantidad debe ser un número no negativo');
     }
 
-    return this.service.updateItem(id, itemId, dto, userId);
+    return this.service.updateCountItem(Number(id), Number(itemId), dto);
   }
 
   /**
@@ -189,17 +176,13 @@ export class InventoryCountsController {
     @Headers('x-user-id') userId: string,
     @Headers('x-inventory-permission') permission: string,
   ) {
-    if (!userId) {
-      throw new UnauthorizedException('Usuario no identificado');
-    }
-
     if (permission !== 'full') {
       throw new UnauthorizedException(
         'Solo usuarios con permiso "full" pueden publicar conteos',
       );
     }
 
-    return this.service.publish(id, userId);
+    return this.service.publishAdjustments(Number(id));
   }
 
   /**
@@ -212,16 +195,12 @@ export class InventoryCountsController {
     @Headers('x-user-id') userId: string,
     @Headers('x-inventory-permission') permission: string,
   ) {
-    if (!userId) {
-      throw new UnauthorizedException('Usuario no identificado');
-    }
-
     if (permission !== 'full') {
       throw new UnauthorizedException(
         'Solo usuarios con permiso "full" pueden cancelar conteos',
       );
     }
 
-    return this.service.cancel(id, userId);
+    return this.service.cancelCount(Number(id));
   }
 }

@@ -33,6 +33,10 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  imagen?: string;
+
+  @IsOptional()
+  @IsString()
   almacen?: string;
 
   @IsOptional()

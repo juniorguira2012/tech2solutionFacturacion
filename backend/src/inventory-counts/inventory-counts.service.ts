@@ -119,7 +119,7 @@ export class InventoryCountsService {
         productoNombre: product.nombre,
         codigo: product.codigo,
         cantidadSistema: product.stock,
-        cantidadContada: addCountItemDto.cantidadContada || null,
+        cantidadContada: addCountItemDto.cantidadContada ?? undefined,
         precioUnitario: product.precio,
         unidadMedida: product.unidadMedida || 'Unidad',
       });
