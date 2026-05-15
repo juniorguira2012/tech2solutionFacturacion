@@ -39,9 +39,11 @@ export class ProductsService {
 async update(id: number, updateProductDto: UpdateProductDto) {
   // Eliminamos la lógica de desestructurar createdAt/updatedAt ya que el DTO
   // no los contiene y causaba error de TypeScript.
+  const { ...datosParaActualizar } = updateProductDto;
+
   const producto = await this.productRepository.preload({
     id: id,
-    ...updateProductDto,
+    ...datosParaActualizar,
   });
 
   if (!producto)

@@ -69,7 +69,7 @@ const Ventas = () => {
     setShowDescuentoModal(false);
   };
 
-  const finalizarVenta = useCallback(() => {
+  const finalizarVenta = useCallback(async () => {
   // 1. Validaciones iniciales
   if (carrito.length === 0) {
     alert("El carrito está vacío.");
@@ -90,36 +90,44 @@ const Ventas = () => {
     // 3. Preparar datos dinámicos desde configuración
     const clienteActual = clientes.find(c => c.id.toString() === clienteId.toString()) || { nombre: "Consumidor Final", rnc: "" };
 
-    const nuevaVenta = { 
-    // id: `V-${Date.now()}`,  <-- Si vas a guardar ventas en DB, deja que la DB ponga el ID
-    fecha: new Date().toISOString(),
-    cliente: clienteActual.nombre, 
-    rnc: clienteActual.rnc || "",
-    subtotal: parseFloat(subtotal),
-    descuento: parseFloat(montoDescuento),
-    itbis: parseFloat(impuesto),
-    total: parseFloat(totalFinal), 
-    items: carrito.map(item => ({
-    productoId: item.id, // ID numérico de Postgres
-    cantidad: item.cantidad,
-    precio: item.precio
-  })),
-  vendedorId: usuario?.id,
-};
+    const nuevaVenta = {
+      cliente: clienteActual.nombre,
+      rnc: clienteActual.rnc || "",
+      subtotal: Number(subtotal),
+      descuento: Number(montoDescuento),
+      itbis: Number(impuesto),
+      total: Number(totalFinal),
+      items: carrito.map(item => ({
+        productoId: Number(item.id),
+        cantidad: Number(item.cantidad),
+        precio: Number(item.precio)
+      })),
+      vendedorId: usuario?.id?.toString(),
+    };
 
-    // 4. Ejecutar operaciones críticas
-    // Primero registramos, si esto falla, el 'catch' detendrá todo
-    registrarVenta(nuevaVenta);
-    descontarStock(carrito);
-    
-    // 5. Impresión (se dispara después de registrar)
+    // 4. Ejecutar operaciones críticas - primero registrar la venta
+    const resVenta = await registrarVenta(nuevaVenta);
+
+    if (resVenta && resVenta.success === false) {
+      throw new Error(resVenta.error || "Error al registrar la venta en el servidor.");
+    }
+
+    // 5. Descontar stock en la base de datos (Backend)
+    try {
+      await descontarStock(carrito);
+    } catch (stockError) {
+      console.error("Error al descontar stock:", stockError);
+      alert(`Venta registrada pero hay error en stock: ${stockError.message}`);
+    }
+
+    // 6. Impresión (se dispara después de registrar)
     imprimirTicket(nuevaVenta, carrito);
-    
-    // 6. Limpieza y reset de interfaz
+
+    // 7. Limpieza y reset de interfaz
     setCarrito([]);
     setDescuentoPorcentaje(0);
     setBusquedaCliente("");
-    
+
     // Buscamos el ID del consumidor final para dejarlo seleccionado para la próxima venta
     const consumidor = clientes.find(c => c.nombre.toUpperCase().includes("CONSUMIDOR"));
     if (consumidor) {
@@ -133,7 +141,7 @@ const Ventas = () => {
 
   } catch (error) {
     console.error("Error en flujo de venta:", error);
-    alert("¡ERROR CRÍTICO!: La venta no se pudo registrar. Verifique la consola.");
+    alert(`Error: ${error.message}`);
   }
 }, [carrito, totalFinal, clienteId, clientes, usuario, subtotal, montoDescuento, impuesto, registrarVenta, descontarStock]);
 

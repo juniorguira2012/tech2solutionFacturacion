@@ -5,6 +5,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductsModule } from './products/products.module';
 import { InventoryCountsModule } from './inventory-counts/inventory-counts.module';
+import { MovementsModule } from './movements/movements.module';
+import { SalesModule } from './sales/sales.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { InventoryCountsModule } from './inventory-counts/inventory-counts.modul
     }),
     ProductsModule,
     InventoryCountsModule,
+    MovementsModule,
+    SalesModule,
   ],
 })
 export class AppModule {}

@@ -109,6 +109,27 @@ const ProductosSection = ({ mostrarToast }) => {
     movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
   });
 
+  const [almacenesReales, setAlmacenesReales] = useState([]);
+
+  // Sincronizar almacenes desde localStorage
+  useEffect(() => {
+    const cargarAlmacenes = () => {
+      const saved = localStorage.getItem('posfactura_almacenes_detallados');
+      if (saved) setAlmacenesReales(JSON.parse(saved));
+    };
+
+    if (isModalOpen) cargarAlmacenes();
+    
+    window.addEventListener('storage', cargarAlmacenes);
+    return () => window.removeEventListener('storage', cargarAlmacenes);
+  }, [isModalOpen]);
+
+  // Filtrar ubicaciones según el almacén seleccionado en el formData
+  const ubicacionesDisponibles = useMemo(() => {
+    const almacenEncontrado = almacenesReales.find(a => a.nombre === formData.almacen);
+    return almacenEncontrado ? almacenEncontrado.ubicaciones : [];
+  }, [formData.almacen, almacenesReales]);
+
   const abrirEditar = (prod) => {
     setFormData({
       id: prod.id,
@@ -201,10 +222,18 @@ const handleSave = async (e) => {
   }
 
   // 1. Limpieza de metadatos (evita que NestJS/PostgreSQL exploten con Error 500)
-  const { createdAt, updatedAt, countItems, ...datosBase } = formData;
+  const { createdAt, updatedAt, countItems, vendidos, ...datosBase } = formData;
 
   const dataProcesada = {
     ...datosBase,
+    // ─── Ajuste para la base de datos ───
+    // Generamos el string combinando los selectores dinámicos y el detalle manual
+    ubicacion: (formData.pasillo || formData.fila) 
+      ? `${formData.pasillo || ''}${formData.pasillo && formData.fila ? ' - ' : ''}${formData.fila || ''}`.trim()
+      : '',
+
+    almacen: formData.almacen || 'Principal',
+
     // Forzamos que el ID sea número si existe
     id: isEditing ? Number(formData.id) : undefined, 
     precio: parseFloat(formData.precio) || 0,
@@ -221,13 +250,13 @@ const handleSave = async (e) => {
       guardado = await agregarProducto(dataProcesada);
     }
 
-    if (guardado) {
-      mostrarToast?.(isEditing ? 'Producto actualizado' : 'Producto creado', 'success');
-      cerrarModal(); // Esto ya limpia el formData, el estado de edición y cierra el modal
-    }
+    // Si llegamos aquí sin que lance error, es que fue exitoso
+    mostrarToast?.(isEditing ? 'Producto actualizado' : 'Producto creado', 'success');
+    cerrarModal();
+
   } catch (error) {
-    const mensajeError = error.response?.data?.message || 'Error al guardar producto';
-    mostrarToast?.(mensajeError, 'error');
+    // Ahora capturamos el mensaje real del servidor (ValidationPipe)
+    mostrarToast?.(error.message || 'Error al guardar producto', 'error');
     console.error("Error en handleSave:", error);
   }
 };
@@ -487,11 +516,48 @@ const handleEliminar = (prod) => {
                     {unidadesMedida.filter(u => u.activo).map(u => <option key={u.id} value={u.nombre}>{u.nombre}</option>)}
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Almacén</label>
-                  <select className="w-full px-5 py-3 rounded-2xl border outline-none font-bold text-sm" value={formData.almacen} onChange={(e) => setFormData({...formData, almacen: e.target.value})}>
-                    {['Principal', 'Secundario', 'Temporal', 'Externo'].map(a => <option key={a} value={a}>{a}</option>)}
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Almacén de Depósito</label>
+                  <select 
+                    className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm bg-white"
+                    value={formData.almacen}
+                    onChange={(e) => setFormData({...formData, almacen: e.target.value, pasillo: ''})}
+                  >
+                    <option value="">Seleccionar Almacén</option>
+                    {almacenesReales.map(al => (
+                      <option key={al.id} value={al.nombre}>{al.nombre}</option>
+                    ))}
                   </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Ubicación / Pasillo</label>
+                  <select 
+                    className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm bg-white"
+                    value={formData.pasillo}
+                    onChange={(e) => setFormData({...formData, pasillo: e.target.value})}
+                    disabled={!ubicacionesDisponibles.length}
+                  >
+                    <option value="">
+                      {ubicacionesDisponibles.length > 0 ? 'Seleccionar Ubicación' : 'Sin ubicaciones creadas'}
+                    </option>
+                    {ubicacionesDisponibles.map((ubi, idx) => (
+                      <option key={idx} value={ubi.nombre}>
+                        {ubi.nombre} ({ubi.codigo})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Fila / Nivel</label>
+                  <input 
+                    placeholder="Ej: Nivel 2"
+                    className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm" 
+                    value={formData.fila} 
+                    onChange={(e) => setFormData({...formData, fila: e.target.value})}
+                  />
                 </div>
               </div>
 

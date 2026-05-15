@@ -57,6 +57,10 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  ubicacion?: string;
+
+  @IsOptional()
+  @IsString()
   unidadMedida?: string;
 
   @IsOptional()

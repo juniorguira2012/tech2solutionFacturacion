@@ -1,18 +1,20 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
 const InventarioContext = createContext();
 
 export const InventarioProvider = ({ children }) => {
   const [productos, setProductos] = useState([]);
+  const [movimientos, setMovimientos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorConexion, setErrorConexion] = useState(null);
   const [refreshIndex, setRefreshIndex] = useState(0);
 
   const { usuario } = useAuth();
-  const API_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000`;
-  const API_URL = `${API_BASE_URL}/products`;
+  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000/products`;
+  // Forma más segura de obtener la base sin importar si hay "/" al final
+  const API_BASE_URL = API_URL.split('/products')[0];
 
   // --- Estados de configuración (Categorías y Unidades) ---
   const [categorias, setCategorias] = useState(() => {
@@ -79,7 +81,7 @@ export const InventarioProvider = ({ children }) => {
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 8000);
 
-    fetch(API_URL, { signal: controller.signal })
+    fetch(API_URL, { signal: controller.signal, headers: getAuthHeaders() })
       .then(res => {
         if (!res.ok) throw new Error(`Error: ${res.status}`);
         return res.json();
@@ -96,11 +98,85 @@ export const InventarioProvider = ({ children }) => {
       });
   }, [usuario, refreshIndex, API_URL]);
 
+  // 1.1 Cargar Movimientos (Kardex)
+  const cargarMovimientos = useCallback(async (productoId = null) => {
+    try {
+      const url = productoId 
+        ? `${API_BASE_URL}/movements?productoId=${productoId}`
+        : `${API_BASE_URL}/movements`;
+      
+      const res = await fetch(url, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Error al cargar movimientos');
+      const data = await res.json();
+      setMovimientos(data);
+    } catch (err) {
+      console.error("Error Kardex:", err);
+    }
+  }, [API_BASE_URL]);
+
+  // 2. Registrar Movimiento (Sustituye actualizarProducto en la sección de movimientos)
+  const registrarMovimiento = async (datosMovimiento) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/movements/bulk-receive`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(datosMovimiento)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Error en el movimiento');
+
+      // Refrescamos productos para ver el nuevo stock y el historial
+      setRefreshIndex(prev => prev + 1);
+      setMovimientos(prev => [data, ...prev]);
+      return true;
+    } catch (err) {
+      console.error("Error al registrar movimiento:", err);
+      throw err; // Re-lanzamos para que la UI pueda capturar el error
+    }
+  };
+
+ // --- DENTRO DE InventarioContext.jsx ---
+
+const registrarMovimientosMasivos = async (payload) => {
+  try {
+    // 1. Apuntamos a la ruta exacta de tu controlador de NestJS
+    const res = await fetch(`${API_BASE_URL}/movements/bulk-receive`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      let errorMessage = 'Error en el procesamiento masivo';
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = Array.isArray(errorJson.message) ? errorJson.message.join(', ') : errorJson.message;
+      } catch {
+        errorMessage = errorText;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await res.json();
+
+    // 2. Refrescamos la UI
+    setRefreshIndex(prev => prev + 1);
+    cargarMovimientos(); 
+    
+    return true;
+  } catch (err) {
+    console.error("Error en registrarMovimientosMasivos:", err);
+    throw err; 
+  }
+};
+
   // 2. Agregar Producto
   const agregarProducto = async (nuevoProducto) => {
     try {
-      // Ahora que el backend acepta 'imagen' y payloads grandes, la incluimos
-      const { id, createdAt, updatedAt, ...datosParaEnviar } = nuevoProducto;
+      // Limpiamos campos que el DTO de NestJS podría rechazar si no están habilitados
+      const { id, createdAt, updatedAt, countItems, vendidos, ...datosParaEnviar } = nuevoProducto;
 
       const res = await fetch(API_URL, {
         method: 'POST',
@@ -126,7 +202,7 @@ export const InventarioProvider = ({ children }) => {
       return true;
     } catch (err) {
       console.error("Error al agregar producto:", err);
-      return false;
+      throw err; // Re-lanzamos para que ProductosSection lo atrape
     }
   };
 
@@ -150,8 +226,8 @@ export const InventarioProvider = ({ children }) => {
   const actualizarProducto = async (editado) => {
     try {
       // IMPORTANTE: Quitamos createdAt, updatedAt y countItems porque NestJS da 500 si se los envías
-      // También quitamos vendidos e id del body para evitar conflictos
-      const { id, createdAt, updatedAt, countItems, vendidos, ...datosParaEnviar } = editado;
+      // También quitamos id y ubicacion del body para evitar conflictos con el DTO
+      const { id, createdAt, updatedAt, countItems, ...datosParaEnviar } = editado;
 
       const res = await fetch(`${API_URL}/${id}`, {
         method: 'PATCH',
@@ -178,47 +254,71 @@ export const InventarioProvider = ({ children }) => {
       return true;
     } catch (err) {
       console.error("Error al actualizar:", err);
-      return false;
+      throw err; // Re-lanzamos el error
     }
   };
 
   // 5. Descontar Stock
   const descontarStock = async (itemsCarrito) => {
     try {
-      const promesas = itemsCarrito.map(item => {
-        const prod = productos.find(p => p.id === item.id);
-        if (!prod) return null;
-        return fetch(`${API_URL}/${item.id}`, {
-          method: 'PATCH',
-          headers: getAuthHeaders(),
+      // Creamos headers especiales para despacho que aseguren que el backend
+      // entienda que es una operación de venta y no una gestión manual.
+      const headers = getAuthHeaders();
+      if (headers['x-inventory-permission'] === 'none') {
+        headers['x-inventory-permission'] = 'view'; // Mínimo permiso para despachar
+      }
+
+      const promesas = itemsCarrito.map(async (item) => {
+        const res = await fetch(`${API_BASE_URL}/movements`, {
+          method: 'POST',
+          headers: headers,
           body: JSON.stringify({ 
-            stock: (prod.stock - item.cantidad), 
-            vendidos: (prod.vendidos || 0) + item.cantidad 
+            productoId: Number(item.id), // Aseguramos que sea número para la DB
+            tipo: 'DESPACHAR',
+            cantidad: Number(item.cantidad),
+            nota: 'Venta realizada desde el POS'
           })
-        }).then(res => res.json());
-      }).filter(p => p !== null);
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || `Error al descontar stock de ${item.nombre}`);
+        }
+        return res.json();
+      });
 
       const resultados = await Promise.all(promesas);
-      setProductos(prev => prev.map(p => {
-        const actualizado = resultados.find(r => r.id === p.id);
-        return actualizado || p;
-      }));
+      setRefreshIndex(prev => prev + 1); // Recargamos para ver stock y Kardex actualizado
     } catch (error) {
       console.error("Error al descontar stock:", error);
+      throw error; // Re-lanzamos el error para que Ventas.jsx lo capture
     }
   };
 
-  return (
-    <InventarioContext.Provider value={{ 
-      productos, loading, errorConexion, categorias, setCategorias,
-      unidadesMedida, setUnidadesMedida, agregarProducto, eliminarProducto,
-      actualizarProducto, // <--- CAMBIADO DE 'ducto' A 'actualizarProducto'
-      descontarStock,
-      recargarInventario: () => setRefreshIndex(prev => prev + 1)
-    }}>
-      {children}
-    </InventarioContext.Provider>
-  );
+  // --- Al final de InventarioContext.jsx ---
+
+return (
+  <InventarioContext.Provider value={{ 
+    productos, 
+    movimientos, 
+    loading, 
+    errorConexion, 
+    categorias, 
+    setCategorias,
+    unidadesMedida, 
+    setUnidadesMedida, 
+    agregarProducto, 
+    eliminarProducto,
+    actualizarProducto,
+    descontarStock,
+    registrarMovimiento,         // <-- Asegúrate de que termine en "o" (Minúscula, plural de la función)
+    registrarMovimientosMasivos, // <-- Tu nueva función masiva
+    cargarMovimientos,
+    recargarInventario: () => setRefreshIndex(prev => prev + 1)
+  }}>
+    {children}
+  </InventarioContext.Provider>
+);
 };
 
 export const useInventario = () => useContext(InventarioContext);
