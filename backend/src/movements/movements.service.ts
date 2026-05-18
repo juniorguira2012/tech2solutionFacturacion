@@ -61,8 +61,8 @@ export class MovementsService {
   /**
    * PROCESAR RECIBO MASIVO (Atómico: Todo o Nada)
    */
-  /**
-   * PROCESAR RECIBO MASIVO (Atómico: Todo o Nada)
+/**
+   * PROCESAR RECIBO / DESPACHO MASIVO (Atómico: Todo o Nada)
    */
   async createBulk(bulkData: { tipo: string; nota: string; items: any[]; usuarioId?: any }) {
     const { tipo, nota, items, usuarioId } = bulkData;
@@ -72,8 +72,8 @@ export class MovementsService {
     await queryRunner.startTransaction();
 
     try {
-      // CORRECCIÓN 2: Tipamos explícitamente el arreglo para evitar el error 'never'
       const movimientosCreados: Movement[] = [];
+      const tipoNormalizado = tipo.trim().toUpperCase();
 
       for (const item of items) {
         const { productoId, cantidad, almacen } = item;
@@ -84,21 +84,35 @@ export class MovementsService {
           throw new NotFoundException(`Producto ID ${productoId} no encontrado en la lista`);
         }
 
-        if (tipo.toUpperCase() === 'RECIBIR' || tipo.toUpperCase() === 'ENTRADA') {
-          producto.stock += Number(cantidad);
+        const cantidadNumerica = Number(cantidad);
+
+        // --- NUEVA LÓGICA DE ACTUALIZACIÓN DE STOCK (ENTRADA / SALIDA) ---
+        if (tipoNormalizado === 'RECIBIR' || tipoNormalizado === 'ENTRADA') {
+          producto.stock += cantidadNumerica;
+        } 
+        else if (tipoNormalizado === 'DESPACHAR' || tipoNormalizado === 'SALIDA') {
+          // Validación crítica para no despachar lo que no existe
+          if (producto.stock < cantidadNumerica) {
+            throw new BadRequestException(
+              `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock}, Solicitado: ${cantidadNumerica}`
+            );
+          }
+          producto.stock -= cantidadNumerica;
+        } else {
+          throw new BadRequestException(`Tipo de movimiento masivo no válido: ${tipo}`);
         }
 
+        // Guardamos el producto con el stock actualizado dentro de la transacción
         await queryRunner.manager.save(Product, producto);
 
-        // CORRECCIÓN 1: Forzamos la creación limpia mapeando las propiedades exactas de la entidad
+        // Forzamos la creación limpia mapeando las propiedades exactas de la entidad
         const datosMovimiento: any = {
           productoId: Number(productoId),
-          tipo: tipo.toUpperCase(),
-          cantidad: Number(cantidad),
+          tipo: tipoNormalizado,
+          cantidad: cantidadNumerica,
           nota: `${nota} | Almacén: ${almacen || 'General'}`,
         };
 
-        // Si tu DB usa strings/UUIDs para los usuarios, lo convertimos a String, si usa enteros a Number
         if (usuarioId) {
           datosMovimiento.usuarioId = typeof usuarioId === 'number' ? usuarioId : String(usuarioId);
         }
@@ -109,10 +123,12 @@ export class MovementsService {
         movimientosCreados.push(guardado);
       }
 
+      // Si todo el bucle se ejecuta correctamente, guardamos en la Base de Datos
       await queryRunner.commitTransaction();
       return movimientosCreados;
 
     } catch (err) {
+      // Si un solo producto falla o no tiene stock, se cancela TODO el despacho automáticamente
       await queryRunner.rollbackTransaction();
       throw err;
     } finally {
