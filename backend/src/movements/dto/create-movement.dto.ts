@@ -25,4 +25,8 @@ export class CreateMovementDto {
   @IsOptional()
   @IsString()
   almacenDestino?: string;
+
+  @IsOptional()
+  @IsNumber()
+  costoUnitario?: number;
 }

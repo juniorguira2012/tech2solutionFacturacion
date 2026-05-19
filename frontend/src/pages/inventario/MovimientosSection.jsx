@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useMovimientosForm } from '../../hooks/useMovimientosForm';
 import { FormTransferencia } from './FormTransferencia';
 import { FormMovimientoSimple } from './FormMovimientoSimple';
+import { FormAjuste } from '../../components/FormAjuste';
 
 const MovimientosSection = ({ mostrarToast }) => {
   const { productos, movimientos, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, cargarMovimientos, loading, recargarInventario, almacenesDetallados } = useInventario();
@@ -110,7 +111,12 @@ const MovimientosSection = ({ mostrarToast }) => {
     
     // Reseteamos el estado interno del formulario simple a través del hook si es necesario
     formProps.setMovimientoData({ productoId: '', cantidad: 1, almacenDestino: 'Principal', nota: '' });
-    
+    //Limpieza de los campos de ajuste para que el modal aparezca en blanco
+    formProps.setAjusteProductoId('');
+    formProps.setAjusteAlmacen('');
+    formProps.setAjusteCantidad('');
+    formProps.setAjusteCosto('');
+    formProps.setAjusteNota('');
     setModalOpen(true);
   };
 
@@ -534,7 +540,7 @@ const MovimientosSection = ({ mostrarToast }) => {
               )}
 
               {/* 4. MOVIMIENTOS SIMPLES DIRECTOS (Ajustar, Descartar) */}
-              {(tipoMovimiento === 'ajustar' || tipoMovimiento === 'descartar') && (
+              {(tipoMovimiento === 'descartar') && (
                 <FormMovimientoSimple 
                   tipoMovimiento={tipoMovimiento}
                   productos={productos}
@@ -543,7 +549,26 @@ const MovimientosSection = ({ mostrarToast }) => {
                   setMovimientoData={formProps.setMovimientoData}
                 />
               )}
-
+              {/* 5. NUEVO: FORMULARIO DE AJUSTE AVANZADO (Con Almacén, Cantidad y Costo) */}
+              {tipoMovimiento === 'ajustar' && (
+                <FormAjuste 
+                  productos={productos}
+                  almacenesDisponibles={almacenesNombres} // Tus almacenes del contexto general
+                  onSubmit={formProps.ejecutarMovimiento}
+                  
+                  // Mapeo explícito de los estados específicos de ajuste desde el hook
+                  ajusteProductoId={formProps.ajusteProductoId}
+                  setAjusteProductoId={formProps.setAjusteProductoId}
+                  almacenDestino={formProps.ajusteAlmacen}       // Enlazado con ajusteAlmacen del hook
+                  setAlmacenDestino={formProps.setAjusteAlmacen}  // Enlazado con setAjusteAlmacen del hook
+                  ajusteCantidad={formProps.ajusteCantidad}
+                  setAjusteCantidad={formProps.setAjusteCantidad}
+                  ajusteCosto={formProps.ajusteCosto}
+                  setAjusteCosto={formProps.setAjusteCosto}
+                  ajusteNota={formProps.ajusteNota}
+                  setAjusteNota={formProps.setAjusteNota}
+                />
+              )}
             </div>
           </div>
         </div>
