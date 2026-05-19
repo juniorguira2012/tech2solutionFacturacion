@@ -8,7 +8,7 @@ import {
 import { useInventario } from '../../context/InventarioContext';
 import { useAuth } from '../../context/AuthContext';
 
-// ─── Modal de Confirmación ────────────────────────────────────────────────────
+//Modal de Confirmación
 const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo = 'danger' }) => {
   if (!isOpen) return null;
 
@@ -53,7 +53,7 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
   );
 };
 
-// ─── Componente Principal ─────────────────────────────────────────────────────
+//Componente Principal 
 const ProductosSection = ({ mostrarToast }) => {
   const {
     productos,
@@ -61,7 +61,8 @@ const ProductosSection = ({ mostrarToast }) => {
     eliminarProducto,
     agregarProducto,
     actualizarProducto,
-    categorias,
+    categorias, // Mantener categorías aquí
+    almacenesDetallados, // <-- Obtenemos los almacenes del contexto
     unidadesMedida
   } = useInventario();
   const { usuario } = useAuth();
@@ -109,26 +110,12 @@ const ProductosSection = ({ mostrarToast }) => {
     movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
   });
 
-  const [almacenesReales, setAlmacenesReales] = useState([]);
-
-  // Sincronizar almacenes desde localStorage
-  useEffect(() => {
-    const cargarAlmacenes = () => {
-      const saved = localStorage.getItem('posfactura_almacenes_detallados');
-      if (saved) setAlmacenesReales(JSON.parse(saved));
-    };
-
-    if (isModalOpen) cargarAlmacenes();
-    
-    window.addEventListener('storage', cargarAlmacenes);
-    return () => window.removeEventListener('storage', cargarAlmacenes);
-  }, [isModalOpen]);
-
   // Filtrar ubicaciones según el almacén seleccionado en el formData
   const ubicacionesDisponibles = useMemo(() => {
-    const almacenEncontrado = almacenesReales.find(a => a.nombre === formData.almacen);
+    // Usamos almacenesDetallados del contexto
+    const almacenEncontrado = almacenesDetallados.find(a => a.nombre === formData.almacen);
     return almacenEncontrado ? almacenEncontrado.ubicaciones : [];
-  }, [formData.almacen, almacenesReales]);
+  }, [formData.almacen, almacenesDetallados]);
 
   const abrirEditar = (prod) => {
     setFormData({
@@ -366,7 +353,7 @@ const handleEliminar = (prod) => {
         </div>
         <select value={almacenFiltro} onChange={(e) => setAlmacenFiltro(e.target.value)} className="min-w-44 h-9 px-3 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-600 bg-white">
           <option value="todos">Todos los almacenes</option>
-          {['Principal', 'Secundario', 'Temporal', 'Externo'].map(a => <option key={a} value={a}>{a}</option>)}
+          {almacenesDetallados.map(al => <option key={al.id} value={al.nombre}>{al.nombre}</option>)}
         </select>
       </div>
 
@@ -527,7 +514,7 @@ const handleEliminar = (prod) => {
                     onChange={(e) => setFormData({...formData, almacen: e.target.value, pasillo: ''})}
                   >
                     <option value="">Seleccionar Almacén</option>
-                    {almacenesReales.map(al => (
+                    {almacenesDetallados.map(al => (
                       <option key={al.id} value={al.nombre}>{al.nombre}</option>
                     ))}
                   </select>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Warehouse, Plus, Boxes, MapPin, X, LayoutGrid, List, Edit2, Trash2 } from 'lucide-react';
 
+import { useInventario } from '../../context/InventarioContext';
+
 const AlmacenSection = ({ mostrarToast }) => {
   const [isAlmacenModalOpen, setIsAlmacenModalOpen] = useState(false);
   const [isUbicacionModalOpen, setIsUbicacionModalOpen] = useState(false);
@@ -13,20 +15,9 @@ const AlmacenSection = ({ mostrarToast }) => {
   const [isEditingAlmacen, setIsEditingAlmacen] = useState(false);
   const [editandoAlmacenId, setEditandoAlmacenId] = useState(null);
 
-  const [almacenes, setAlmacenes] = useState(() => {
-    const saved = localStorage.getItem('posfactura_almacenes_detallados');
-    return saved ? JSON.parse(saved) : [
-      { id: 1, nombre: 'Principal', descripcion: 'Almacén central', ubicaciones: [] },
-      { id: 2, nombre: 'Secundario', descripcion: 'Soporte ventas', ubicaciones: [] }
-    ];
-  });
-
+  const { almacenesDetallados: almacenes, setAlmacenesDetallados: setAlmacenes } = useInventario();
   const [almacenFormData, setAlmacenFormData] = useState({ nombre: '', descripcion: '' });
   const [ubicacionFormData, setUbicacionFormData] = useState({ nombre: '', codigo: '', tipo: 'Pasillo' });
-
-  useEffect(() => {
-    localStorage.setItem('posfactura_almacenes_detallados', JSON.stringify(almacenes));
-  }, [almacenes]);
 
   useEffect(() => {
     localStorage.setItem('posfactura_almacen_vista', vistaAlmacen);

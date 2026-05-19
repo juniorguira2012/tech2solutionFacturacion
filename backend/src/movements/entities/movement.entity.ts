@@ -32,6 +32,12 @@ export class Movement {
   @Column({ nullable: true })
   usuarioId: string;
 
+  @Column({ nullable: true })
+  almacenOrigen: string;
+
+  @Column({ nullable: true })
+  almacenDestino: string;
+
   @CreateDateColumn()
   createdAt: Date;
 }

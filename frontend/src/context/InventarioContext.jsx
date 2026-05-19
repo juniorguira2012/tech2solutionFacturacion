@@ -16,6 +16,17 @@ export const InventarioProvider = ({ children }) => {
   // Forma más segura de obtener la base sin importar si hay "/" al final
   const API_BASE_URL = API_URL.split('/products')[0];
 
+  // --- Estado de Almacenes Detallados ---
+  const [almacenesDetallados, setAlmacenesDetallados] = useState(() => {
+    try {
+      const saved = localStorage.getItem('posfactura_almacenes_detallados');
+      return saved ? JSON.parse(saved) : [
+        { id: 1, nombre: 'Principal', descripcion: 'Almacén central', ubicaciones: [] },
+      ];
+    } catch (e) { return []; }
+  });
+
+
   // --- Estados de configuración (Categorías y Unidades) ---
   const [categorias, setCategorias] = useState(() => {
     const saved = localStorage.getItem('posfactura_categorias');
@@ -54,6 +65,21 @@ export const InventarioProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('posfactura_unidades_medida', JSON.stringify(unidadesMedida));
   }, [unidadesMedida]);
+
+  // Sincronizar almacenes desde localStorage y escuchar cambios
+  useEffect(() => {
+    const cargarAlmacenes = () => {
+      try {
+        const saved = localStorage.getItem('posfactura_almacenes_detallados');
+        if (saved) setAlmacenesDetallados(JSON.parse(saved));
+      } catch (e) { console.error("Error al cargar almacenes de localStorage", e); }
+    };
+
+    cargarAlmacenes(); // Cargar al inicio
+    window.addEventListener('storage', cargarAlmacenes); // Escuchar cambios de otras pestañas
+    return () => window.removeEventListener('storage', cargarAlmacenes);
+  }, []); // Solo se ejecuta una vez al montar
+
 
   // --- Helpers ---
   const getInventoryPermission = () => {
@@ -117,7 +143,7 @@ export const InventarioProvider = ({ children }) => {
   // 2. Registrar Movimiento (Sustituye actualizarProducto en la sección de movimientos)
   const registrarMovimiento = async (datosMovimiento) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/movements/bulk-receive`, {
+      const res = await fetch(`${API_BASE_URL}/movements`, { // Corregido para el endpoint de movimientos individuales
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(datosMovimiento)
@@ -133,6 +159,27 @@ export const InventarioProvider = ({ children }) => {
     } catch (err) {
       console.error("Error al registrar movimiento:", err);
       throw err; // Re-lanzamos para que la UI pueda capturar el error
+    }
+  };
+
+  // 2.1 Registrar Transferencia entre almacenes
+  const registrarTransferencia = async (payload) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/movements/transfer`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Error en la transferencia');
+
+      setRefreshIndex(prev => prev + 1);
+      cargarMovimientos();
+      return true;
+    } catch (err) {
+      console.error("Error en registrarTransferencia:", err);
+      throw err;
     }
   };
 
@@ -307,11 +354,14 @@ return (
     setCategorias,
     unidadesMedida, 
     setUnidadesMedida, 
+    almacenesDetallados, // <-- Exponemos los almacenes
+    setAlmacenesDetallados, // <-- Exponemos el setter para AlmacenSection
     agregarProducto, 
     eliminarProducto,
     actualizarProducto,
     descontarStock,
     registrarMovimiento,         // <-- Asegúrate de que termine en "o" (Minúscula, plural de la función)
+    registrarTransferencia,      // <-- Nueva función para transferencias
     registrarMovimientosMasivos, // <-- Tu nueva función masiva
     cargarMovimientos,
     recargarInventario: () => setRefreshIndex(prev => prev + 1)

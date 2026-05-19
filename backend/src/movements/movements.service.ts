@@ -16,51 +16,182 @@ export class MovementsService {
   ) {}
 
   /**
-   * Crear un movimiento individual
+   * PROCESAR TRANSFERENCIA ENTRE ALMACENES (Atómico)
    */
-  async create(createMovementDto: CreateMovementDto) {
-    const { productoId, tipo, cantidad, nota, usuarioId } = createMovementDto;
+  async transferBulk(transferData: { 
+    productoId: number; 
+    almacenOrigen: string; 
+    almacenDestino: string; 
+    cantidad: number; 
+    nota: string; 
+    usuarioId?: any 
+  }) {
+    const { productoId, almacenOrigen, almacenDestino, cantidad, nota, usuarioId } = transferData;
 
-    const producto = await this.productRepository.findOneBy({ id: productoId });
+    if (almacenOrigen === almacenDestino) {
+      throw new BadRequestException('El almacén de origen y destino no pueden ser iguales.');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Buscar el producto para validar que exista
+      const producto = await queryRunner.manager.findOne(Product, { where: { id: productoId } });
+      if (!producto) {
+        throw new NotFoundException(`Producto ID ${productoId} no encontrado`);
+      }
+
+      const cantidadNumerica = Number(cantidad);
+
+      // 2. VALIDAR STOCK EN ORIGEN
+      // NOTA: Si manejas una tabla relacional de stock por almacén (ej: ProductStock), 
+      // buscarías el stock específico de 'almacenOrigen'. Si usas el stock global por ahora:
+      if (producto.stock < cantidadNumerica) {
+        throw new BadRequestException(
+          `Stock insuficiente en ${almacenOrigen}. Disponible: ${producto.stock}, Requerido: ${cantidadNumerica}`
+        );
+      }
+
+      // 3. APLICAR MOVIMIENTO (Restar de Origen y Sumar a Destino)
+      // Si manejas stock global, el neto no cambia, pero registramos el movimiento en el Kardex.
+      // Si manejas stocks separados por almacén, aquí restarías a uno y sumarías al otro.
+      // Asumiendo manejo de Kardex por almacén con stock global de respaldo:
+      producto.stock -= cantidadNumerica; // Descuento temporal para simular la salida del origen
+      await queryRunner.manager.save(Product, producto);
+      
+      producto.stock += cantidadNumerica; // Lo devolvemos al stock global al entrar al destino
+      await queryRunner.manager.save(Product, producto);
+
+      // 4. REGISTRAR LOG DE SALIDA (ORIGEN)
+      const logSalida = queryRunner.manager.create(Movement, {
+        productoId,
+        tipo: 'SALIDA',
+        cantidad: cantidadNumerica,
+        nota: `TRANSFERENCIA (ORIGEN: ${almacenOrigen} -> DESTINO: ${almacenDestino}) | ${nota}`,
+        usuarioId: usuarioId ? String(usuarioId) : undefined
+      });
+      await queryRunner.manager.save(Movement, logSalida);
+
+      // 5. REGISTRAR LOG DE ENTRADA (DESTINO)
+      const logEntrada = queryRunner.manager.create(Movement, {
+        productoId,
+        tipo: 'ENTRADA',
+        cantidad: cantidadNumerica,
+        nota: `TRANSFERENCIA (RECIBIDO DESDE: ${almacenOrigen}) | ${nota}`,
+        usuarioId: usuarioId ? String(usuarioId) : undefined
+      });
+      await queryRunner.manager.save(Movement, logEntrada);
+
+      await queryRunner.commitTransaction();
+      return { message: 'Transferencia procesada con éxito', productoId, cantidad: cantidadNumerica };
+
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+ * Crear un movimiento individual
+ */
+async create(createMovementDto: CreateMovementDto) {
+  const queryRunner = this.dataSource.createQueryRunner();
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
+
+  const { productoId, tipo, cantidad, nota, usuarioId, almacenOrigen, almacenDestino } = createMovementDto;
+
+  try {
+    // Buscar el producto base
+    const producto = await queryRunner.manager.findOne(Product, { where: { id: productoId } });
     if (!producto) {
       throw new NotFoundException(`Producto con ID ${productoId} no encontrado`);
     }
 
-    let nuevoStock = producto.stock;
     const tipoNormalizado = tipo.toUpperCase();
+    const cantidadNumerica = Number(cantidad);
+    let nuevoStock = producto.stock;
 
-    // Lógica de cálculo de stock
-    if (tipoNormalizado === 'ENTRADA' || tipoNormalizado === 'RECIBIR') {
-      nuevoStock += cantidad;
-    } else if (tipoNormalizado === 'SALIDA' || tipoNormalizado === 'DESPACHAR') {
-      if (producto.stock < cantidad) {
-        throw new BadRequestException(`Stock insuficiente. Disponible: ${producto.stock}`);
+    // =========================================================================
+    // CASO ESPECIAL: TRANSFERENCIA ENTRE ALMACENES
+    // No altera el stock global del producto, solo mueve stock interno
+    // =========================================================================
+    if (tipoNormalizado === 'TRANSFERIR') {
+      if (!almacenOrigen || !almacenDestino) {
+        throw new BadRequestException('Para una transferencia se requiere un almacén de origen y uno de destino.');
       }
-      nuevoStock -= cantidad;
-    } else if (tipoNormalizado === 'AJUSTE') {
-      nuevoStock = cantidad;
+      if (almacenOrigen === almacenDestino) {
+        throw new BadRequestException('El almacén de origen y destino no pueden ser el mismo.');
+      }
+
+      // 1. [OPCIONAL] Aquí deberías restar/sumar en tu tabla intermedia de almacenes si la tienes.
+      // Ejemplo: 
+      // await queryRunner.manager.decrement('ProductoAlmacen', { productoId, almacenNombre: almacenOrigen }, 'stock', cantidadNumerica);
+      // await queryRunner.manager.increment('ProductoAlmacen', { productoId, almacenNombre: almacenDestino }, 'stock', cantidadNumerica);
+
+      // El stock global del producto se queda EXACTAMENTE IGUAL
+      nuevoStock = producto.stock; 
+
+    // =========================================================================
+    // CASOS REGULARES: ENTRADAS, SALIDAS Y AJUSTES GLOBALES
+    // =========================================================================
     } else {
-      throw new BadRequestException(`Tipo de movimiento no válido: ${tipo}`);
+      const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION', 'DEVOLUCION_FACTURA'];
+      const tiposDecremento = ['SALIDA', 'DESPACHAR', 'DESCARTAR']; // Sacamos 'TRANSFERIR' de aquí
+
+      if (tiposIncremento.includes(tipoNormalizado)) {
+        nuevoStock += cantidadNumerica;
+      } else if (tiposDecremento.includes(tipoNormalizado)) {
+        // VALIDACIÓN CRÍTICA: No permitir stock negativo general
+        if (producto.stock < cantidadNumerica) {
+          throw new BadRequestException(
+            `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock}, Solicitado: ${cantidadNumerica}`
+          );
+        }
+        nuevoStock -= cantidadNumerica;
+      } else if (tipoNormalizado === 'AJUSTE' || tipoNormalizado === 'AJUSTAR') {
+        if (cantidadNumerica < 0) throw new BadRequestException('El stock no puede ser negativo tras un ajuste');
+        nuevoStock = cantidadNumerica;
+      } else {
+        throw new BadRequestException(`Tipo de movimiento no válido: ${tipo}`);
+      }
+
+      // Actualizar el stock general del producto solo si NO es una transferencia
+      producto.stock = nuevoStock;
+      await queryRunner.manager.save(Product, producto);
     }
 
-    // Guardamos cambios (se podría envolver en transacción también, pero para 1 item es seguro)
-    producto.stock = nuevoStock;
-    await this.productRepository.save(producto);
-
-    const movement = this.movementRepository.create({
-      productoId,
+    // =========================================================================
+    // REGISTRO DEL HISTORIAL DEL MOVIMIENTO (Mapeo limpio para evitar errores de TypeORM)
+    // =========================================================================
+    const movement = queryRunner.manager.create(Movement, {
+      productoId: Number(productoId),
       tipo: tipoNormalizado,
-      cantidad,
-      nota,
-      usuarioId,
+      cantidad: cantidadNumerica,
+      nuevoStock: Number(nuevoStock),
+      nota: nota || undefined,
+      usuarioId: usuarioId ? String(usuarioId) : undefined,
+      almacenOrigen: almacenOrigen || undefined,
+      almacenDestino: almacenDestino || undefined,
     });
 
-    return await this.movementRepository.save(movement);
-  }
+    const savedMovement = await queryRunner.manager.save(Movement, movement);
 
-  /**
-   * PROCESAR RECIBO MASIVO (Atómico: Todo o Nada)
-   */
+    await queryRunner.commitTransaction();
+    return savedMovement;
+
+  } catch (err) {
+    await queryRunner.rollbackTransaction();
+    throw err;
+  } finally {
+    await queryRunner.release();
+  }
+}
+
 /**
    * PROCESAR RECIBO / DESPACHO MASIVO (Atómico: Todo o Nada)
    */
@@ -86,11 +217,14 @@ export class MovementsService {
 
         const cantidadNumerica = Number(cantidad);
 
+        const tiposIncremento = ['RECIBIR', 'ENTRADA', 'DEVOLUCION'];
+        const tiposDecremento = ['DESPACHAR', 'SALIDA', 'DESCARTAR', 'TRANSFERIR'];
+
         // --- NUEVA LÓGICA DE ACTUALIZACIÓN DE STOCK (ENTRADA / SALIDA) ---
-        if (tipoNormalizado === 'RECIBIR' || tipoNormalizado === 'ENTRADA') {
+        if (tiposIncremento.includes(tipoNormalizado)) {
           producto.stock += cantidadNumerica;
         } 
-        else if (tipoNormalizado === 'DESPACHAR' || tipoNormalizado === 'SALIDA') {
+        else if (tiposDecremento.includes(tipoNormalizado)) {
           // Validación crítica para no despachar lo que no existe
           if (producto.stock < cantidadNumerica) {
             throw new BadRequestException(
@@ -110,7 +244,10 @@ export class MovementsService {
           productoId: Number(productoId),
           tipo: tipoNormalizado,
           cantidad: cantidadNumerica,
+          nuevoStock: producto.stock,
           nota: `${nota} | Almacén: ${almacen || 'General'}`,
+          almacenOrigen: almacen || undefined, // Asumimos que 'almacen' en el item es el origen para bulk
+          almacenDestino: undefined, // No aplica directamente para bulk-receive/despachar
         };
 
         if (usuarioId) {
