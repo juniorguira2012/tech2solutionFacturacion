@@ -127,18 +127,9 @@ async create(createMovementDto: CreateMovementDto) {
       if (almacenOrigen === almacenDestino) {
         throw new BadRequestException('El almacén de origen y destino no pueden ser el mismo.');
       }
-
-      // 1. [OPCIONAL] Aquí deberías restar/sumar en tu tabla intermedia de almacenes si la tienes.
-      // Ejemplo: 
-      // await queryRunner.manager.decrement('ProductoAlmacen', { productoId, almacenNombre: almacenOrigen }, 'stock', cantidadNumerica);
-      // await queryRunner.manager.increment('ProductoAlmacen', { productoId, almacenNombre: almacenDestino }, 'stock', cantidadNumerica);
-
       // El stock global del producto se queda EXACTAMENTE IGUAL
-      nuevoStock = producto.stock; 
-
-    // =========================================================================
+      nuevoStock = producto.stock;
     // CASOS REGULARES: ENTRADAS, SALIDAS Y AJUSTES GLOBALES
-    // =========================================================================
     } else {
       const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION', 'DEVOLUCION_FACTURA'];
       const tiposDecremento = ['SALIDA', 'DESPACHAR', 'DESCARTAR']; // Sacamos 'TRANSFERIR' de aquí
@@ -156,6 +147,12 @@ async create(createMovementDto: CreateMovementDto) {
       } else if (tipoNormalizado === 'AJUSTE' || tipoNormalizado === 'AJUSTAR') {
         if (cantidadNumerica < 0) throw new BadRequestException('El stock no puede ser negativo tras un ajuste');
         nuevoStock = cantidadNumerica;
+
+        // Sincronizamos el precio del producto con el valor de costo enviado en el ajuste
+        if (createMovementDto.costoUnitario !== undefined) {
+          producto.precio = Number(createMovementDto.costoUnitario);
+        }
+        producto.stock = nuevoStock;
       } else {
         throw new BadRequestException(`Tipo de movimiento no válido: ${tipo}`);
       }
@@ -173,10 +170,11 @@ async create(createMovementDto: CreateMovementDto) {
       tipo: tipoNormalizado,
       cantidad: cantidadNumerica,
       nuevoStock: Number(nuevoStock),
-      nota: nota || undefined,
+      nota,
       usuarioId: usuarioId ? String(usuarioId) : undefined,
       almacenOrigen: almacenOrigen || undefined,
       almacenDestino: almacenDestino || undefined,
+      costoUnitario: createMovementDto.costoUnitario ? Number(createMovementDto.costoUnitario) : undefined,
     });
 
     const savedMovement = await queryRunner.manager.save(Movement, movement);
