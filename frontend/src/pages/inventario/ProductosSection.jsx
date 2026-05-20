@@ -387,9 +387,20 @@ const handleEliminar = (prod) => {
                       <p className="text-[8px] font-black uppercase opacity-70">Stock</p>
                       <span className="text-sm font-black">{prod.stock}</span>
                     </div>
-                    <div className="bg-slate-50 p-1.5 rounded-lg border">
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Almacén</p>
-                      <p className="text-[9px] font-black truncate">{prod.almacen || 'Principal'}</p>
+                    <div className="bg-slate-50 p-1.5 rounded-lg border overflow-hidden">
+                      <p className="text-[8px] font-black text-slate-400 uppercase">Por Almacén</p>
+                      <div className="max-h-[30px] overflow-y-auto">
+                        {prod.warehouseStocks && prod.warehouseStocks.length > 0 ? (
+                          prod.warehouseStocks.map(ws => (
+                            <div key={ws.id} className="flex justify-between items-center gap-1">
+                              <span className="text-[7px] font-black truncate uppercase text-slate-500">{ws.almacen}:</span>
+                              <span className="text-[7px] font-black text-slate-700">{ws.cantidad}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-[9px] font-black truncate">{prod.almacen || 'Principal'}</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {permisoInventario === 'full' && (

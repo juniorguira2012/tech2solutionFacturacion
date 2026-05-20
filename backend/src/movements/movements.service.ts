@@ -1,9 +1,10 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm'; // Añadimos DataSource
+import { Repository, DataSource, EntityManager } from 'typeorm'; // Añadimos DataSource
 import { Movement } from './entities/movement.entity';
 import { Product } from '../products/entities/product.entity';
 import { CreateMovementDto } from './dto/create-movement.dto';
+import { ProductWarehouseStock } from '../products/entities/product-warehouse-stock.entity';
 
 @Injectable()
 export class MovementsService {
@@ -14,6 +15,31 @@ export class MovementsService {
     private productRepository: Repository<Product>,
     private dataSource: DataSource, // <--- Inyectado para transacciones robustas
   ) {}
+
+  /**
+   * Helper para actualizar el stock por almacén de forma atómica
+   */
+  private async updateWarehouseStock(
+    manager: EntityManager,
+    productoId: number,
+    almacen: string,
+    cantidad: number,
+    isAbsolute: boolean = false,
+  ) {
+    if (!almacen) return;
+    
+    let stock = await manager.findOne(ProductWarehouseStock, {
+      where: { productoId: Number(productoId), almacen },
+    });
+
+    if (!stock) {
+      stock = manager.create(ProductWarehouseStock, { productoId: Number(productoId), almacen, cantidad: 0 });
+    }
+
+    stock.cantidad = isAbsolute ? cantidad : Number(stock.cantidad) + cantidad;
+    
+    await manager.save(ProductWarehouseStock, stock);
+  }
 
   /**
    * PROCESAR TRANSFERENCIA ENTRE ALMACENES (Atómico)
@@ -54,19 +80,15 @@ export class MovementsService {
         );
       }
 
-      // 3. APLICAR MOVIMIENTO (Restar de Origen y Sumar a Destino)
-      // Si manejas stock global, el neto no cambia, pero registramos el movimiento en el Kardex.
-      // Si manejas stocks separados por almacén, aquí restarías a uno y sumarías al otro.
-      // Asumiendo manejo de Kardex por almacén con stock global de respaldo:
-      producto.stock -= cantidadNumerica; // Descuento temporal para simular la salida del origen
-      await queryRunner.manager.save(Product, producto);
-      
-      producto.stock += cantidadNumerica; // Lo devolvemos al stock global al entrar al destino
-      await queryRunner.manager.save(Product, producto);
+      // 3. ACTUALIZAR STOCKS POR ALMACÉN
+      await this.updateWarehouseStock(queryRunner.manager, productoId, almacenOrigen, -cantidadNumerica);
+      await this.updateWarehouseStock(queryRunner.manager, productoId, almacenDestino, cantidadNumerica);
+
+      // El stock global no cambia en una transferencia entre almacenes.
 
       // 4. REGISTRAR LOG DE SALIDA (ORIGEN)
       const logSalida = queryRunner.manager.create(Movement, {
-        productoId,
+        productoId: Number(productoId),
         tipo: 'SALIDA',
         cantidad: cantidadNumerica,
         nota: `TRANSFERENCIA (ORIGEN: ${almacenOrigen} -> DESTINO: ${almacenDestino}) | ${nota}`,
@@ -76,7 +98,7 @@ export class MovementsService {
 
       // 5. REGISTRAR LOG DE ENTRADA (DESTINO)
       const logEntrada = queryRunner.manager.create(Movement, {
-        productoId,
+        productoId: Number(productoId),
         tipo: 'ENTRADA',
         cantidad: cantidadNumerica,
         nota: `TRANSFERENCIA (RECIBIDO DESDE: ${almacenOrigen}) | ${nota}`,
@@ -103,7 +125,7 @@ async create(createMovementDto: CreateMovementDto) {
   await queryRunner.connect();
   await queryRunner.startTransaction();
 
-  const { productoId, tipo, cantidad, nota, usuarioId, almacenOrigen, almacenDestino } = createMovementDto;
+  const { productoId, tipo, cantidad, nota, usuarioId, almacenOrigen, almacenDestino, referencia } = createMovementDto;
 
   try {
     // Buscar el producto base
@@ -115,52 +137,60 @@ async create(createMovementDto: CreateMovementDto) {
     const tipoNormalizado = tipo.toUpperCase();
     const cantidadNumerica = Number(cantidad);
     let nuevoStock = producto.stock;
+    const targetAlmacen = almacenDestino || almacenOrigen || producto.almacen || 'Principal';
 
     // =========================================================================
     // CASO ESPECIAL: TRANSFERENCIA ENTRE ALMACENES
-    // No altera el stock global del producto, solo mueve stock interno
     // =========================================================================
     if (tipoNormalizado === 'TRANSFERIR') {
       if (!almacenOrigen || !almacenDestino) {
         throw new BadRequestException('Para una transferencia se requiere un almacén de origen y uno de destino.');
       }
-      if (almacenOrigen === almacenDestino) {
-        throw new BadRequestException('El almacén de origen y destino no pueden ser el mismo.');
-      }
-      // El stock global del producto se queda EXACTAMENTE IGUAL
-      nuevoStock = producto.stock;
+      await this.updateWarehouseStock(queryRunner.manager, productoId, almacenOrigen, -cantidadNumerica);
+      await this.updateWarehouseStock(queryRunner.manager, productoId, almacenDestino, cantidadNumerica);
+      
     // CASOS REGULARES: ENTRADAS, SALIDAS Y AJUSTES GLOBALES
     } else {
-      const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION', 'DEVOLUCION_FACTURA'];
-      const tiposDecremento = ['SALIDA', 'DESPACHAR', 'DESCARTAR']; // Sacamos 'TRANSFERIR' de aquí
+        // (Mercancía que ENTRA al almacén)
+        const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION_FACTURA'];
+        // (Mercancía que SALE del almacén hacia afuera o al proveedor)
+        const tiposDecremento = ['SALIDA', 'DESPACHAR', 'DESCARTAR', 'DEVOLUCION']; 
 
-      if (tiposIncremento.includes(tipoNormalizado)) {
-        nuevoStock += cantidadNumerica;
-      } else if (tiposDecremento.includes(tipoNormalizado)) {
-        // VALIDACIÓN CRÍTICA: No permitir stock negativo general
-        if (producto.stock < cantidadNumerica) {
-          throw new BadRequestException(
-            `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock}, Solicitado: ${cantidadNumerica}`
-          );
-        }
-        nuevoStock -= cantidadNumerica;
-      } else if (tipoNormalizado === 'AJUSTE' || tipoNormalizado === 'AJUSTAR') {
-        if (cantidadNumerica < 0) throw new BadRequestException('El stock no puede ser negativo tras un ajuste');
-        nuevoStock = cantidadNumerica;
+        if (tiposIncremento.includes(tipoNormalizado)) {
+          nuevoStock += cantidadNumerica;
+          await this.updateWarehouseStock(queryRunner.manager, productoId, targetAlmacen, cantidadNumerica);
 
-        // Sincronizamos el precio del producto con el valor de costo enviado en el ajuste
-        if (createMovementDto.costoUnitario !== undefined) {
-          producto.precio = Number(createMovementDto.costoUnitario);
+        } else if (tiposDecremento.includes(tipoNormalizado)) {
+          if (producto.stock < cantidadNumerica) {
+            throw new BadRequestException(
+              `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock}, Solicitado: ${cantidadNumerica}`
+            );
+          }
+          nuevoStock -= cantidadNumerica;   
+          await this.updateWarehouseStock(queryRunner.manager, productoId, targetAlmacen, -cantidadNumerica);
+
+        } else if (tipoNormalizado === 'AJUSTE' || tipoNormalizado === 'AJUSTAR') {
+          if (cantidadNumerica < 0) throw new BadRequestException('El stock no puede ser negativo tras un ajuste');
+          
+          await this.updateWarehouseStock(queryRunner.manager, productoId, targetAlmacen, cantidadNumerica, true);
+          
+          // Recalculamos el stock global basado en todos los almacenes
+          const allStocks = await queryRunner.manager.find(ProductWarehouseStock, { where: { productoId: Number(productoId) } });
+          nuevoStock = allStocks.reduce((sum, s) => sum + Number(s.cantidad), 0);
+
+          // Sincronizamos el precio/costo del producto con el valor enviado en el ajuste
+          if (createMovementDto.costoUnitario !== undefined && createMovementDto.costoUnitario !== null) {
+            producto.precio = Number(createMovementDto.costoUnitario);
+          }
+          
+        } else {
+          throw new BadRequestException(`Tipo de movimiento no válido: ${tipo}`);
         }
+
+        // Actualizar el stock general del producto de forma centralizada
         producto.stock = nuevoStock;
-      } else {
-        throw new BadRequestException(`Tipo de movimiento no válido: ${tipo}`);
       }
-
-      // Actualizar el stock general del producto solo si NO es una transferencia
-      producto.stock = nuevoStock;
-      await queryRunner.manager.save(Product, producto);
-    }
+    await queryRunner.manager.save(Product, producto);
 
     // =========================================================================
     // REGISTRO DEL HISTORIAL DEL MOVIMIENTO (Mapeo limpio para evitar errores de TypeORM)
@@ -172,9 +202,10 @@ async create(createMovementDto: CreateMovementDto) {
       nuevoStock: Number(nuevoStock),
       nota,
       usuarioId: usuarioId ? String(usuarioId) : undefined,
-      almacenOrigen: almacenOrigen || undefined,
-      almacenDestino: almacenDestino || undefined,
+      almacenOrigen: almacenOrigen || targetAlmacen,
+      almacenDestino: almacenDestino || targetAlmacen,
       costoUnitario: createMovementDto.costoUnitario ? Number(createMovementDto.costoUnitario) : undefined,
+      referencia: referencia || undefined, // Aseguramos que se guarde la referencia si existe
     });
 
     const savedMovement = await queryRunner.manager.save(Movement, movement);
@@ -194,7 +225,7 @@ async create(createMovementDto: CreateMovementDto) {
    * PROCESAR RECIBO / DESPACHO MASIVO (Atómico: Todo o Nada)
    */
   async createBulk(bulkData: { tipo: string; nota: string; items: any[]; usuarioId?: any }) {
-    const { tipo, nota, items, usuarioId } = bulkData;
+    const { tipo, nota, items, usuarioId, referencia } = bulkData;
     
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -221,6 +252,7 @@ async create(createMovementDto: CreateMovementDto) {
         // --- NUEVA LÓGICA DE ACTUALIZACIÓN DE STOCK (ENTRADA / SALIDA) ---
         if (tiposIncremento.includes(tipoNormalizado)) {
           producto.stock += cantidadNumerica;
+          await this.updateWarehouseStock(queryRunner.manager, productoId, almacen || 'Principal', cantidadNumerica);
         } 
         else if (tiposDecremento.includes(tipoNormalizado)) {
           // Validación crítica para no despachar lo que no existe
@@ -230,6 +262,7 @@ async create(createMovementDto: CreateMovementDto) {
             );
           }
           producto.stock -= cantidadNumerica;
+          await this.updateWarehouseStock(queryRunner.manager, productoId, almacen || 'Principal', -cantidadNumerica);
         } else {
           throw new BadRequestException(`Tipo de movimiento masivo no válido: ${tipo}`);
         }
@@ -246,6 +279,7 @@ async create(createMovementDto: CreateMovementDto) {
           nota: `${nota} | Almacén: ${almacen || 'General'}`,
           almacenOrigen: almacen || undefined, // Asumimos que 'almacen' en el item es el origen para bulk
           almacenDestino: undefined, // No aplica directamente para bulk-receive/despachar
+          referencia: referencia || undefined,
         };
 
         if (usuarioId) {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Package, Tags, ArrowLeftRight, CheckCircle,
   ClipboardList, Bell, Layers3, AlertTriangle,
-  Warehouse, Ruler, Braces, Plug
+  Warehouse, Ruler, Braces, Plug, Truck
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import AlmacenSection from './inventario/AlmacenSection';
@@ -13,6 +13,7 @@ import UnidadesSection from './inventario/UnidadesSection';
 import ProductosSection from './inventario/ProductosSection';
 import CamposPersonalizadosSection from './inventario/CamposPersonalizadosSection';
 import IntegracionesSection from './inventario/IntegracionesSection';
+import ProveedoresSection from './inventario/ProveedoresSection';
 
 const Inventario = () => {
   const { productos, categorias, setCategorias } = useInventario();
@@ -37,6 +38,7 @@ const Inventario = () => {
     { id: 'productos', label: 'Producto', icon: Package },
     { id: 'categoria', label: 'Categoría', icon: Tags },
     { id: 'movimiento', label: 'Movimiento de inventario', icon: ArrowLeftRight },
+    { id: 'proveedores', label: 'Proveedores', icon: Truck },
     { id: 'almacen', label: 'Almacén', icon: Warehouse },
     { id: 'conteo', label: 'Conteo Físico', icon: ClipboardList },
     { id: 'alerta', label: 'Alerta', icon: Bell },
@@ -77,6 +79,8 @@ const Inventario = () => {
             <CategoriasSection categorias={categorias} setCategorias={setCategorias} mostrarToast={mostrarToast} />
           ) : seccionActiva === 'movimiento' ? (
             <MovimientosSection />
+          ) : seccionActiva === 'proveedores' ? (
+            <ProveedoresSection mostrarToast={mostrarToast} />
           ) : seccionActiva === 'almacen' ? (
             <AlmacenSection mostrarToast={mostrarToast} />
           ) : seccionActiva === 'conteo' ? (

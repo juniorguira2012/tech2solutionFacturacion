@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { CountItem } from '../../inventory-counts/entities/count-item.entity';
+import { ProductWarehouseStock } from './product-warehouse-stock.entity';
 
 @Entity('products')
 export class Product {
@@ -83,6 +84,10 @@ export class Product {
   // el id como número plano.
   @OneToMany(() => CountItem, (item) => item.productoId, { cascade: false })
   countItems: CountItem[];
+
+  // Relación para el stock desglosado por almacén
+  @OneToMany(() => ProductWarehouseStock, (stock) => stock.producto, { cascade: true, eager: true })
+  warehouseStocks: ProductWarehouseStock[];
 
   // ─── Timestamps ───────────────────────────────────────────────────────────
   @CreateDateColumn()

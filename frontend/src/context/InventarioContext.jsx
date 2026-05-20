@@ -46,6 +46,15 @@ export const InventarioProvider = ({ children }) => {
     ];
   });
 
+  const [proveedores, setProveedores] = useState(() => {
+    try {
+      const saved = localStorage.getItem('posfactura_proveedores');
+      return saved ? JSON.parse(saved) : [
+        { id: 1, nombre: 'Proveedor Genérico', rnc: '', telefono: '', email: '', categoria: 'Estándar' }
+      ];
+    } catch (e) { return []; }
+  });
+
   const [unidadesMedida, setUnidadesMedida] = useState(() => {
     try {
       const saved = localStorage.getItem('posfactura_unidades_medida');
@@ -61,6 +70,10 @@ export const InventarioProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('posfactura_categorias', JSON.stringify(categorias));
   }, [categorias]);
+
+  useEffect(() => {
+    localStorage.setItem('posfactura_proveedores', JSON.stringify(proveedores));
+  }, [proveedores]);
 
   useEffect(() => {
     localStorage.setItem('posfactura_unidades_medida', JSON.stringify(unidadesMedida));
@@ -352,6 +365,8 @@ return (
     errorConexion, 
     categorias, 
     setCategorias,
+    proveedores,
+    setProveedores,
     unidadesMedida, 
     setUnidadesMedida, 
     almacenesDetallados, // <-- Exponemos los almacenes

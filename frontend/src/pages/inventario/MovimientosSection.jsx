@@ -12,12 +12,14 @@ import { FormMovimientoSimple } from './FormMovimientoSimple';
 import { FormAjuste } from '../../components/FormAjuste';
 
 const MovimientosSection = ({ mostrarToast }) => {
-  const { productos, movimientos, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, cargarMovimientos, loading, recargarInventario, almacenesDetallados } = useInventario();
+  const { productos, movimientos, proveedores, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, cargarMovimientos, loading, recargarInventario, almacenesDetallados } = useInventario();
   const { historialVentas } = useVentas();
   const { usuario } = useAuth();
   
   // Mapeamos los almacenes detallados a una lista de nombres para el selector
   const almacenesNombres = useMemo(() => almacenesDetallados.map(a => a.nombre), [almacenesDetallados]);
+  const [proveedorSeleccionado, setProveedorSeleccionado] = useState('');
+
   // Estados de control de la UI principal
   const [modalOpen, setModalOpen] = useState(false);
   const [tipoMovimiento, setTipoMovimiento] = useState(null);
@@ -32,6 +34,7 @@ const MovimientosSection = ({ mostrarToast }) => {
     setItemsEnCarritoMovimiento([]);
     setBusquedaCarrito('');
     setResultadosBusquedaCarrito([]);
+    setProveedorSeleccionado('');
   };
 
   // Inicialización de nuestro Custom Hook
@@ -44,6 +47,7 @@ const MovimientosSection = ({ mostrarToast }) => {
   const [itemsEnCarritoMovimiento, setItemsEnCarritoMovimiento] = useState([]);
   const [busquedaCarrito, setBusquedaCarrito] = useState('');
   const [resultadosBusquedaCarrito, setResultadosBusquedaCarrito] = useState([]); // Mantener este estado local
+  const [resultadosBusquedaFactura, setResultadosBusquedaFactura] = useState([]);
 
   const [subTipoDevolucion, setSubTipoDevolucion] = useState('producto'); 
   const [busquedaFactura, setBusquedaFactura] = useState('');
@@ -73,6 +77,19 @@ const MovimientosSection = ({ mostrarToast }) => {
     setResultadosBusquedaCarrito(filtrados);
   }, [busquedaCarrito, productos]);
 
+  // Lógica de búsqueda de facturas para el dropdown
+  useEffect(() => {
+    if (!busquedaFactura.trim()) {
+      setResultadosBusquedaFactura([]);
+      return;
+    }
+    const filtradas = historialVentas.filter(v => 
+      v.id.toString().includes(busquedaFactura) || 
+      v.cliente?.toLowerCase().includes(busquedaFactura.toLowerCase())
+    ).slice(0, 5); // Limitamos a 5 resultados para el dropdown
+    setResultadosBusquedaFactura(filtradas);
+  }, [busquedaFactura, historialVentas]);
+
   // Cargar historial al montar el componente
   useEffect(() => {
     cargarMovimientos();
@@ -98,6 +115,31 @@ const MovimientosSection = ({ mostrarToast }) => {
     }]);
     setBusquedaCarrito('');
     setResultadosBusquedaCarrito([]);
+  };
+
+  // Función para cargar automáticamente los items de una factura al carrito
+  const cargarItemsDeFactura = (factura) => {
+    const itemsNuevos = factura.items.map(item => {
+      const p = productos.find(prod => prod.id === item.productoId);
+      return {
+        ...p,
+        id: item.productoId,
+        nombre: p?.nombre || item.nombre,
+        stock: p?.stock || 0,
+        almacen: p?.almacen || 'Principal',
+        cantidadMovimiento: item.cantidad
+      };
+    });
+
+    // Evitar duplicados al cargar
+    const idsExistentes = new Set(itemsEnCarritoMovimiento.map(i => i.id));
+    const itemsUnicos = itemsNuevos.filter(i => !idsExistentes.has(i.id));
+    
+    setItemsEnCarritoMovimiento([...itemsEnCarritoMovimiento, ...itemsUnicos]);
+    setFacturaEncontrada(factura);
+    setBusquedaFactura(factura.id.toString());
+    setResultadosBusquedaFactura([]);
+    mostrarToast?.(`Cargados ${itemsUnicos.length} productos de la factura ${factura.id}`, "success");
   };
 
   const abrirModal = (tipo) => {
@@ -139,12 +181,13 @@ const MovimientosSection = ({ mostrarToast }) => {
 
       const payload = {
         tipo: tipo, 
-        nota: `${prefijoNota} - ${new Date().toLocaleDateString()}`,
+        nota: `${prefijoNota} ${proveedorSeleccionado ? `(Prov: ${proveedorSeleccionado})` : ''} - ${new Date().toLocaleDateString()}`,
         items: itemsEnCarritoMovimiento.map(item => ({
           productoId: item.id,
           cantidad: Number(item.cantidadMovimiento),
           almacen: item.almacen || 'Principal'
         })),
+        referencia: facturaEncontrada?.id || undefined,
         usuarioId: Number(usuario?.id)
       };
 
@@ -414,6 +457,43 @@ const MovimientosSection = ({ mostrarToast }) => {
               {/* 1. FLUJOS MASIVOS (CARRITO) */}
               {esFlujoMovimientoMasivo && (
                 <div className="space-y-4 relative">
+                  {/* Selector de Proveedor para Recibos */}
+                  {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Proveedor de Mercancía</label>
+                      <select 
+                        className="w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white"
+                        value={proveedorSeleccionado}
+                        onChange={(e) => setProveedorSeleccionado(e.target.value)}
+                      >
+                        <option value="">Seleccionar Proveedor...</option>
+                        {proveedores.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Buscador de Factura opcional para vincular recibos */}
+                  <div className="relative">
+                    <RefreshCw className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                      type="text" 
+                      placeholder="Vincular con Factura (Opcional)..."
+                      className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-slate-50/50"
+                      value={busquedaFactura}
+                      onChange={(e) => setBusquedaFactura(e.target.value)}
+                    />
+                    {resultadosBusquedaFactura.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 shadow-xl rounded-xl z-[60] p-1">
+                        {resultadosBusquedaFactura.map(f => (
+                          <div key={f.id} onClick={() => cargarItemsDeFactura(f)} className="px-4 py-2 hover:bg-brand/5 rounded-lg cursor-pointer transition-colors border-b last:border-0">
+                            <p className="text-[10px] font-black text-slate-700">FACTURA #{f.id}</p>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase">{f.cliente} - {f.total.toLocaleString()} USD</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input 
@@ -510,9 +590,28 @@ const MovimientosSection = ({ mostrarToast }) => {
                     />
                   ) : (
                     <div className="space-y-4">
-                      <div className="flex gap-2">
-                        <input type="text" placeholder="Número de Factura..." className="flex-1 h-12 px-4 rounded-2xl border border-slate-200 text-xs font-bold" value={busquedaFactura} onChange={(e) => setBusquedaFactura(e.target.value)} />
-                        <button onClick={buscarFactura} className="px-6 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest">Buscar</button>
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input 
+                          type="text" 
+                          placeholder="Buscar factura por número o cliente..." 
+                          className="w-full h-14 pl-12 pr-4 rounded-2xl border-2 border-slate-100 outline-none focus:border-brand font-bold text-sm bg-white shadow-sm"
+                          value={busquedaFactura} 
+                          onChange={(e) => setBusquedaFactura(e.target.value)} 
+                        />
+                        {resultadosBusquedaFactura.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 overflow-hidden">
+                            {resultadosBusquedaFactura.map(f => (
+                              <div key={f.id} onClick={() => { setFacturaEncontrada(f); setBusquedaFactura(f.id); setResultadosBusquedaFactura([]); }} className="p-4 hover:bg-brand/5 cursor-pointer border-b last:border-0 transition-colors">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-black text-slate-800 text-xs">FACTURA #{f.id}</span>
+                                  <span className="text-[10px] font-bold text-brand">{f.total.toLocaleString()} USD</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase">{f.cliente}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       {facturaEncontrada && (
                         <div className="space-y-4">
