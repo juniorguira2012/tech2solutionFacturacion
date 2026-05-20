@@ -220,11 +220,10 @@ async create(createMovementDto: CreateMovementDto) {
     await queryRunner.release();
   }
 }
-
 /**
    * PROCESAR RECIBO / DESPACHO MASIVO (Atómico: Todo o Nada)
    */
-  async createBulk(bulkData: { tipo: string; nota: string; items: any[]; usuarioId?: any }) {
+  async createBulk(bulkData: { tipo: string; nota: string; items: any[]; usuarioId?: any; referencia?: string }) {
     const { tipo, nota, items, usuarioId, referencia } = bulkData;
     
     const queryRunner = this.dataSource.createQueryRunner();
@@ -307,7 +306,7 @@ async create(createMovementDto: CreateMovementDto) {
 
   async findAll() {
     return await this.movementRepository.find({
-      relations: ['producto'],
+      relations: ['producto'], // Prueba quitando 'producto.proveedor' si falla
       order: { createdAt: 'DESC' },
     });
   }
@@ -315,7 +314,7 @@ async create(createMovementDto: CreateMovementDto) {
   async findByProductId(productoId: number) {
     return await this.movementRepository.find({
       where: { productoId },
-      relations: ['producto'],
+      relations: ['producto', 'producto.proveedor'],
       order: { createdAt: 'DESC' },
     });
   }

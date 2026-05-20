@@ -46,14 +46,7 @@ export const InventarioProvider = ({ children }) => {
     ];
   });
 
-  const [proveedores, setProveedores] = useState(() => {
-    try {
-      const saved = localStorage.getItem('posfactura_proveedores');
-      return saved ? JSON.parse(saved) : [
-        { id: 1, nombre: 'Proveedor Genérico', rnc: '', telefono: '', email: '', categoria: 'Estándar' }
-      ];
-    } catch (e) { return []; }
-  });
+  const [proveedores, setProveedores] = useState([]);
 
   const [unidadesMedida, setUnidadesMedida] = useState(() => {
     try {
@@ -70,10 +63,6 @@ export const InventarioProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('posfactura_categorias', JSON.stringify(categorias));
   }, [categorias]);
-
-  useEffect(() => {
-    localStorage.setItem('posfactura_proveedores', JSON.stringify(proveedores));
-  }, [proveedores]);
 
   useEffect(() => {
     localStorage.setItem('posfactura_unidades_medida', JSON.stringify(unidadesMedida));
@@ -135,6 +124,12 @@ export const InventarioProvider = ({ children }) => {
         window.clearTimeout(timeoutId);
         setLoading(false);
       });
+
+    // Cargar proveedores desde la DB
+    fetch(`${API_BASE_URL}/providers`, { headers: getAuthHeaders() })
+      .then(res => res.json())
+      .then(data => setProveedores(Array.isArray(data) ? data : []))
+      .catch(err => console.error("Error cargando proveedores:", err));
   }, [usuario, refreshIndex, API_URL]);
 
   // 1.1 Cargar Movimientos (Kardex)
@@ -266,6 +261,65 @@ const registrarMovimientosMasivos = async (payload) => {
     }
   };
 
+  // --- GESTIÓN DE PROVEEDORES (DB) ---
+  const agregarProveedor = async (nuevo) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/providers`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(nuevo)
+      });
+
+      // Validamos si la respuesta es exitosa antes de procesar el JSON
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: `Error del servidor (${res.status})` }));
+        throw new Error(errorData.message || 'Error al crear proveedor');
+      }
+
+      const data = await res.json();
+      setProveedores(prev => [...prev, data]);
+      return true;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const actualizarProveedor = async (editado) => {
+    try {
+      const { id, ...datos } = editado;
+      const res = await fetch(`${API_BASE_URL}/providers/${id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(datos)
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: `Error (${res.status})` }));
+        throw new Error(errorData.message || 'Error al actualizar proveedor');
+      }
+
+      const data = await res.json();
+      setProveedores(prev => prev.map(p => p.id === data.id ? data : p));
+      return true;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const eliminarProveedor = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/providers/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('No se pudo eliminar');
+      setProveedores(prev => prev.filter(p => p.id !== id));
+      return true;
+    } catch (err) {
+      console.error(err);
+      return false;
+    }
+  };
+
   // 3. Eliminar Producto
   const eliminarProducto = async (id) => {
     try {
@@ -366,6 +420,9 @@ return (
     categorias, 
     setCategorias,
     proveedores,
+    agregarProveedor,
+    actualizarProveedor,
+    eliminarProveedor,
     setProveedores,
     unidadesMedida, 
     setUnidadesMedida, 

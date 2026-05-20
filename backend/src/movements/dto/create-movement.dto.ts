@@ -29,4 +29,8 @@ export class CreateMovementDto {
   @IsOptional()
   @IsNumber()
   costoUnitario?: number;
+
+  @IsOptional()
+  @IsString()
+  referencia?: string;
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, ParseIntPipe } from '@nestjs/common';
 import { MovementsService } from './movements.service';
 import { CreateMovementDto } from './dto/create-movement.dto';
 
@@ -11,14 +11,21 @@ export class MovementsController {
     return this.movementsService.create(createMovementDto);
   }
 
-  // NUEVO: Endpoint para el procesamiento masivo
+  @Post('transfer')
+  transferBulk(@Body() transferData: any) {
+    return this.movementsService.transferBulk(transferData);
+  }
+
   @Post('bulk-receive')
-  createBulk(@Body() bulkData: { tipo: string; nota: string; items: any[]; usuarioId?: number }) {
+  createBulk(@Body() bulkData: { tipo: string; nota: string; items: any[]; usuarioId?: number; referencia?: string }) {
     return this.movementsService.createBulk(bulkData);
   }
 
   @Get()
-  findAll() {
+  findAll(@Query('productoId') productoId?: string) {
+    if (productoId) {
+      return this.movementsService.findByProductId(Number(productoId));
+    }
     return this.movementsService.findAll();
   }
 

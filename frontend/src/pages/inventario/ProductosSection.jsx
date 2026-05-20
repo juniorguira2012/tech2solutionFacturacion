@@ -63,6 +63,7 @@ const ProductosSection = ({ mostrarToast }) => {
     actualizarProducto,
     categorias, // Mantener categorías aquí
     almacenesDetallados, // <-- Obtenemos los almacenes del contexto
+    proveedores,
     unidadesMedida
   } = useInventario();
   const { usuario } = useAuth();
@@ -382,6 +383,7 @@ const handleEliminar = (prod) => {
                     <h3 className="font-black text-slate-800 uppercase text-xs truncate">{prod.nombre}</h3>
                     <p className="font-black text-slate-900 text-xs italic whitespace-nowrap">RD$ {formatPrice(prod.precio)}</p>
                   </div>
+                  {prod.proveedor && <p className="text-[8px] font-black text-brand uppercase tracking-widest -mt-1">{prod.proveedor.nombre}</p>}
                   <div className="grid grid-cols-2 gap-2">
                     <div className={`rounded-lg p-1.5 border ${prod.stock <= LOW_STOCK_THRESHOLD ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
                       <p className="text-[8px] font-black uppercase opacity-70">Stock</p>

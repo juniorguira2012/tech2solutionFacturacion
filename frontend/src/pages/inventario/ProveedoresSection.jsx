@@ -3,22 +3,27 @@ import { Truck, Plus, Search, Edit3, Trash2, X, Phone, Mail, Globe } from 'lucid
 import { useInventario } from '../../context/InventarioContext';
 
 const ProveedoresSection = ({ mostrarToast }) => {
-  const { proveedores, setProveedores } = useInventario();
+  const { proveedores, agregarProveedor, actualizarProveedor, eliminarProveedor } = useInventario();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [formData, setFormData] = useState({ id: null, nombre: '', rnc: '', telefono: '', email: '', direccion: '', categoria: 'Estándar' });
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    if (isEditing) {
-      setProveedores(prev => prev.map(p => p.id === formData.id ? formData : p));
-      mostrarToast("Proveedor actualizado");
-    } else {
-      setProveedores([...proveedores, { ...formData, id: Date.now() }]);
-      mostrarToast("Proveedor registrado");
+    try {
+      if (isEditing) {
+        await actualizarProveedor(formData);
+        mostrarToast("Proveedor actualizado");
+      } else {
+        const { id, ...nuevoProv } = formData;
+        await agregarProveedor(nuevoProv);
+        mostrarToast("Proveedor registrado");
+      }
+      cerrarModal();
+    } catch (err) {
+      mostrarToast("Error al procesar proveedor", "error");
     }
-    cerrarModal();
   };
 
   const cerrarModal = () => {
@@ -50,7 +55,12 @@ const ProveedoresSection = ({ mostrarToast }) => {
               <div className="h-12 w-12 bg-indigo-50 text-brand rounded-xl flex items-center justify-center font-black">{prov.nombre.charAt(0)}</div>
               <div className="flex gap-1">
                 <button onClick={() => { setFormData(prov); setIsEditing(true); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
-                <button onClick={() => setProveedores(proveedores.filter(p => p.id !== prov.id))} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                <button onClick={async () => {
+                  if(window.confirm("¿Eliminar este proveedor?")) {
+                    const exito = await eliminarProveedor(prov.id);
+                    if(exito) mostrarToast("Proveedor eliminado");
+                  }
+                }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16}/></button>
               </div>
             </div>
             <h3 className="font-black text-slate-800 uppercase text-xs mb-1">{prov.nombre}</h3>

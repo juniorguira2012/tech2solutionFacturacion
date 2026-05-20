@@ -3,11 +3,13 @@ import {
   Column,
   PrimaryGeneratedColumn,
   OneToMany,
+  ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { CountItem } from '../../inventory-counts/entities/count-item.entity';
 import { ProductWarehouseStock } from './product-warehouse-stock.entity';
+import { Provider } from '../../providers/provider.entity';
 
 @Entity('products')
 export class Product {
@@ -84,6 +86,12 @@ export class Product {
   // el id como número plano.
   @OneToMany(() => CountItem, (item) => item.productoId, { cascade: false })
   countItems: CountItem[];
+
+  @Column({ nullable: true })
+  proveedorId: number;
+
+  @ManyToOne(() => Provider, { nullable: true, eager: true })
+  proveedor: Provider;
 
   // Relación para el stock desglosado por almacén
   @OneToMany(() => ProductWarehouseStock, (stock) => stock.producto, { cascade: true, eager: true })
