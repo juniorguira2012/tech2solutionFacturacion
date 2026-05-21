@@ -6,6 +6,7 @@ import {
   ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  JoinColumn,
 } from 'typeorm';
 import { CountItem } from '../../inventory-counts/entities/count-item.entity';
 import { ProductWarehouseStock } from './product-warehouse-stock.entity';

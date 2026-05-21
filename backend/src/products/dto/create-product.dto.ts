@@ -8,6 +8,7 @@ import {
   IsPositive,
   IsString,
   Min,
+  IsEmail
 } from 'class-validator';
 
 export class CreateProductDto {
@@ -90,4 +91,8 @@ export class CreateProductDto {
   @IsNumber()
   @IsPositive() // Asegura que el ID sea un número positivo
   proveedorId?: number;
+
+  @IsEmail()
+  @IsOptional()
+  correo?: string;
 }

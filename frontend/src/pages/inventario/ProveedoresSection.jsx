@@ -7,7 +7,7 @@ const ProveedoresSection = ({ mostrarToast }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [formData, setFormData] = useState({ id: null, nombre: '', rnc: '', telefono: '', email: '', direccion: '', categoria: 'Estándar' });
+  const [formData, setFormData] = useState({ id: null, nombre: '', rnc: '', telefono: '', correo: '', direccion: '', categoria: 'Estándar' });
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -29,7 +29,7 @@ const ProveedoresSection = ({ mostrarToast }) => {
   const cerrarModal = () => {
     setIsModalOpen(false);
     setIsEditing(false);
-    setFormData({ id: null, nombre: '', rnc: '', telefono: '', email: '', direccion: '', categoria: 'Estándar' });
+    setFormData({ id: null, nombre: '', rnc: '', telefono: '', correo: '', direccion: '', categoria: 'Estándar' });
   };
 
   const proveedoresFiltrados = proveedores.filter(p => 
@@ -67,7 +67,7 @@ const ProveedoresSection = ({ mostrarToast }) => {
             <p className="text-[9px] text-slate-400 font-bold mb-4 uppercase">RNC: {prov.rnc || '---'}</p>
             <div className="space-y-2 border-t pt-4">
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><Phone size={12}/> {prov.telefono}</div>
-              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><Mail size={12}/> {prov.email}</div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><Mail size={12}/> {prov.correo || '---'}</div>
             </div>
           </div>
         ))}
@@ -97,7 +97,7 @@ const ProveedoresSection = ({ mostrarToast }) => {
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
-                <input className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                <input className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value})} />
               </div>
               <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-brand transition-all">
                 {isEditing ? 'Actualizar Proveedor' : 'Registrar Proveedor'}

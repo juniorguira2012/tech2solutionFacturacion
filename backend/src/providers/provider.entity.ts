@@ -16,4 +16,10 @@ export class Provider {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ nullable: true }) // nullable: true por si no todos los proveedores tienen correo
+  correo: string;
+
+  @Column({ nullable: true })
+  direccion: string;
 }
