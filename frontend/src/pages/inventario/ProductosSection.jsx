@@ -107,7 +107,7 @@ const ProductosSection = ({ mostrarToast }) => {
   const [formData, setFormData] = useState({
     nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
     modelo: '', serie: '',
-    almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad',
+    almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '',
     movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
   });
 
@@ -135,6 +135,7 @@ const ProductosSection = ({ mostrarToast }) => {
       movimientoInventario: prod.movimientoInventario || 'Entrada',
       descripcion: prod.descripcion || '',
       imagen: prod.imagen || '',
+      proveedorId: prod.proveedor ? prod.proveedor.id : (prod.proveedorId || ''),
       camposPersonalizados: prod.camposPersonalizados || []
     });
     setIsEditing(true);
@@ -290,7 +291,7 @@ const handleEliminar = (prod) => {
     setFormData({
       nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
       modelo: '', serie: '',
-      almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad',
+      almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '',
       movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
     });
   };
@@ -481,6 +482,33 @@ const handleEliminar = (prod) => {
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Serie / Serial</label>
                   <input className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm" value={formData.serie} onChange={(e) => setFormData({...formData, serie: e.target.value})}/>
+                </div>
+                {/* ─── CATEGORÍA Y PROVEEDOR ─── */}
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Categoría</label>
+                  <select 
+                    className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm bg-white" 
+                    value={formData.categoria} 
+                    onChange={(e) => setFormData({...formData, categoria: e.target.value})}
+                  >
+                    {categorias.map(cat => <option key={cat.nombre} value={cat.nombre}>{cat.nombre}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Proveedor Autorizado</label>
+                  <select 
+                    className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm bg-white"
+                    value={formData.proveedorId || ''} 
+                    onChange={(e) => setFormData({...formData, proveedorId: e.target.value})}
+                  >
+                    <option value="">Ninguno / Sin Proveedor</option>
+                    {proveedores && proveedores.map(prov => (
+                      <option key={prov.id} value={prov.id}>
+                        {prov.nombre} {prov.rnc ? `(RNC: ${prov.rnc})` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Categoría</label>

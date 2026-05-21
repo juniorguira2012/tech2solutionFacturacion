@@ -91,6 +91,7 @@ export class Product {
   proveedorId: number;
 
   @ManyToOne(() => Provider, { nullable: true, eager: true })
+  @JoinColumn({ name: 'proveedorId' }) // Especifica que la columna 'proveedorId' es la clave foránea
   proveedor: Provider;
 
   // Relación para el stock desglosado por almacén
@@ -103,4 +104,6 @@ export class Product {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+
 }
