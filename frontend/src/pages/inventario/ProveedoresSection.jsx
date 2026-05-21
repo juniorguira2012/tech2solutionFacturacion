@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Truck, Plus, Search, Edit3, Trash2, X, Phone, Mail, Globe } from 'lucide-react';
+import { Truck, Plus, Search, Edit3, Trash2, X, Phone, Mail, Globe, MapPin } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 
 const ProveedoresSection = ({ mostrarToast }) => {
@@ -68,6 +68,7 @@ const ProveedoresSection = ({ mostrarToast }) => {
             <div className="space-y-2 border-t pt-4">
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><Phone size={12}/> {prov.telefono}</div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><Mail size={12}/> {prov.correo || '---'}</div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 truncate"><MapPin size={12}/> {prov.direccion || '---'}</div>
             </div>
           </div>
         ))}
@@ -99,9 +100,18 @@ const ProveedoresSection = ({ mostrarToast }) => {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
                 <input className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value})} />
               </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dirección</label>
+                <input 
+                  placeholder="Ej: Av. Winston Churchill, Santo Domingo" 
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm" 
+                  value={formData.direccion || ''} 
+                  onChange={e => setFormData({...formData, direccion: e.target.value})} 
+                />
+              </div>
               <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-brand transition-all">
                 {isEditing ? 'Actualizar Proveedor' : 'Registrar Proveedor'}
-              </button>
+              </button> 
             </form>
           </div>
         </div>
