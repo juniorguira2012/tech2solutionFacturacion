@@ -101,7 +101,8 @@ export const useMovimientosForm = (
         recargarInventario();
       }
     } catch (error) {
-      console.error("Error al tramitar la petición:", error);
+      console.error("Error en movimiento:", error);
+      mostrarToast?.(error.message || "No se pudo completar la operación", "error");
     }
   };
 

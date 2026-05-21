@@ -14,7 +14,7 @@ export const InventarioProvider = ({ children }) => {
   const { usuario } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000/products`;
   // Forma más segura de obtener la base sin importar si hay "/" al final
-  const API_BASE_URL = API_URL.split('/products')[0];
+  const API_BASE_URL = API_URL.split('/products')[0].replace(/\/$/, '');
 
   // --- Estado de Almacenes Detallados ---
   const [almacenesDetallados, setAlmacenesDetallados] = useState(() => {
@@ -195,8 +195,9 @@ export const InventarioProvider = ({ children }) => {
 
 const registrarMovimientosMasivos = async (payload) => {
   try {
+    const url = `${API_BASE_URL}/movements/bulk-receive`;
     // 1. Apuntamos a la ruta exacta de tu controlador de NestJS
-    const res = await fetch(`${API_BASE_URL}/movements/bulk-receive`, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(payload)
@@ -222,8 +223,9 @@ const registrarMovimientosMasivos = async (payload) => {
     
     return true;
   } catch (err) {
-    console.error("Error en registrarMovimientosMasivos:", err);
-    throw err; 
+    const errorMsg = `Error de conexión con la API (${API_BASE_URL}): ${err.message}`;
+    console.error(errorMsg, err);
+    throw new Error(errorMsg); 
   }
 };
 
@@ -231,7 +233,17 @@ const registrarMovimientosMasivos = async (payload) => {
   const agregarProducto = async (nuevoProducto) => {
     try {
       // Limpiamos campos que el DTO de NestJS podría rechazar si no están habilitados
-      const { id, createdAt, updatedAt, countItems, vendidos, ...datosParaEnviar } = nuevoProducto;
+      const { 
+        id, 
+        createdAt, 
+        updatedAt, 
+        countItems, 
+        vendidos, 
+        proveedor, 
+        warehouseStocks, 
+        proveedorId, 
+        ...datosParaEnviar 
+      } = nuevoProducto;
 
       const res = await fetch(API_URL, {
         method: 'POST',
@@ -239,7 +251,8 @@ const registrarMovimientosMasivos = async (payload) => {
         body: JSON.stringify({
           ...datosParaEnviar,
           precio: Number(datosParaEnviar.precio) || 0,
-          stock: Number(datosParaEnviar.stock) || 0
+          stock: Number(datosParaEnviar.stock) || 0,
+          proveedorId: proveedorId ? Number(proveedorId) : null
         })
       });
       
@@ -339,9 +352,17 @@ const registrarMovimientosMasivos = async (payload) => {
   // 4. Actualizar Producto (CORREGIDO: nombre y limpieza de datos)
   const actualizarProducto = async (editado) => {
     try {
-      // IMPORTANTE: Quitamos createdAt, updatedAt y countItems porque NestJS da 500 si se los envías
-      // También quitamos id y ubicacion del body para evitar conflictos con el DTO
-      const { id, createdAt, updatedAt, countItems, ...datosParaEnviar } = editado;
+      // Quitamos objetos relacionales y metadatos antes de enviar
+      const { 
+        id, 
+        createdAt, 
+        updatedAt, 
+        countItems, 
+        proveedor, 
+        warehouseStocks, 
+        proveedorId, 
+        ...datosParaEnviar 
+      } = editado;
 
       const res = await fetch(`${API_URL}/${id}`, {
         method: 'PATCH',
@@ -349,7 +370,8 @@ const registrarMovimientosMasivos = async (payload) => {
         body: JSON.stringify({
           ...datosParaEnviar,
           precio: Number(editado.precio) || 0,
-          stock: Number(editado.stock) || 0
+          stock: Number(editado.stock) || 0,
+          proveedorId: proveedorId ? Number(proveedorId) : null
         })
       });
 

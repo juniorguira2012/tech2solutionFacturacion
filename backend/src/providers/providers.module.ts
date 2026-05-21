@@ -8,6 +8,6 @@ import { Provider } from './provider.entity';
   imports: [TypeOrmModule.forFeature([Provider])], // <-- CRUCIAL para que TypeORM cree la tabla
   controllers: [ProvidersController],
   providers: [ProvidersService],
-  exports: [TypeOrmModule]
+  exports: [TypeOrmModule, ProvidersService] // Exporta el módulo y el servicio para que otros módulos puedan usarlos
 })
 export class ProvidersModule {}

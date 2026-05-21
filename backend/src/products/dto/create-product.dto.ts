@@ -5,6 +5,7 @@ import {
   IsInt,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   Min,
 } from 'class-validator';
@@ -83,5 +84,10 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsBoolean()
-  isActive?: boolean;
+  isActive?: boolean; 
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive() // Asegura que el ID sea un número positivo
+  proveedorId?: number;
 }

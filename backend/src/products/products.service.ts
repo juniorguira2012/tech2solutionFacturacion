@@ -4,17 +4,26 @@ import { Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { Provider } from '../providers/provider.entity';
 
 @Injectable()
 export class ProductsService {
   constructor(
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(Provider)
+    private readonly providerRepository: Repository<Provider>,
   ) {}
 
   // Crear un producto
   async create(createProductDto: CreateProductDto) {
-    const nuevoProducto = this.productRepository.create(createProductDto);
+    if (createProductDto.proveedorId) {
+      const provider = await this.providerRepository.findOneBy({ id: createProductDto.proveedorId });
+      if (!provider) {
+        throw new NotFoundException(`Proveedor con ID ${createProductDto.proveedorId} no encontrado.`);
+      }
+    }
+    const nuevoProducto = this.productRepository.create(createProductDto); // `proveedorId` en DTO es suficiente
     return await this.productRepository.save(nuevoProducto);
   }
 
@@ -33,12 +42,14 @@ export class ProductsService {
     return producto;
   }
 
-  // Actualizar datos
- // products.service.ts
-
 async update(id: number, updateProductDto: UpdateProductDto) {
-  // Eliminamos la lógica de desestructurar createdAt/updatedAt ya que el DTO
-  // no los contiene y causaba error de TypeScript.
+  if (updateProductDto.proveedorId !== undefined && updateProductDto.proveedorId !== null) {
+    const provider = await this.providerRepository.findOneBy({ id: updateProductDto.proveedorId });
+    if (!provider) {
+      throw new NotFoundException(`Proveedor con ID ${updateProductDto.proveedorId} no encontrado.`);
+    }
+  }
+
   const { ...datosParaActualizar } = updateProductDto;
 
   const producto = await this.productRepository.preload({
