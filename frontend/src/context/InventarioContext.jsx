@@ -9,6 +9,8 @@ export const InventarioProvider = ({ children }) => {
   const [movimientos, setMovimientos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorConexion, setErrorConexion] = useState(null);
+  const [conteos, setConteos] = useState([]);
+  const [lotes, setLotes] = useState([]);
   const [refreshIndex, setRefreshIndex] = useState(0);
 
   const { usuario } = useAuth();
@@ -431,6 +433,90 @@ const registrarMovimientosMasivos = async (payload) => {
     }
   };
 
+  // --- GESTIÓN DE CONTEO FÍSICO (Auditoría) ---
+  const cargarConteos = useCallback(async (almacen = '') => {
+    try {
+      const url = almacen 
+        ? `${API_BASE_URL}/inventory-counts?almacen=${almacen}`
+        : `${API_BASE_URL}/inventory-counts`;
+      
+      const res = await fetch(url, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Error al cargar conteos');
+      const data = await res.json();
+      setConteos(data);
+    } catch (err) {
+      console.error("Error cargando conteos:", err);
+    }
+  }, [API_BASE_URL]);
+
+  const crearConteo = async (payload) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/inventory-counts`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('No se pudo crear el conteo');
+      const data = await res.json();
+      setConteos(prev => [data, ...prev]);
+      return data;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const obtenerConteo = async (id) => {
+    const res = await fetch(`${API_BASE_URL}/inventory-counts/${id}`, { headers: getAuthHeaders() });
+    if (!res.ok) throw new Error('Conteo no encontrado');
+    return res.json();
+  };
+
+  const agregarItemAConteo = async (conteoId, itemData) => {
+    const res = await fetch(`${API_BASE_URL}/inventory-counts/${conteoId}/items`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(itemData)
+    });
+    if (!res.ok) throw new Error('Error al agregar item');
+    return res.json();
+  };
+
+  const actualizarItemConteo = async (conteoId, itemId, cantidad) => {
+    const res = await fetch(`${API_BASE_URL}/inventory-counts/${conteoId}/items/${itemId}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ cantidadContada: Number(cantidad) })
+    });
+    if (!res.ok) throw new Error('Error al actualizar cantidad');
+    return res.json();
+  };
+
+  const publicarConteo = async (id) => {
+    const res = await fetch(`${API_BASE_URL}/inventory-counts/${id}/publish`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) throw new Error('Error al publicar ajustes');
+    const data = await res.json();
+    setConteos(prev => prev.map(c => c.id === id ? data : c));
+    return data;
+  };
+
+  // --- GESTIÓN DE LOTES ---
+  const cargarLotes = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/inventory-batches`, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Error al cargar lotes');
+      const data = await res.json();
+      setLotes(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error cargando lotes:", err);
+      // Fallback a datos vacíos si el endpoint aún no existe en el backend
+      setLotes([]);
+    }
+  }, [API_BASE_URL]);
+
   // --- Al final de InventarioContext.jsx ---
 
 return (
@@ -447,6 +533,15 @@ return (
     eliminarProveedor,
     setProveedores,
     unidadesMedida, 
+    conteos,
+    lotes,
+    cargarLotes,
+    cargarConteos,
+    crearConteo,
+    obtenerConteo,
+    agregarItemAConteo,
+    actualizarItemConteo,
+    publicarConteo,
     setUnidadesMedida, 
     almacenesDetallados, // <-- Exponemos los almacenes
     setAlmacenesDetallados, // <-- Exponemos el setter para AlmacenSection

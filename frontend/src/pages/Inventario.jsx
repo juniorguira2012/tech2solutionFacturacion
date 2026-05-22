@@ -14,6 +14,7 @@ import ProductosSection from './inventario/ProductosSection';
 import CamposPersonalizadosSection from './inventario/CamposPersonalizadosSection';
 import IntegracionesSection from './inventario/IntegracionesSection';
 import ProveedoresSection from './inventario/ProveedoresSection';
+import LotesSection from './inventario/LotesSection';
 
 const Inventario = () => {
   const { productos, categorias, setCategorias } = useInventario();
@@ -115,10 +116,7 @@ const Inventario = () => {
             </div>
           </div>
           ) : seccionActiva === 'lotes' ? (
-            <div className="py-20 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-              <Layers3 size={40} className="mx-auto mb-4 text-slate-200" />
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No se encontraron lotes registrados</p>
-            </div>
+            <LotesSection />
           ) : null}
         </div>
       </section>
