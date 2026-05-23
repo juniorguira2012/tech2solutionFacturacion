@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { VentasProvider } from './context/VentasContext';
 import { InventarioProvider } from './context/InventarioContext';
 import { ClienteProvider } from './context/ClienteContext';
+import { UsuariosProvider } from './context/UsuariosContext';
 
 import Home from './pages/Home';
 import Ventas from './pages/Ventas';
@@ -59,11 +60,12 @@ function App() {
   return (
     <AuthProvider>
       <VentasProvider>
-        <InventarioProvider>
-          <ClienteProvider>
-            <Router>
-              <Routes>
-                {/* RUTA PÚBLICA */}
+        <UsuariosProvider>
+          <InventarioProvider>
+            <ClienteProvider>
+              <Router>
+                <Routes>
+                  {/* RUTA PÚBLICA */}
                 <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
 
                 {/* RUTAS PROTEGIDAS CON "moduloRequerido" */}
@@ -104,9 +106,10 @@ function App() {
                     
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-            </Router>
-          </ClienteProvider>
-        </InventarioProvider>
+              </Router>
+            </ClienteProvider>
+          </InventarioProvider>
+        </UsuariosProvider>
       </VentasProvider>
     </AuthProvider>
   );

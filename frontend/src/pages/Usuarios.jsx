@@ -4,11 +4,13 @@ import {
   CheckCircle, X, Edit2, KeyRound, Power, Shield, Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // Importamos Auth
+import { useAuth } from '../context/AuthContext';
+import { useUsuarios } from '../context/UsuariosContext'; // Importamos el contexto de DB
 
 const Usuarios = () => {
   const navigate = useNavigate();
-  const { usuario } = useAuth(); // Obtenemos el usuario logueado
+  const { usuario } = useAuth();
+  const { usuarios, loading, agregarUsuario, actualizarUsuario, eliminarUsuario } = useUsuarios();
   
   // 1. ESTADOS PRINCIPALES
   const [showModal, setShowModal] = useState(false);
@@ -19,18 +21,6 @@ const Usuarios = () => {
   // --- CONTROL DE SEGURIDAD NIVEL 0 ---
   // Si el usuario no es admin, bloqueamos el renderizado inmediatamente
   const esAdmin = usuario?.rol === 'admin';
-
-  // 2. CARGAR USUARIOS
-  const [usuarios, setUsuarios] = useState(() => {  
-    const saved = localStorage.getItem('posfactura_usuarios_list');
-    if (saved) return JSON.parse(saved);
-    
-    const semilla = [
-      { id: 1, nombre: 'Admin Junior', username: 'admin', email: 'admin@techtwosolution.com', password: '1234', rol: 'admin', estado: 'activo' }
-    ];
-    localStorage.setItem('posfactura_usuarios_list', JSON.stringify(semilla));
-    return semilla;
-  });
 
       const getRolesDinámicos = () => {
         const savedRoles = localStorage.getItem('posfactura_roles_config');
@@ -51,14 +41,10 @@ const Usuarios = () => {
       const rolesDinámicos = getRolesDinámicos();
 
   const [nuevoUsuario, setNuevoUsuario] = useState({ 
-    nombre: '', username: '', email: '', password: '', rol: 'vendedor', estado: 'activo'
+    nombre: '', email: '', password: '', rol: 'vendedor', isActive: true
   });
 
-  useEffect(() => {
-    if (esAdmin) {
-      localStorage.setItem('posfactura_usuarios_list', JSON.stringify(usuarios));
-    }
-  }, [usuarios, esAdmin]);
+  const [formUsuario, setFormUsuario] = useState({ ...nuevoUsuario });
 
   // Si no es admin, mostramos pantalla de error de seguridad
   if (!esAdmin) {
@@ -90,55 +76,46 @@ const Usuarios = () => {
 
   const prepararEdicion = (user) => {
     setEditandoId(user.id);
-    setNuevoUsuario({
+    setFormUsuario({
       nombre: user.nombre,
-      username: user.username,
       email: user.email,
       password: user.password,
       rol: user.rol,
-      estado: user.estado || 'activo'
+      isActive: user.isActive ?? true
     });
     setShowModal(true);
   };
 
-  const toggleEstadoRapido = (id) => {
-    const listaActualizada = usuarios.map(u => {
-      if (u.id === id) {
-        if (u.username === 'admin') return u; 
-        const nuevoEstado = u.estado === 'activo' ? 'inactivo' : 'activo';
-        mostrarToast(`Usuario ${nuevoEstado === 'activo' ? 'activado' : 'suspendido'}`);
-        return { ...u, estado: nuevoEstado };
-      }
-      return u;
-    });
-    setUsuarios(listaActualizada);
+  const toggleEstadoRapido = async (user) => {
+    if (user.id === 1 || user.id === usuario.id) return;
+    try {
+      await actualizarUsuario({ ...user, isActive: !user.isActive });
+      mostrarToast(`Usuario ${!user.isActive ? 'activado' : 'suspendido'}`);
+    } catch (err) {
+      mostrarToast("Error al cambiar estado");
+    }
   };
 
-  const guardarUsuario = (e) => {
+  const guardarUsuario = async (e) => {
     e.preventDefault();
     setIsSaving(true);
     
-    setTimeout(() => {
+    try {
       if (editandoId) {
-        const listaActualizada = usuarios.map(u => 
-          u.id === editandoId ? { ...nuevoUsuario, id: editandoId } : u
-        );
-        setUsuarios(listaActualizada);
+        await actualizarUsuario({ ...formUsuario, id: editandoId });
         mostrarToast("Usuario actualizado correctamente");
       } else {
-        const usuarioCreado = { 
-          ...nuevoUsuario, 
-          id: Date.now(), 
-          username: nuevoUsuario.email.split('@')[0].toLowerCase() 
-        };
-        setUsuarios([...usuarios, usuarioCreado]);
-        mostrarToast(`Acceso creado para @${usuarioCreado.username}`);
+        await agregarUsuario(formUsuario);
+        mostrarToast(`Acceso creado para ${formUsuario.email}`);
       }
       setIsSaving(false);
       setShowModal(false);
       setEditandoId(null);
-      setNuevoUsuario({ nombre: '', username: '', email: '', password: '', rol: 'vendedor', estado: 'activo' });
-    }, 600);
+      setFormUsuario({ ...nuevoUsuario });
+    } catch (err) {
+      setIsSaving(false);
+      mostrarToast(err.message || "Error al procesar usuario");
+    }
   };
 
   return (
@@ -173,7 +150,7 @@ const Usuarios = () => {
             <Shield size={18} className="text-slate-400" /> Roles
           </button>
           <button 
-            onClick={() => { setEditandoId(null); setNuevoUsuario({ nombre: '', username: '', email: '', password: '', rol: 'vendedor', estado: 'activo' }); setShowModal(true); }} 
+            onClick={() => { setEditandoId(null); setFormUsuario({ ...nuevoUsuario }); setShowModal(true); }} 
             className="bg-brand text-white px-8 py-4 rounded-[1.5rem] font-black flex items-center justify-center gap-3 hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 text-xs uppercase tracking-widest"
           >
             <UserPlus size={18} /> Nuevo Registro
@@ -194,10 +171,10 @@ const Usuarios = () => {
             </thead>
             <tbody className="divide-y divide-slate-50 font-bold">
               {usuarios.map(user => (
-                <tr key={user.id} className={`hover:bg-slate-50/30 transition-colors group ${user.estado === 'inactivo' ? 'opacity-50' : ''}`}>
+                <tr key={user.id} className={`hover:bg-slate-50/30 transition-colors group ${!user.isActive ? 'opacity-50' : ''}`}>
                   <td className="px-10 py-6">
                     <div className="flex items-center gap-4">
-                      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-black text-sm border-2 transition-all ${user.estado === 'activo' ? 'bg-brand/5 border-brand/10 text-brand group-hover:bg-brand group-hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
+                      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-black text-sm border-2 transition-all ${user.isActive ? 'bg-brand/5 border-brand/10 text-brand group-hover:bg-brand group-hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
                         {user.nombre.charAt(0)}
                       </div>
                       <div>
@@ -215,12 +192,12 @@ const Usuarios = () => {
                   </td>
                   <td className="px-10 py-6">
                     <button 
-                      onClick={() => toggleEstadoRapido(user.id)}
+                      onClick={() => toggleEstadoRapido(user)}
                       className={`mx-auto flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${
-                        user.estado === 'activo' ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'
+                        user.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100'
                       }`}
                     >
-                      <div className={`h-2 w-2 rounded-full ${user.estado === 'activo' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                      <div className={`h-2 w-2 rounded-full ${user.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
                       <span className="text-[9px] font-black uppercase tracking-widest">{user.estado}</span>
                     </button>
                   </td>
@@ -229,8 +206,8 @@ const Usuarios = () => {
                       <button onClick={() => prepararEdicion(user)} className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-indigo-50 hover:text-brand transition-all">
                          <Edit2 size={18} />
                       </button>
-                      {user.username !== 'admin' && (
-                        <button onClick={() => setUsuarios(usuarios.filter(u => u.id !== user.id))} className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-red-50 hover:text-red-500 transition-all">
+                      {user.id !== 1 && user.id !== usuario.id && (
+                        <button onClick={() => { if(window.confirm("¿Eliminar usuario?")) eliminarUsuario(user.id) }} className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-red-50 hover:text-red-500 transition-all">
                           <Trash2 size={18} />
                         </button>
                       )}
@@ -260,26 +237,26 @@ const Usuarios = () => {
               <div className="grid grid-cols-1 gap-5">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nombre Completo</label>
-                  <input required value={nuevoUsuario.nombre} onChange={e => setNuevoUsuario({...nuevoUsuario, nombre: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" placeholder="Ej. Juan Perez" />
+                  <input required value={formUsuario.nombre} onChange={e => setFormUsuario({...formUsuario, nombre: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" placeholder="Ej. Juan Perez" />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Email de Acceso</label>
-                  <input required type="email" value={nuevoUsuario.email} onChange={e => setNuevoUsuario({...nuevoUsuario, email: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" placeholder="usuario@one-red.com" />
+                  <input required type="email" value={formUsuario.email} onChange={e => setFormUsuario({...formUsuario, email: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" placeholder="usuario@one-red.com" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Contraseña</label>
                     <div className="relative">
-                      <input required type="password" value={nuevoUsuario.password} onChange={e => setNuevoUsuario({...nuevoUsuario, password: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" />
+                      <input required={!editandoId} type="password" value={formUsuario.password} onChange={e => setFormUsuario({...formUsuario, password: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" />
                       <KeyRound className="absolute right-5 top-5 text-slate-300" size={18} />
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nivel (Rol)</label>
-                    <select value={nuevoUsuario.rol} onChange={e => setNuevoUsuario({...nuevoUsuario, rol: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-black text-[10px] uppercase text-slate-700 bg-white transition-all cursor-pointer">
+                    <select value={formUsuario.rol} onChange={e => setFormUsuario({...formUsuario, rol: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-black text-[10px] uppercase text-slate-700 bg-white transition-all cursor-pointer">
                       {rolesDinámicos.map(rol => (
                         <option key={rol.id} value={rol.id}>{rol.nombre}</option>
                       ))}
@@ -289,7 +266,7 @@ const Usuarios = () => {
 
                 <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 mt-4">
                   <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-2xl ${nuevoUsuario.estado === 'activo' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
+                    <div className={`p-3 rounded-2xl ${formUsuario.isActive ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
                       <Power size={20} />
                     </div>
                     <div>
@@ -299,10 +276,10 @@ const Usuarios = () => {
                   </div>
                   <button 
                     type="button"
-                    onClick={() => setNuevoUsuario({...nuevoUsuario, estado: nuevoUsuario.estado === 'activo' ? 'inactivo' : 'activo'})}
-                    className={`w-14 h-7 rounded-full transition-all relative shadow-inner ${nuevoUsuario.estado === 'activo' ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                    onClick={() => setFormUsuario({...formUsuario, isActive: !formUsuario.isActive})}
+                    className={`w-14 h-7 rounded-full transition-all relative shadow-inner ${formUsuario.isActive ? 'bg-emerald-500' : 'bg-slate-300'}`}
                   >
-                    <div className={`absolute top-1 bg-white h-5 w-5 rounded-full shadow-md transition-all ${nuevoUsuario.estado === 'activo' ? 'right-1' : 'left-1'}`}></div>
+                    <div className={`absolute top-1 bg-white h-5 w-5 rounded-full shadow-md transition-all ${formUsuario.isActive ? 'right-1' : 'left-1'}`}></div>
                   </button>
                 </div>
               </div>
