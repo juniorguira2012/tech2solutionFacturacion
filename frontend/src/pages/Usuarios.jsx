@@ -198,7 +198,7 @@ const Usuarios = () => {
                       }`}
                     >
                       <div className={`h-2 w-2 rounded-full ${user.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
-                      <span className="text-[9px] font-black uppercase tracking-widest">{user.estado}</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest">{user.isActive ? 'activo' : 'inactivo'}</span>
                     </button>
                   </td>
                   <td className="px-10 py-6 text-right">

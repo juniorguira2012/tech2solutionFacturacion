@@ -20,21 +20,17 @@ import RolesManager from './pages/RolesManager';
 // --- 1. COMPONENTE DE PROTECCIÓN MEJORADO ---
 
 const PrivateRoute = ({ children, moduloRequerido }) => {
-  const { usuario, loading } = useAuth();
+  const { usuario, permisos, loading } = useAuth();
 
   if (loading) return null; 
 
   // Si no hay usuario, al Login
   if (!usuario) return <Navigate to="/login" replace />;
 
-  // VERIFICACIÓN DE ROLES
-  // El Admin siempre pasa. Si no es admin, chequeamos el localStorage
+  // VERIFICACIÓN DE ROLES DESDE EL CONTEXTO (DB)
   if (usuario.rol !== 'admin' && moduloRequerido) {
-    const savedRoles = localStorage.getItem('posfactura_roles_config');
-    const rolesConfig = savedRoles ? JSON.parse(savedRoles) : null;
-
-    if (rolesConfig && rolesConfig[usuario.rol]) {
-      const nivelPermiso = rolesConfig[usuario.rol].modules[moduloRequerido];
+    if (permisos) {
+      const nivelPermiso = permisos.modules?.[moduloRequerido];
       
       // Si el permiso es 'none', lo rebotamos al Home (o Dashboard)
       if (nivelPermiso === 'none') {

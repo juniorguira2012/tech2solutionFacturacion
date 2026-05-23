@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, Save, CheckCircle, Lock, Eye, Edit3, RotateCcw, ShieldCheck, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const RolesManager = () => {
   const initialRoles = {
@@ -21,17 +22,32 @@ const RolesManager = () => {
   }
 };
 
-  const [rolesConfig, setRolesConfig] = useState(() => {
-    const saved = localStorage.getItem('posfactura_roles_config');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return { ...initialRoles, ...parsed }; // Mezcla para asegurar que 'supervisor' exista
-    }
-    return initialRoles;
-  });
-
+  const { usuario } = useAuth();
+  const [rolesConfig, setRolesConfig] = useState(initialRoles);
   const [rolSeleccionado, setRolSeleccionado] = useState('vendedor');
   const [toast, setToast] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const API_BASE_URL = (import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000`).split('/products')[0].replace(/\/$/, '');
+
+  const fetchRoles = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/roles`);
+      if (res.ok) {
+        const data = await res.json();
+        // Convertimos el array de la DB al objeto que usa el componente
+        const configMap = {};
+        data.forEach(r => { configMap[r.name] = r.config; });
+        setRolesConfig(prev => ({ ...prev, ...configMap }));
+      }
+    } catch (error) {
+      console.error("Error al cargar roles:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE_URL]);
+
+  useEffect(() => { fetchRoles(); }, [fetchRoles]);
 
   const modulos = [
     { id: 'ventas', nombre: 'Módulo de Ventas', desc: 'Facturación e historial' },
@@ -40,10 +56,22 @@ const RolesManager = () => {
     { id: 'clientes', nombre: 'Gestión de Clientes', desc: 'Base de datos' }
   ];
 
-  const guardarConfiguracion = () => {
-    localStorage.setItem('posfactura_roles_config', JSON.stringify(rolesConfig));
-    setToast(true);
-    setTimeout(() => setToast(false), 3000);
+  const guardarConfiguracion = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/roles/update-config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': usuario?.rol || ''
+        },
+        body: JSON.stringify({ name: rolSeleccionado, config: rolesConfig[rolSeleccionado] })
+      });
+      if (!res.ok) throw new Error("Error al guardar");
+      setToast(true);
+      setTimeout(() => setToast(false), 3000);
+    } catch (error) {
+      alert("No se pudo guardar la configuración en la base de datos.");
+    }
   };
 
   const resetearRol = () => {

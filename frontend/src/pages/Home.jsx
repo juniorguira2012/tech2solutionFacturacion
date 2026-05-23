@@ -82,6 +82,33 @@ const Home = () => {
       .sort((a, b) => b.value - a.value).slice(0, 5);
   }, [productos]);
 
+  // 4. CÁLCULO DINÁMICO DE "MÁS VENDIDOS"
+  const topVendidos = useMemo(() => {
+    const conteo = {};
+    
+    historialVentas.forEach(venta => {
+      const articulos = venta.items || venta.productos || [];
+      articulos.forEach(item => {
+        const id = item.productoId || item.id;
+        if (!id) return;
+        conteo[id] = (conteo[id] || 0) + (Number(item.cantidad) || 0);
+      });
+    });
+
+    return Object.entries(conteo)
+      .map(([id, total]) => {
+        const p = productos.find(prod => String(prod.id) === String(id));
+        return {
+          id,
+          nombre: p?.nombre || "Producto",
+          vendidos: total,
+          stock: p?.stock || 0
+        };
+      })
+      .sort((a, b) => b.vendidos - a.vendidos)
+      .slice(0, 5);
+  }, [historialVentas, productos]);
+
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
   const stockBajo = productos.filter(p => p.stock <= (p.stockMin || 5)).length;
 
@@ -265,17 +292,13 @@ const Home = () => {
           </div>
 
           {/* TENDENCIA (Visible si tiene inventario) */}
-          {permisos.inventario !== 'none' && (
+          {(permisos.inventario !== 'none' || permisos.ventas !== 'none') && (
               <div className="col-span-12 lg:col-span-4 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-8">
                   <h2 className="font-black text-slate-800 mb-8 flex items-center gap-2 tracking-tighter uppercase italic text-sm">
-                      ⭐ Más Vendidos
+                      Más Vendidos
                   </h2>
                   <div className="space-y-5">
-                      {productos
-                          .filter(p => (p.vendidos || 0) > 0)
-                          .sort((a, b) => (b.vendidos || 0) - (a.vendidos || 0))
-                          .slice(0, 5)
-                          .map((p, i) => (
+                      {topVendidos.length > 0 ? topVendidos.map((p, i) => (
                               <div key={p.id} className="flex items-center justify-between group cursor-default">
                                   <div className="flex items-center gap-4">
                                       <div className="h-10 w-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-xs text-slate-400 italic group-hover:bg-brand group-hover:text-white transition-all">
@@ -290,7 +313,11 @@ const Home = () => {
                                       Stock: {p.stock}
                                   </div>
                               </div>
-                          ))}
+                          )) : (
+                            <div className="py-10 text-center">
+                              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Sin datos de ventas</p>
+                            </div>
+                          )}
                   </div>
               </div>
           )}
