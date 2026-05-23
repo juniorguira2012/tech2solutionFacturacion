@@ -11,7 +11,7 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column() // Quitamos select: false temporalmente para que el login del frontend funcione
+  @Column({ select: false }) // Por seguridad, no devuelve el password en consultas normales
   password: string;
 
   @Column({ default: 'user' })
