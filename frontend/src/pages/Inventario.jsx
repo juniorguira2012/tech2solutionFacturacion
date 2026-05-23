@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Package, Tags, ArrowLeftRight, CheckCircle,
-  ClipboardList, Bell, Layers3, AlertTriangle,
+  ClipboardList, Bell, Layers3, AlertTriangle, RefreshCw,
   Warehouse, Ruler, Braces, Plug, Truck
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';

@@ -68,6 +68,35 @@ export class MovementsService {
   }
 
   /**
+   * Registra automáticamente un lote en la base de datos para entradas de inventario
+   */
+  private async generateAndSaveBatch(
+    manager: EntityManager,
+    productoId: number,
+    cantidad: number,
+    almacen: string,
+    providedBatchNumber?: string,
+  ) {
+    const batchNumber = providedBatchNumber || `LOTE-${new Date().getTime()}-${Math.floor(Math.random() * 1000)}`;
+    const expiryDate = new Date();
+    expiryDate.setFullYear(expiryDate.getFullYear() + 1); // +1 año por defecto
+
+    await manager.createQueryBuilder()
+      .insert()
+      .into('inventory_batches')
+      .values({
+        productoId: productoId,
+        numeroLote: batchNumber,
+        cantidad: cantidad,
+        almacen: almacen,
+        fechaVencimiento: expiryDate,
+      })
+      .execute();
+
+    return batchNumber;
+  }
+
+  /**
    * PROCESAR TRANSFERENCIA ENTRE ALMACENES (Atómico)
    */
   async transferBulk(transferData: { 
@@ -156,9 +185,10 @@ export class MovementsService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-    const { productoId, tipo, cantidad, nota, usuarioId, almacenOrigen, almacenDestino, referencia } = createMovementDto;
+    const { productoId, tipo, cantidad, nota, usuarioId, almacenOrigen, almacenDestino, referencia, lote } = createMovementDto as any;
 
     try {
+      let batchGenerated = '';
       const producto = await queryRunner.manager.findOne(Product, { where: { id: productoId } });
       if (!producto) {
         throw new NotFoundException(`Producto con ID ${productoId} no encontrado`);
@@ -183,6 +213,8 @@ export class MovementsService {
         if (tiposIncremento.includes(tipoNormalizado)) {
           nuevoStock += cantidadNumerica;
           await this.updateWarehouseStock(queryRunner.manager, productoId, targetAlmacen, cantidadNumerica);
+          // CREACIÓN AUTOMÁTICA DE LOTE
+          batchGenerated = await this.generateAndSaveBatch(queryRunner.manager, productoId, cantidadNumerica, targetAlmacen, lote);
 
         } else if (tiposDecremento.includes(tipoNormalizado)) {
           if (producto.stock < cantidadNumerica) {
@@ -224,7 +256,7 @@ export class MovementsService {
         tipo: tipoNormalizado,
         cantidad: cantidadNumerica,
         nuevoStock: Number(nuevoStock),
-        nota,
+        nota: batchGenerated ? `${nota} | Lote: ${batchGenerated}` : nota,
         usuarioId: usuarioId ? String(usuarioId) : undefined,
         almacenOrigen: almacenOrigen || targetAlmacen,
         almacenDestino: almacenDestino || targetAlmacen,
@@ -261,7 +293,7 @@ export class MovementsService {
       const finalUsuarioId = (usuarioId && !isNaN(Number(usuarioId))) ? String(usuarioId) : undefined;
 
       for (const item of items) {
-        const { productoId, cantidad, almacen } = item;
+        const { productoId, cantidad, almacen, lote } = item;
         const idNum = Number(productoId);
         
         if (!productoId || isNaN(idNum)) continue;
@@ -278,10 +310,13 @@ export class MovementsService {
         const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION_FACTURA'];
         const tiposDecremento = ['SALIDA', 'DESPACHAR', 'DESCARTAR', 'DEVOLUCION'];
         let nuevoStock = producto.stock;
+        let batchInfo = '';
 
         if (tiposIncremento.includes(tipoNormalizado)) {
           nuevoStock += cantidadNumerica;
           await this.updateWarehouseStock(queryRunner.manager, Number(productoId), almacen || 'Principal', cantidadNumerica);
+          // CREACIÓN AUTOMÁTICA DE LOTE
+          batchInfo = await this.generateAndSaveBatch(queryRunner.manager, idNum, cantidadNumerica, almacen || 'Principal', lote);
         } 
         else if (tiposDecremento.includes(tipoNormalizado)) {
           if (producto.stock < cantidadNumerica) {
@@ -305,7 +340,7 @@ export class MovementsService {
           tipo: tipoNormalizado,
           cantidad: cantidadNumerica,
           nuevoStock: producto.stock,
-          nota: `${nota} | Almacén: ${almacen || 'General'}`,
+          nota: `${nota}${batchInfo ? ` | Lote: ${batchInfo}` : ''} | Almacén: ${almacen || 'General'}`,
           costoUnitario: producto.precio ? Number(producto.precio) : undefined,
           almacenOrigen: almacen || 'Principal',
           almacenDestino: almacen || 'Principal',

@@ -19,15 +19,7 @@ export const InventarioProvider = ({ children }) => {
   const API_BASE_URL = API_URL.split('/products')[0].replace(/\/$/, '');
 
   // --- Estado de Almacenes Detallados ---
-  const [almacenesDetallados, setAlmacenesDetallados] = useState(() => {
-    try {
-      const saved = localStorage.getItem('posfactura_almacenes_detallados');
-      return saved ? JSON.parse(saved) : [
-        { id: 1, nombre: 'Principal', descripcion: 'Almacén central', ubicaciones: [] },
-      ];
-    } catch (e) { return []; }
-  });
-
+  const [almacenesDetallados, setAlmacenesDetallados] = useState([]);
 
   // --- Estados de configuración (Categorías y Unidades) ---
   const [categorias, setCategorias] = useState(() => {
@@ -70,21 +62,6 @@ export const InventarioProvider = ({ children }) => {
     localStorage.setItem('posfactura_unidades_medida', JSON.stringify(unidadesMedida));
   }, [unidadesMedida]);
 
-  // Sincronizar almacenes desde localStorage y escuchar cambios
-  useEffect(() => {
-    const cargarAlmacenes = () => {
-      try {
-        const saved = localStorage.getItem('posfactura_almacenes_detallados');
-        if (saved) setAlmacenesDetallados(JSON.parse(saved));
-      } catch (e) { console.error("Error al cargar almacenes de localStorage", e); }
-    };
-
-    cargarAlmacenes(); // Cargar al inicio
-    window.addEventListener('storage', cargarAlmacenes); // Escuchar cambios de otras pestañas
-    return () => window.removeEventListener('storage', cargarAlmacenes);
-  }, []); // Solo se ejecuta una vez al montar
-
-
   // --- Helpers ---
   const getInventoryPermission = () => {
     if (usuario?.rol === 'admin') return 'full';
@@ -126,13 +103,30 @@ export const InventarioProvider = ({ children }) => {
         window.clearTimeout(timeoutId);
         setLoading(false);
       });
-
-    // Cargar proveedores desde la DB
-    fetch(`${API_BASE_URL}/providers`, { headers: getAuthHeaders() })
-      .then(res => res.json())
-      .then(data => setProveedores(Array.isArray(data) ? data : []))
-      .catch(err => console.error("Error cargando proveedores:", err));
   }, [usuario, refreshIndex, API_URL]);
+
+  // Efecto para cargar catálogos (Proveedores y Almacenes)
+  useEffect(() => {
+    if (!usuario) return;
+
+    const headers = getAuthHeaders();
+
+    // Cargar proveedores
+    fetch(`${API_BASE_URL}/providers`, { headers })
+      .then(res => res.json().then(data => setProveedores(Array.isArray(data) ? data : [])))
+      .catch(err => console.error("Error proveedores:", err));
+
+    // Cargar almacenes directamente desde la DB
+    fetch(`${API_BASE_URL}/warehouses`, { headers })
+      .then(res => {
+        if (!res.ok) throw new Error('Error al obtener almacenes');
+        return res.json();
+      })
+      .then(data => {
+        setAlmacenesDetallados(Array.isArray(data) ? data : []);
+      })
+      .catch(err => console.error("Error almacenes:", err));
+  }, [usuario, refreshIndex, API_BASE_URL]);
 
   // 1.1 Cargar Movimientos (Kardex)
   const cargarMovimientos = useCallback(async (productoId = null) => {
@@ -503,6 +497,51 @@ const registrarMovimientosMasivos = async (payload) => {
     return data;
   };
 
+  // --- GESTIÓN DE ALMACENES (DB) ---
+  const agregarAlmacen = async (nuevo) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/warehouses`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(nuevo)
+      });
+      if (!res.ok) throw new Error('Error al crear almacén');
+      const data = await res.json();
+      setAlmacenesDetallados(prev => [...prev, data]);
+      return true;
+    } catch (err) { console.error(err); throw err; }
+  };
+
+  const actualizarAlmacen = async (editado) => {
+    try {
+      const { id, ...datos } = editado;
+      const res = await fetch(`${API_BASE_URL}/warehouses/${id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(datos)
+      });
+      if (!res.ok) throw new Error('Error al actualizar almacén');
+      const data = await res.json();
+      setAlmacenesDetallados(prev => prev.map(a => a.id === data.id ? data : a));
+      return true;
+    } catch (err) { console.error(err); throw err; }
+  };
+
+  const eliminarAlmacen = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/warehouses/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'No se pudo eliminar el almacén');
+      }
+      setAlmacenesDetallados(prev => prev.filter(a => a.id !== id));
+      return true;
+    } catch (err) { console.error(err); throw err; }
+  };
+
   // --- GESTIÓN DE LOTES ---
   const cargarLotes = useCallback(async () => {
     try {
@@ -544,6 +583,9 @@ return (
     publicarConteo,
     setUnidadesMedida, 
     almacenesDetallados, // <-- Exponemos los almacenes
+    agregarAlmacen,
+    actualizarAlmacen,
+    eliminarAlmacen,
     setAlmacenesDetallados, // <-- Exponemos el setter para AlmacenSection
     agregarProducto, 
     eliminarProducto,

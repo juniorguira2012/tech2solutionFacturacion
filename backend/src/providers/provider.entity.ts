@@ -22,4 +22,7 @@ export class Provider {
 
   @Column({ nullable: true })
   direccion: string;
+
+@Column({ type: 'varchar', length: 255, nullable: true })
+  ofrece: string;
 }

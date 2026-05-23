@@ -7,28 +7,14 @@ export const AuthProvider = ({ children }) => {
   const [usuario, setUsuario] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Calculamos la URL base de la API
+  const API_BASE_URL = (import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000`).split('/products')[0].replace(/\/$/, '');
+
   // 1. Inicialización Segura
   useEffect(() => {
     const inicializarAuth = () => {
       try {
         const userSaved = localStorage.getItem('posfactura_user');
-        const usersList = localStorage.getItem('posfactura_usuarios_list');
-
-        // Si la "DB" de usuarios no existe, creamos el admin inicial
-        if (!usersList) {
-          const defaultAdmin = [
-            { 
-              id: 1, 
-              nombre: 'Admin Junior', 
-              username: 'admin', 
-              email: 'admin@techtwosolution.com', 
-              password: '1234', 
-              rol: 'admin', 
-              estado: 'activo' 
-            }
-          ];
-          localStorage.setItem('posfactura_usuarios_list', JSON.stringify(defaultAdmin));
-        }
 
         if (userSaved && userSaved !== "undefined") {
           setUsuario(JSON.parse(userSaved));
@@ -44,17 +30,20 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // 2. Función de Login mejorada
-  const login = useCallback((identifier, password) => {
+  const login = useCallback(async (identifier, password) => {
     try {
-      const savedUsers = localStorage.getItem('posfactura_usuarios_list');
-      const usuariosMaster = savedUsers ? JSON.parse(savedUsers) : [];
+      // Consultamos los usuarios directamente desde el Backend
+      const response = await fetch(`${API_BASE_URL}/users`);
+      if (!response.ok) throw new Error('No se pudo conectar con el servidor');
+      
+      const usuariosMaster = await response.json();
 
-      // Buscamos coincidencia por correo o por username
-      const userMatch = usuariosMaster.find(u => 
-        (u.email?.toLowerCase() === identifier.toLowerCase() || 
-         u.username?.toLowerCase() === identifier.toLowerCase()) && 
-        u.password === password
-      );
+      // Buscamos coincidencia por correo (La entidad no tiene username)
+      const userMatch = usuariosMaster.find(u => {
+        const emailMatch = u.email?.trim().toLowerCase() === identifier.trim().toLowerCase();
+        const passMatch = String(u.password) === String(password);
+        return emailMatch && passMatch;
+      });
 
       if (userMatch) {
         if (userMatch.estado === 'inactivo') {
@@ -67,10 +56,11 @@ export const AuthProvider = ({ children }) => {
       }
 
       return { success: false, message: 'Credenciales incorrectas.' };
-    } catch {
-      return { success: false, message: 'Error técnico en el login.' };
+    } catch (error) {
+      console.error("Error en Login:", error);
+      return { success: false, message: 'Error de conexión con la base de datos.' };
     }
-  }, []);
+  }, [API_BASE_URL]);
 
   const logout = useCallback(() => {
     setUsuario(null);

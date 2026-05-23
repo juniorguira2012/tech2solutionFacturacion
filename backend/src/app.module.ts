@@ -8,6 +8,9 @@ import { InventoryCountsModule } from './inventory-counts/inventory-counts.modul
 import { MovementsModule } from './movements/movements.module';
 import { SalesModule } from './sales/sales.module';
 import { ProvidersModule } from './providers/providers.module';
+import { WarehousesModule } from './movements/warehouses.module';
+import { UsersModule } from './providers/users.module';
+import { ClientsModule } from './providers/clients.module';
 
 @Module({
   imports: [
@@ -30,6 +33,9 @@ import { ProvidersModule } from './providers/providers.module';
     MovementsModule,
     SalesModule,
     ProvidersModule,  
+    WarehousesModule,
+    UsersModule,
+    ClientsModule,
   ],
 })
 export class AppModule {}

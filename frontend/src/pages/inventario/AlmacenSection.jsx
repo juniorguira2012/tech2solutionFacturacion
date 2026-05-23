@@ -15,7 +15,15 @@ const AlmacenSection = ({ mostrarToast }) => {
   const [isEditingAlmacen, setIsEditingAlmacen] = useState(false);
   const [editandoAlmacenId, setEditandoAlmacenId] = useState(null);
 
-  const { almacenesDetallados: almacenes, setAlmacenesDetallados: setAlmacenes } = useInventario();
+  const [isEditingUbicacion, setIsEditingUbicacion] = useState(false);
+  const [editandoUbicacionIdx, setEditandoUbicacionIdx] = useState(null);
+
+  const { 
+    almacenesDetallados: almacenes, 
+    agregarAlmacen, 
+    actualizarAlmacen, 
+    eliminarAlmacen 
+  } = useInventario();
   const [almacenFormData, setAlmacenFormData] = useState({ nombre: '', descripcion: '' });
   const [ubicacionFormData, setUbicacionFormData] = useState({ nombre: '', codigo: '', tipo: 'Pasillo' });
 
@@ -37,6 +45,13 @@ const AlmacenSection = ({ mostrarToast }) => {
     setEditandoAlmacenId(null);
   };
 
+  const handleCerrarUbicacionModal = () => {
+    setIsUbicacionModalOpen(false);
+    setUbicacionFormData({ nombre: '', codigo: '', tipo: 'Pasillo' });
+    setIsEditingUbicacion(false);
+    setEditandoUbicacionIdx(null);
+  };
+
   const handleAbrirEditar = (almacen) => {
     setAlmacenFormData({ nombre: almacen.nombre, descripcion: almacen.descripcion });
     setEditandoAlmacenId(almacen.id);
@@ -44,41 +59,75 @@ const AlmacenSection = ({ mostrarToast }) => {
     setIsAlmacenModalOpen(true);
   };
 
-  const handleEliminarAlmacen = (almacen) => {
+  const handleEliminarAlmacen = async (almacen) => {
     if (!window.confirm(`¿Seguro que deseas eliminar el almacén "${almacen.nombre}"?`)) return;
 
-    setAlmacenes(prev => prev.filter(al => al.id !== almacen.id));
-    if (selectedAlmacen?.id === almacen.id) {
-      setSelectedAlmacen(null);
-      setIsUbicacionModalOpen(false);
+    try {
+      await eliminarAlmacen(almacen.id);
+      if (selectedAlmacen?.id === almacen.id) {
+        setSelectedAlmacen(null);
+        setIsUbicacionModalOpen(false);
+      }
+      mostrarToast("Almacén eliminado");
+    } catch (error) {
+      mostrarToast(error.message || "Error al eliminar", "error");
     }
-    mostrarToast("Almacén eliminado");
   };
 
-  const handleGuardarAlmacen = (e) => {
+  const handleGuardarAlmacen = async (e) => {
     e.preventDefault();
-    if (isEditingAlmacen) {
-      setAlmacenes(prev => prev.map(al => 
-        al.id === editandoAlmacenId ? { ...al, ...almacenFormData } : al
-      ));
-      mostrarToast("Almacén actualizado");
-    } else {
-      setAlmacenes([...almacenes, { ...almacenFormData, id: Date.now(), ubicaciones: [] }]);
-      mostrarToast("Almacén creado");
+    try {
+      if (isEditingAlmacen) {
+        await actualizarAlmacen({ id: editandoAlmacenId, ...almacenFormData });
+        mostrarToast("Almacén actualizado");
+      } else {
+        await agregarAlmacen(almacenFormData);
+        mostrarToast("Almacén creado");
+      }
+      handleCerrarAlmacenModal();
+    } catch (error) {
+      mostrarToast("Error al conectar con el servidor", "error");
     }
-    handleCerrarAlmacenModal();
   };
 
-  const handleGuardarUbicacion = (e) => {
+  const handleAbrirEditarUbicacion = (almacen, ubi, idx) => {
+    setSelectedAlmacen(almacen);
+    setUbicacionFormData(ubi);
+    setEditandoUbicacionIdx(idx);
+    setIsEditingUbicacion(true);
+    setIsUbicacionModalOpen(true);
+  };
+
+  const handleEliminarUbicacion = async (almacen, idx) => {
+    if (!window.confirm(`¿Seguro que deseas eliminar la ubicación "${almacen.ubicaciones[idx].nombre}"?`)) return;
+    try {
+      const nuevasUbicaciones = almacen.ubicaciones.filter((_, i) => i !== idx);
+      await actualizarAlmacen({ id: almacen.id, ubicaciones: nuevasUbicaciones });
+      mostrarToast("Ubicación eliminada");
+    } catch (error) {
+      mostrarToast("Error al eliminar ubicación", "error");
+    }
+  };
+
+  const handleGuardarUbicacion = async (e) => {
     e.preventDefault();
-    setAlmacenes(prev => prev.map(al => 
-      al.id === selectedAlmacen.id 
-      ? { ...al, ubicaciones: [...al.ubicaciones, ubicacionFormData] }
-      : al
-    ));
-    setIsUbicacionModalOpen(false);
-    setUbicacionFormData({ nombre: '', codigo: '', tipo: 'Pasillo' });
-    mostrarToast("Ubicación añadida");
+    try {
+      let nuevasUbicaciones;
+      if (isEditingUbicacion) {
+        nuevasUbicaciones = selectedAlmacen.ubicaciones.map((u, i) => 
+          i === editandoUbicacionIdx ? ubicacionFormData : u
+        );
+      } else {
+        nuevasUbicaciones = [...(selectedAlmacen.ubicaciones || []), ubicacionFormData];
+      }
+
+      await actualizarAlmacen({ id: selectedAlmacen.id, ubicaciones: nuevasUbicaciones });
+      
+      handleCerrarUbicacionModal();
+      mostrarToast(isEditingUbicacion ? "Ubicación actualizada" : "Ubicación añadida");
+    } catch (error) {
+      mostrarToast("Error al guardar ubicación", "error");
+    }
   };
 
   return (
@@ -169,15 +218,29 @@ const AlmacenSection = ({ mostrarToast }) => {
             
             <div className="p-5 flex-1">
               <div className="space-y-2">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 italic">Ubicaciones Registradas ({almacen.ubicaciones.length})</p>
-                {almacen.ubicaciones.length > 0 ? (
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 italic">Ubicaciones Registradas ({almacen.ubicaciones?.length || 0})</p>
+                {almacen.ubicaciones?.length > 0 ? (
                   <div className={vistaAlmacen === 'grid' ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2'}>
-                    {almacen.ubicaciones.map((ubi, idx) => (
-                      <div key={idx} className="p-2 bg-slate-50 border border-slate-100 rounded-lg">
+                    {almacen.ubicaciones?.map((ubi, idx) => (
+                      <div key={idx} className="p-2 bg-slate-50 border border-slate-100 rounded-lg group/ubi relative">
                         <p className="text-[9px] font-black text-slate-700 uppercase truncate">{ubi.nombre}</p>
                         <div className="flex items-center justify-between mt-1">
                           <span className="text-[8px] font-bold text-indigo-600 uppercase tracking-tighter bg-white px-1.5 py-0.5 rounded border border-indigo-50">{ubi.codigo}</span>
                           <span className="text-[7px] font-black text-slate-400 uppercase italic">{ubi.tipo}</span>
+                        </div>
+                        <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover/ubi:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => handleAbrirEditarUbicacion(almacen, ubi, idx)}
+                            className="p-1 bg-white border border-slate-100 rounded text-slate-400 hover:text-amber-500 shadow-sm transition-colors"
+                          >
+                            <Edit2 size={10} />
+                          </button>
+                          <button 
+                            onClick={() => handleEliminarUbicacion(almacen, idx)}
+                            className="p-1 bg-white border border-slate-100 rounded text-slate-400 hover:text-rose-500 shadow-sm transition-colors"
+                          >
+                            <Trash2 size={10} />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -228,10 +291,10 @@ const AlmacenSection = ({ mostrarToast }) => {
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
               <div>
-                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter italic">Nueva Ubicación</h2>
+                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter italic">{isEditingUbicacion ? 'Editar Ubicación' : 'Nueva Ubicación'}</h2>
                 <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-widest">{selectedAlmacen?.nombre}</p>
               </div>
-              <button onClick={() => setIsUbicacionModalOpen(false)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 shadow-sm transition-all"><X size={20} /></button>
+              <button onClick={handleCerrarUbicacionModal} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 shadow-sm transition-all"><X size={20} /></button>
             </div>
             <form onSubmit={handleGuardarUbicacion} className="p-8 space-y-6">
               <div className="space-y-2">
@@ -258,7 +321,7 @@ const AlmacenSection = ({ mostrarToast }) => {
                 </select>
               </div>
               <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-indigo-600 transition-all uppercase text-[10px] tracking-[0.2em]">
-                Registrar Ubicación
+                {isEditingUbicacion ? 'Actualizar Ubicación' : 'Registrar Ubicación'}
               </button>
             </form>
           </div>

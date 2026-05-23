@@ -10,23 +10,21 @@ const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
- const handleSubmit = (e) => {
+ const handleSubmit = async (e) => {
   e.preventDefault();
   setError('');
   setIsLoading(true);
 
-  // Reducimos el tiempo a 500ms para que se sienta rápido pero profesional
-  setTimeout(() => {
-    const res = login(form.username, form.password);
-    
+  try {
+    const res = await login(form.username, form.password);
     if (res && res.success) {
-      //IMPORTANTE: Navegamos inmediatamente
       navigate('/home', { replace: true }); 
     } else {
       setError(res ? res.message : 'Error de conexión');
-      setIsLoading(false);
     }
-  }, 500);
+  } finally {
+    setIsLoading(false);
+  }
 };
 
   return (

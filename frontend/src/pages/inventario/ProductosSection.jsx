@@ -510,12 +510,6 @@ const handleEliminar = (prod) => {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Categoría</label>
-                  <select className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm" value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})}>
-                    {categorias.map(cat => <option key={cat.nombre} value={cat.nombre}>{cat.nombre}</option>)}
-                  </select>
-                </div>
                 <div className="md:col-span-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Imagen (URL o Archivo)</label>
                   <div className="flex gap-3 items-center">

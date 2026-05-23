@@ -7,7 +7,8 @@ const ProveedoresSection = ({ mostrarToast }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [formData, setFormData] = useState({ id: null, nombre: '', rnc: '', telefono: '', correo: '', direccion: '', categoria: 'Estándar' });
+  const [serviceSearchTerm, setServiceSearchTerm] = useState("");
+  const [formData, setFormData] = useState({ id: null, nombre: '', rnc: '', telefono: '', correo: '', direccion: '', ofrece: '', categoria: 'Estándar' });
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -29,19 +30,36 @@ const ProveedoresSection = ({ mostrarToast }) => {
   const cerrarModal = () => {
     setIsModalOpen(false);
     setIsEditing(false);
-    setFormData({ id: null, nombre: '', rnc: '', telefono: '', correo: '', direccion: '', categoria: 'Estándar' });
+    setFormData({ id: null, nombre: '', rnc: '', telefono: '', correo: '', direccion: '', ofrece: '', categoria: 'Estándar' });
   };
 
   const proveedoresFiltrados = proveedores.filter(p => 
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || (p.rnc && p.rnc.includes(searchTerm))
+    // Filtro General (Nombre o RNC)
+    (p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
+     (p.rnc && p.rnc.includes(searchTerm))) &&
+    // Filtro Específico por Servicio/Producto
+    (serviceSearchTerm === "" || (p.ofrece && p.ofrece.toLowerCase().includes(serviceSearchTerm.toLowerCase())))
   );
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input type="text" placeholder="Buscar proveedor..." className="w-full h-10 pl-10 pr-4 rounded-xl border border-slate-200 outline-none focus:border-brand text-xs font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        <div className="flex flex-1 flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input type="text" placeholder="Buscar por nombre o RNC..." className="w-full h-10 pl-10 pr-4 rounded-xl border border-slate-200 outline-none focus:border-brand text-xs font-bold bg-white" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          </div>
+          
+          <div className="relative flex-1">
+            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-brand" size={14} />
+            <input 
+              type="text" 
+              placeholder="Filtrar por servicio (ej: Limpieza)..." 
+              className="w-full h-10 pl-10 pr-4 rounded-xl border border-slate-200 outline-none focus:border-brand text-xs font-bold bg-white italic" 
+              value={serviceSearchTerm} 
+              onChange={(e) => setServiceSearchTerm(e.target.value)} 
+            />
+          </div>
         </div>
         <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all">
           <Plus size={16} /> Nuevo Proveedor
@@ -64,7 +82,13 @@ const ProveedoresSection = ({ mostrarToast }) => {
               </div>
             </div>
             <h3 className="font-black text-slate-800 uppercase text-xs mb-1">{prov.nombre}</h3>
-            <p className="text-[9px] text-slate-400 font-bold mb-4 uppercase">RNC: {prov.rnc || '---'}</p>
+            <p className="text-[9px] text-slate-400 font-bold uppercase mb-2">RNC: {prov.rnc || '---'}</p>
+            {prov.ofrece && (
+              <div className="mb-4 flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 text-indigo-600 rounded-xl border border-indigo-100/50 w-fit">
+                <Globe size={10} className="text-indigo-400" />
+                <span className="text-[9px] font-black uppercase tracking-wide italic truncate max-w-[150px]">{prov.ofrece}</span>
+              </div>
+            )}
             <div className="space-y-2 border-t pt-4">
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><Phone size={12}/> {prov.telefono}</div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><Mail size={12}/> {prov.correo || '---'}</div>
@@ -99,6 +123,15 @@ const ProveedoresSection = ({ mostrarToast }) => {
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
                 <input className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm" value={formData.correo} onChange={e => setFormData({...formData, correo: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Producto o Servicio que ofrece</label>
+                <input 
+                  placeholder="Ej: Materiales de Red, Consultoría, Limpieza..." 
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm" 
+                  value={formData.ofrece || ''} 
+                  onChange={e => setFormData({...formData, ofrece: e.target.value})} 
+                />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dirección</label>
