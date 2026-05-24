@@ -497,6 +497,22 @@ const registrarMovimientosMasivos = async (payload) => {
     return data;
   };
 
+  const eliminarConteo = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/inventory-counts/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) throw new Error('No se pudo eliminar el conteo');
+      
+      setConteos(prev => prev.filter(c => c.id !== id));
+      return true;
+    } catch (err) {
+      console.error("Error eliminando conteo:", err);
+      throw err;
+    }
+  };
+
   // --- GESTIÓN DE ALMACENES (DB) ---
   const agregarAlmacen = async (nuevo) => {
     try {
@@ -580,6 +596,7 @@ return (
     obtenerConteo,
     agregarItemAConteo,
     actualizarItemConteo,
+    eliminarConteo,
     publicarConteo,
     setUnidadesMedida, 
     almacenesDetallados, // <-- Exponemos los almacenes

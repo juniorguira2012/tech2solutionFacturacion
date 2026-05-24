@@ -17,7 +17,16 @@ export const AuthProvider = ({ children }) => {
       if (!res.ok) return null;
       const roles = await res.json();
       const miRol = roles.find(r => r.name === rolName);
-      return miRol ? miRol.config : null;
+      
+      if (miRol) return miRol.config;
+
+      // Fallback: Si no hay roles en la DB pero es admin, dar permisos full
+      if (rolName === 'admin') {
+        return {
+          modules: { ventas: 'full', inventario: 'full', reportes: 'full', clientes: 'full', configuracion: 'full' }
+        };
+      }
+      return null;
     } catch (error) {
       console.error("Error cargando permisos:", error);
       return null;

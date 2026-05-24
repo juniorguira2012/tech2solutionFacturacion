@@ -12,7 +12,10 @@ export class UsersService {
   ) {}
 
   findAll(): Promise<User[]> {
-    return this.usersRepository.find();
+    // Forzamos la selección del password para que el frontend pueda validar
+    return this.usersRepository.find({
+      select: ['id', 'nombre', 'email', 'password', 'rol', 'isActive']
+    });
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {

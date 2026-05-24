@@ -1,18 +1,10 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-  OneToMany,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
 import { CountItem } from './count-item.entity';
 
 export enum ConteoEstado {
-  EN_PROGRESO = 'En Progreso',
-  CONTADO = 'Contado',
-  AJUSTES_PUBLICADOS = 'Ajustes Publicados',
-  CANCELADO = 'Cancelado',
+  EN_PROGRESO = 'EN_PROGRESO', // Asegúrate de que este valor coincida con lo que hay en la DB
+  AJUSTES_PUBLICADOS = 'Ajustes Publicados', // Este es el valor que causaba el error
+  CANCELADO = 'CANCELADO', // Asegúrate de que este valor coincida con lo que hay en la DB
 }
 
 @Entity('inventory_counts')
@@ -23,6 +15,9 @@ export class InventoryCount {
   @Column()
   almacen: string;
 
+  @Column({ nullable: true })
+  descripcion: string;
+
   @Column({
     type: 'enum',
     enum: ConteoEstado,
@@ -30,24 +25,15 @@ export class InventoryCount {
   })
   estado: ConteoEstado;
 
-  @Column({ nullable: true })
-  descripcion: string;
-
-  @Column({ default: 0 })
+  @Column({ type: 'int', default: 0 })
   totalProductos: number;
 
-  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'float', default: 0 })
   totalVariacion: number;
 
-  @OneToMany(() => CountItem, (item) => item.conteo, {
-    cascade: true,
-    eager: true,
-  })
+  @OneToMany(() => CountItem, (item) => item.conteo, { cascade: true })
   items: CountItem[];
 
   @CreateDateColumn()
   createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 }

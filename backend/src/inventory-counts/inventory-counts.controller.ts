@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  Delete,
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -217,5 +218,20 @@ export class InventoryCountsController {
       throw new UnauthorizedException('Usuario no identificado');
     }
     return this.service.cancelCount(Number(id));
+  }
+
+  /**
+   * Eliminar un conteo físico
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeInventoryCount(
+    @Param('id') id: string,
+    @Headers('x-inventory-permission') permission: string,
+  ) {
+    if (permission !== 'full') {
+      throw new UnauthorizedException('No tienes permiso para eliminar conteos');
+    }
+    return this.service.remove(Number(id));
   }
 }

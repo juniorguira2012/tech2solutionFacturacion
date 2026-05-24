@@ -251,4 +251,16 @@ export class InventoryCountsService {
       );
     }
   }
+
+  async remove(id: number): Promise<void> {
+    try {
+      const result = await this.inventoryCountRepository.delete(id);
+      if (result.affected === 0) {
+        throw new NotFoundException(`Conteo con ID ${id} no encontrado`);
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      throw new BadRequestException(`Error al eliminar conteo: ${error.message}`);
+    }
+  }
 }
