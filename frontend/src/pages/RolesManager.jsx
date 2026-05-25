@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Shield, Save, CheckCircle, Lock, Eye, Edit3, RotateCcw, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Shield, Save, CheckCircle, Lock, Eye, Edit3, RotateCcw, ShieldCheck, AlertCircle, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const RolesManager = () => {
@@ -26,6 +26,8 @@ const RolesManager = () => {
   const [rolesConfig, setRolesConfig] = useState(initialRoles);
   const [rolSeleccionado, setRolSeleccionado] = useState('vendedor');
   const [toast, setToast] = useState(false);
+  const [newRoleModal, setNewRoleModal] = useState({ show: false, name: '' });
+  const [deleteModal, setDeleteModal] = useState({ show: false, rol: null });
   const [loading, setLoading] = useState(true);
 
   const API_BASE_URL = (import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000`).split('/products')[0].replace(/\/$/, '');
@@ -77,8 +79,55 @@ const RolesManager = () => {
   const resetearRol = () => {
     setRolesConfig({
       ...rolesConfig,
-      [rolSeleccionado]: initialRoles[rolSeleccionado]
+      [rolSeleccionado]: initialRoles[rolSeleccionado] || { 
+        modules: { ventas: 'none', inventario: 'none', reportes: 'none', clientes: 'none' },
+        viewScope: 'own' 
+      }
     });
+  };
+
+  const agregarNuevoRol = () => {
+    setNewRoleModal({ show: true, name: '' });
+  };
+
+  const confirmarNuevoRol = () => {
+    const nombre = newRoleModal.name;
+    if (!nombre || nombre.trim() === "") return;
+    
+    const key = nombre.toLowerCase().trim().replace(/\s+/g, '_');
+    setRolesConfig(prev => ({
+      ...prev,
+      [key]: {
+        modules: { ventas: 'none', inventario: 'none', reportes: 'none', clientes: 'none' },
+        viewScope: 'own'
+      }
+    }));
+    setRolSeleccionado(key);
+    setNewRoleModal({ show: false, name: '' });
+  };
+
+  const ejecutarEliminacion = async () => {
+    const rolABorrar = deleteModal.rol;
+    if (rolABorrar === 'admin') return;
+
+    try {
+      // Opcional: Intentar borrar en backend si existe el endpoint
+      await fetch(`${API_BASE_URL}/roles/${rolABorrar}`, { 
+        method: 'DELETE',
+        headers: { 'x-user-role': usuario?.rol || '' }
+      });
+
+      const nuevaConfig = { ...rolesConfig };
+      delete nuevaConfig[rolABorrar];
+      setRolesConfig(nuevaConfig);
+      
+      if (rolSeleccionado === rolABorrar) {
+        setRolSeleccionado('vendedor');
+      }
+      setDeleteModal({ show: false, rol: null });
+    } catch (error) {
+      setDeleteModal({ show: false, rol: null });
+    }
   };
 
   const cambiarPermiso = (moduloId, nivel) => {
@@ -130,7 +179,15 @@ const RolesManager = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* SIDEBAR: SELECTOR DE ROL */}
         <div className="lg:col-span-4 space-y-3">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Perfiles Disponibles</h3>
+          <div className="flex items-center justify-between ml-2 mb-2">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Perfiles Disponibles</h3>
+            <button 
+              onClick={agregarNuevoRol}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-indigo-600 transition-all active:scale-95"
+            >
+              <Plus size={14} /> Nuevo Perfil
+            </button>
+          </div>
           {Object.keys(rolesConfig).map((rol) => {
             const isActive = rolSeleccionado === rol;
             return (
@@ -152,6 +209,19 @@ const RolesManager = () => {
                     </span>
                   </div>
                 </div>
+                
+                {/* Botón Eliminar (Solo si no es admin) */}
+                {rol !== 'admin' && (
+                  <div 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteModal({ show: true, rol });
+                    }}
+                    className={`p-2 rounded-xl transition-all ${isActive ? 'hover:bg-white/20 text-indigo-200' : 'hover:bg-rose-50 text-slate-300 hover:text-rose-500'}`}
+                  >
+                    <Trash2 size={16} />
+                  </div>
+                )}
               </button>
             );
           })}
@@ -213,6 +283,84 @@ const RolesManager = () => {
           )}
         </div>
       </div>
+
+      {/* VENTANA DE CONFIRMACIÓN ESTILIZADA */}
+      {deleteModal.show && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3.5rem] p-12 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-white/20 text-center">
+            <div className="h-20 w-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
+              <AlertTriangle size={40} strokeWidth={2.5} />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter leading-tight">¿Eliminar Perfil?</h2>
+            <p className="text-slate-500 font-bold mt-4 leading-relaxed text-sm">
+              Estás a punto de borrar el perfil <span className="text-rose-500 uppercase">"{deleteModal.rol}"</span>. 
+              Esta acción no se puede deshacer y afectará a los usuarios vinculados.
+            </p>
+            
+            <div className="flex gap-3 mt-10">
+              <button 
+                onClick={() => setDeleteModal({ show: false, rol: null })}
+                className="flex-1 px-6 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={ejecutarEliminacion}
+                className="flex-1 px-6 py-4 bg-rose-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-600 shadow-xl shadow-rose-100 transition-all active:scale-95"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA CREAR NUEVO PERFIL (SUSTITUYE AL PROMPT) */}
+      {newRoleModal.show && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3.5rem] p-12 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-300 border border-white/20">
+            <div className="h-20 w-20 bg-indigo-50 text-brand rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
+              <Shield size={40} strokeWidth={2.5} />
+            </div>
+            <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter leading-tight text-center">Nuevo Perfil</h2>
+            <p className="text-slate-400 font-bold mt-2 text-center text-[10px] uppercase tracking-widest mb-8">Define el nombre del nivel de acceso</p>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nombre del Perfil</label>
+                <input 
+                  autoFocus
+                  type="text" 
+                  value={newRoleModal.name} 
+                  onChange={(e) => setNewRoleModal({...newRoleModal, name: e.target.value})}
+                  className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-brand font-bold text-sm text-slate-700 transition-all focus:bg-white focus:shadow-sm" 
+                  placeholder="Ej: Auditor, Supervisor Nocturno..."
+                  onKeyDown={(e) => e.key === 'Enter' && newRoleModal.name.trim() && confirmarNuevoRol()}
+                />
+              </div>
+              {rolesConfig[newRoleModal.name.toLowerCase().trim().replace(/\s+/g, '_')] && (
+                <p className="text-[9px] font-black text-rose-500 uppercase tracking-tighter ml-2 italic">⚠️ Este nombre de perfil ya existe.</p>
+              )}
+            </div>
+            
+            <div className="flex gap-3 mt-10">
+              <button 
+                onClick={() => setNewRoleModal({ show: false, name: '' })}
+                className="flex-1 px-6 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmarNuevoRol}
+                disabled={!newRoleModal.name.trim() || rolesConfig[newRoleModal.name.toLowerCase().trim().replace(/\s+/g, '_')]}
+                className="flex-1 px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-brand shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:opacity-30 disabled:pointer-events-none"
+              >
+                Crear Perfil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
