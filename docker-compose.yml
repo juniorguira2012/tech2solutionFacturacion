@@ -3,7 +3,8 @@ version: '3.8'
 services:
 
   backend:
-    image: juniordone/tech2-backend:latest
+    image: juniordone/tech2-backend:v1
+
 
     environment:
       NODE_ENV: production
@@ -29,7 +30,7 @@ services:
         - "traefik.http.services.tech2-backend.loadbalancer.server.port=3000"
 
   frontend:
-    image: juniordone/tech2-frontend:latest
+    image: juniordone/tech2-frontend:v1
 
     networks:
       - network_public
