@@ -1,20 +1,23 @@
 version: '3.8'
 
 services:
+
   postgres_db:
     image: postgres:15-alpine
-    restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: tech_two_solution_db
+
     volumes:
       - tech2_db_data:/var/lib/postgresql/data
 
+    networks:
+      - tech2-network
+
   backend:
-    build:
-      context: ./backend
-    restart: always
+    image: juniordone/tech2-backend:latest
+
     environment:
       NODE_ENV: production
       DATABASE_HOST: postgres_db
@@ -22,42 +25,39 @@ services:
       DATABASE_USER: postgres
       DATABASE_PASSWORD: postgres
       DATABASE_NAME: tech_two_solution_db
-      FRONTEND_URL: https://inventario.oneredrd.com
+
     depends_on:
       - postgres_db
-    expose:
-      - "3000"
+
+    networks:
+      - tech2-network
+
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.tech2-backend.rule=Host(`inventario.oneredrd.com`) && PathPrefix(`/api`)"
       - "traefik.http.routers.tech2-backend.entrypoints=websecure"
       - "traefik.http.routers.tech2-backend.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.tech2-backend.loadbalancer.server.port=3000"
-    networks:
-      - web
 
   frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_URL: https://inventario.oneredrd.com/api
-    restart: always
+    image: juniordone/tech2-frontend:latest
+
     depends_on:
       - backend
-    expose:
-      - "80"
+
+    networks:
+      - tech2-network
+
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.tech2-frontend.rule=Host(`inventario.oneredrd.com`) && !PathPrefix(`/api`)"
+      - "traefik.http.routers.tech2-frontend.rule=Host(`inventario.oneredrd.com`)"
       - "traefik.http.routers.tech2-frontend.entrypoints=websecure"
       - "traefik.http.routers.tech2-frontend.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.tech2-frontend.loadbalancer.server.port=80"
-    networks:
-      - web
 
 volumes:
   tech2_db_data:
 
 networks:
-  web:
-    external: true
+  tech2-network:
+    driver: overlay
