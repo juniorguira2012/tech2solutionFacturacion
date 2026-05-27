@@ -1,5 +1,5 @@
 # Etapa 1: Construcción
-FROM node:24-alpine AS build
+FROM node:20-alpine AS build
 WORKDIR /app
 
 # Argumento para la URL de la API (necesario en build time para Vite)
@@ -13,6 +13,9 @@ RUN npm run build
 
 # Etapa 2: Servidor de producción (Nginx)
 FROM nginx:stable-alpine
+
+# Copiamos la configuración de Nginx para soportar rutas de React (SPA)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copiamos los archivos generados por Vite al directorio de Nginx
 COPY --from=build /app/dist /usr/share/nginx/html

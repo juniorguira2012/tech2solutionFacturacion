@@ -1,22 +1,22 @@
-# Etapa 1: Instalación de dependencias y construcción
-FROM node:24-alpine AS builder
+# Etapa 1: Construcción
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+RUN npm install && npm install -g @nestjs/cli
 COPY . .
 RUN npm run build
 
-# Etapa 2: Imagen final de producción
-FROM node:24-alpine
+# Etapa 2: Imagen final (Producción)
+FROM node:20-alpine
 WORKDIR /app
 
 # Copiamos solo lo necesario para ejecutar
 COPY --from=builder /app/package*.json ./
+# Instalamos dependencias primero para cachear capas
+RUN npm install --omit=dev
+# Luego copiamos el build
 COPY --from=builder /app/dist ./dist
-
-# Instalamos solo dependencias de producción
-RUN npm install --only=production
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/main.js"]
