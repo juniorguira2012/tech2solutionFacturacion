@@ -7,19 +7,22 @@ import { json, urlencoded } from 'express';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors();
+  app.setGlobalPrefix('api');
   // Aumentar límites para soportar imágenes en Base64
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ limit: '50mb', extended: true }));
 
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'https://inventario.oneredrd.com',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ].filter(Boolean);
+
+  console.log('Allowed CORS origins:', allowedOrigins);
+
   app.enableCors({
     origin: (origin, callback) => {
-      const allowedOrigins = [
-        process.env.FRONTEND_URL,
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-      ].filter(Boolean);
-
       const isLocalViteOrigin =
         !origin ||
         /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin) ||
@@ -35,7 +38,7 @@ async function bootstrap() {
       callback(new Error(`Origen no permitido por CORS: ${origin}`));
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true, // Permitir el envío de cookies de origen cruzado
+    credentials: true,
   });
   app.useGlobalPipes(
     new ValidationPipe({

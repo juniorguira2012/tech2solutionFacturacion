@@ -15,8 +15,8 @@ export const VentasProvider = ({ children }) => {
     }
   });
 
-  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000/products`;
-  const API_SALES_URL = API_URL.split('/products')[0] + '/sales';
+  const API_BASE_URL = import.meta.env.VITE_API_URL;
+  const API_SALES_URL = API_BASE_URL + '/sales';
 
   useEffect(() => {
     localStorage.setItem('posfacura_ventas', JSON.stringify(historialVentas));

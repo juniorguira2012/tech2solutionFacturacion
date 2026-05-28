@@ -3,13 +3,13 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Argumento para la URL de la API (necesario en build time para Vite)
-ARG VITE_API_URL
+ARG VITE_API_URL=https://inventario.oneredrd.com/api
 ENV VITE_API_URL=$VITE_API_URL
 
 COPY package*.json ./
 RUN npm install
 COPY . .
-RUN npm run build
+RUN VITE_API_URL=$VITE_API_URL npm run build
 
 # Etapa 2: Servidor de producción (Nginx)
 FROM nginx:stable-alpine

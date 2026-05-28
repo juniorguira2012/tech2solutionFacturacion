@@ -36,4 +36,11 @@ export class UsersService {
 
     return this.usersRepository.save(user);
   }
+
+  async findByEmail(email: string) {
+    return this.usersRepository.findOne({
+      where: { email },
+      select: ['id', 'nombre', 'email', 'password', 'rol', 'isActive'] // <-- Forzamos el password
+    });
+  }
 }

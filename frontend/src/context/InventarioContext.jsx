@@ -14,9 +14,9 @@ export const InventarioProvider = ({ children }) => {
   const [refreshIndex, setRefreshIndex] = useState(0);
 
   const { usuario } = useAuth();
-  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000/products`;
-  // Forma más segura de obtener la base sin importar si hay "/" al final
-  const API_BASE_URL = API_URL.split('/products')[0].replace(/\/$/, '');
+  const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+  const API_URL = `${API_BASE_URL}/products`;
 
   // --- Estado de Almacenes Detallados ---
   const [almacenesDetallados, setAlmacenesDetallados] = useState([]);

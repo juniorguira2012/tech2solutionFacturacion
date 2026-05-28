@@ -9,7 +9,10 @@ export const AuthProvider = ({ children }) => {
   const [permisos, setPermisos] = useState(null);
 
   // Calculamos la URL base de la API
-  const API_BASE_URL = (import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000`).split('/products')[0].replace(/\/$/, '');
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+  
+  // Debug: log para verificar la URL
+  console.log('API_BASE_URL:', API_BASE_URL);
 
   const cargarPermisos = useCallback(async (rolName) => {
     try {
@@ -58,37 +61,73 @@ export const AuthProvider = ({ children }) => {
   // 2. Función de Login mejorada
   const login = useCallback(async (identifier, password) => {
     try {
-      // Consultamos los usuarios directamente desde el Backend
-      const response = await fetch(`${API_BASE_URL}/users`);
-      if (!response.ok) throw new Error('No se pudo conectar con el servidor');
-      
-      const usuariosMaster = await response.json();
-
-      // Buscamos coincidencia por correo (La entidad no tiene username)
-      const userMatch = usuariosMaster.find(u => {
-        const emailMatch = u.email?.trim().toLowerCase() === identifier.trim().toLowerCase();
-        const passMatch = String(u.password) === String(password);
-        return emailMatch && passMatch;
+      console.log('Iniciando intento de login para:', identifier);
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: identifier,
+          password,
+        }),
       });
 
-      if (userMatch) {
-        if (userMatch.estado === 'inactivo') {
-          return { success: false, message: 'Usuario suspendido por administración.' };
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        // Esto nos mostrará si el error es "Invalid credentials" o algo más específico
+        const msg = errorData.message || 'Error de autenticación';
+        console.error('Detalle del error 401:', msg);
+
+        return {
+          success: false,
+          message: msg || 'Credenciales inválidas o usuario inactivo.',
+        };
+      }
+
+      const data = await response.json();
+
+      // DEBUG: Para ver qué devuelve el servidor realmente
+      console.log("Respuesta login:", data);
+
+      if (data.user || data.id) { // A veces el backend devuelve el user directamente
+        const user = data.user || data;
+        
+        // Según tu SQL, la columna es 'isActive'. Validamos ambas posibilidades.
+        if (user.estado === 'inactivo' || user.isActive === false) {
+          return {
+            success: false,
+            message: 'Usuario suspendido por administración.',
+          };
         }
 
-        setUsuario(userMatch);
-        const config = await cargarPermisos(userMatch.rol);
+        setUsuario(user);
+
+        const config = await cargarPermisos(user.rol);
+
         setPermisos(config);
-        localStorage.setItem('posfactura_user', JSON.stringify(userMatch));
+
+        localStorage.setItem(
+          'posfactura_user',
+          JSON.stringify(user)
+        );
+
         return { success: true };
       }
 
-      return { success: false, message: 'Credenciales incorrectas.' };
+      return {
+        success: false,
+        message: 'Credenciales incorrectas.',
+      };
     } catch (error) {
-      console.error("Error en Login:", error);
-      return { success: false, message: 'Error de conexión con la base de datos.' };
+      console.error('Error en Login:', error);
+
+      return {
+        success: false,
+        message: 'Error de conexión con la base de datos.',
+      };
     }
-  }, [API_BASE_URL]);
+  }, [API_BASE_URL, cargarPermisos]);
 
   const logout = useCallback(() => {
     setUsuario(null);

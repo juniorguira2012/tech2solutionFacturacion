@@ -30,7 +30,7 @@ const RolesManager = () => {
   const [deleteModal, setDeleteModal] = useState({ show: false, rol: null });
   const [loading, setLoading] = useState(true);
 
-  const API_BASE_URL = (import.meta.env.VITE_API_URL || `http://${window.location.hostname || '127.0.0.1'}:3000`).split('/products')[0].replace(/\/$/, '');
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
   const fetchRoles = useCallback(async () => {
     try {
