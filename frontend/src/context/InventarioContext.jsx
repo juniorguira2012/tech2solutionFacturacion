@@ -14,7 +14,10 @@ export const InventarioProvider = ({ children }) => {
   const [refreshIndex, setRefreshIndex] = useState(0);
 
   const { usuario } = useAuth();
-  const API_BASE_URL = import.meta.env.VITE_API_URL;
+  
+  // Si VITE_API_URL no está definido o es absoluto hacia producción, 
+  // forzamos el uso de la ruta relativa para que use el subdominio actual.
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') ? '/api' : (import.meta.env.VITE_API_URL || '/api');
 
   const API_URL = `${API_BASE_URL}/products`;
 
@@ -23,10 +26,14 @@ export const InventarioProvider = ({ children }) => {
 
   // --- Estados de configuración (Categorías y Unidades) ---
   const [categorias, setCategorias] = useState(() => {
-    const saved = localStorage.getItem('posfactura_categorias');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return parsed.map(c => typeof c === 'string' ? { nombre: c, color: '#4f46e5' } : c);
+    try {
+      const saved = localStorage.getItem('posfactura_categorias');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.map(c => typeof c === 'string' ? { nombre: c, color: '#4f46e5' } : c);
+      }
+    } catch (e) {
+      console.error("Error al cargar categorías de localStorage:", e);
     }
     return [
       { nombre: 'General', color: '#64748b' },

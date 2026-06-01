@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import * as path from 'path';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductsModule } from './products/products.module';
@@ -13,22 +14,40 @@ import { UsersModule } from './providers/users.module';
 import { ClientsModule } from './providers/clients.module';
 import { RolesModule } from './providers/roles.module';
 
+// Evaluamos los 3 posibles archivos según el entorno
+let envFileName = '.env'; // Por defecto desarrollo local
+if (process.env.NODE_ENV === 'production') {
+  envFileName = '.env.production';
+} else if (process.env.NODE_ENV === 'test') {
+  envFileName = '.env.test';
+}
+
+const envPath = path.resolve(__dirname, '..', '..', envFileName);
+
 @Module({
   imports: [
     ConfigModule.forRoot({
+      envFilePath: envPath,
       isGlobal: true,
     }),
-    TypeOrmModule.forRoot({
-    type: 'postgres',
-    host: process.env.DATABASE_HOST || 'localhost',
-    port: parseInt(process.env.DATABASE_PORT || '5432', 10),
-    username: process.env.DATABASE_USER || 'postgres',
-    password: process.env.DATABASE_PASSWORD || 'postgres',
-    database: process.env.DATABASE_NAME || 'tech_two_solution_db',
-    autoLoadEntities: true,
-    logging: true,
-    synchronize: true,
-  }),
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): TypeOrmModuleOptions => ({
+        type: 'postgres',
+        host: configService.get<string>('DATABASE_HOST', 'localhost'),
+        // Corregido para TypeScript usando coalescencia nula:
+        port: parseInt(configService.get<string>('DATABASE_PORT') ?? '5432', 10),
+        username: configService.get<string>('DATABASE_USER', 'postgres'),
+        password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
+        database: configService.get<string>('DATABASE_NAME', 'tech_two_solution_db'),
+        autoLoadEntities: true,
+        // Sincroniza en local y en test, pero NUNCA en producción
+        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+        logging: configService.get<string>('NODE_ENV') !== 'production',
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+      }),
+    }),
     ProductsModule,
     InventoryCountsModule,
     MovementsModule,

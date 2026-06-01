@@ -15,7 +15,10 @@ export const VentasProvider = ({ children }) => {
     }
   });
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL;
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+    ? '/api' 
+    : (import.meta.env.VITE_API_URL || '/api');
+    
   const API_SALES_URL = API_BASE_URL + '/sales';
 
   useEffect(() => {

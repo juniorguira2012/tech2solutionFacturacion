@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  postgres_test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: tech2_pass_2024
+      POSTGRES_DB: tech_two_solution_db_test
+    volumes:
+      - tech2_test_db_data:/var/lib/postgresql/data
+    ports:
+      - target: 5432
+        published: 5435
+        protocol: tcp
+        mode: host       # <-- Esto fuerza a Swarm a abrir el puerto 5435 en la IP física
+    networks:
+      - network_public
+    deploy:
+      mode: replicated
+      replicas: 1        # <-- Forzamos 1 sola instancia para pruebas
+      restart_policy:
+        condition: any
+
+  backend_test:
+    image: juniordone/tech2-backend:test
+    environment:
+      NODE_ENV: docker_forced          
+      DATABASE_HOST: postgres_test     
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: tech2_pass_2024
+      DATABASE_NAME: tech_two_solution_db_test
+      CORS_ORIGIN: "https://inventariotest.oneredrd.com"
+    networks:
+      - network_public
+    depends_on:
+      - postgres_test
+    deploy:
+      mode: replicated
+      replicas: 1        # <-- Forzamos 1 sola instancia para pruebas
+      restart_policy:
+        condition: any
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=network_public"
+        - "traefik.http.routers.tech2-backend-test.rule=Host(`inventariotest.oneredrd.com`) && PathPrefix(`/api`)"
+        - "traefik.http.routers.tech2-backend-test.entrypoints=websecure"
+        - "traefik.http.routers.tech2-backend-test.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.tech2-backend-test.loadbalancer.server.port=3000"
+
+  frontend_test:
+    image: juniordone/tech2-frontend:test
+    networks:
+      - network_public
+    deploy:
+      mode: replicated
+      replicas: 1        # <-- Forzamos 1 sola instancia para pruebas
+      restart_policy:
+        condition: any
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=network_public"
+        - "traefik.http.routers.tech2-frontend-test.rule=Host(`inventariotest.oneredrd.com`)"
+        - "traefik.http.routers.tech2-frontend-test.entrypoints=websecure"
+        - "traefik.http.routers.tech2-frontend-test.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.tech2-frontend-test.loadbalancer.server.port=80"
+
+networks:
+  network_public:
+    external: true
+
+volumes:
+  tech2_test_db_data:

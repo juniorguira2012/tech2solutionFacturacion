@@ -10,11 +10,11 @@ export class AuthController {
     const user = await this.usersService.findByEmail(body.email);
 
     if (!user) {
-      throw new UnauthorizedException('Usuario no encontrado');
+      throw new UnauthorizedException('Credenciales inválidas');
     }
 
     if (user.password !== body.password) {
-      throw new UnauthorizedException('Contraseña incorrecta');
+      throw new UnauthorizedException('Credenciales inválidas');
     }
 
     return {

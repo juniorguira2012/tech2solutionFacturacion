@@ -79,7 +79,7 @@ const Usuarios = () => {
     setFormUsuario({
       nombre: user.nombre,
       email: user.email,
-      password: user.password,
+      password: '', // Importante: dejar vacío para indicar que no hay cambio de clave por defecto
       rol: user.rol,
       isActive: user.isActive ?? true
     });

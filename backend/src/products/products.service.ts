@@ -50,11 +50,9 @@ async update(id: number, updateProductDto: UpdateProductDto) {
     }
   }
 
-  const { ...datosParaActualizar } = updateProductDto;
-
   const producto = await this.productRepository.preload({
     id: id,
-    ...datosParaActualizar,
+    ...updateProductDto, // El DTO sobrescribe los valores, pero el ID manda
   });
 
   if (!producto)

@@ -9,7 +9,9 @@ export const AuthProvider = ({ children }) => {
   const [permisos, setPermisos] = useState(null);
 
   // Calculamos la URL base de la API
-  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+    ? '/api' 
+    : (import.meta.env.VITE_API_URL || '/api');
   
   // Debug: log para verificar la URL
   console.log('API_BASE_URL:', API_BASE_URL);
@@ -74,14 +76,19 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        // Esto nos mostrará si el error es "Invalid credentials" o algo más específico
-        const msg = errorData.message || 'Error de autenticación';
-        console.error('Detalle del error 401:', msg);
+        // En caso de 500, el body puede no ser JSON. Intentamos leerlo como texto.
+        const errorText = await response.text();
+        let msg = 'Error de autenticación';
+        try {
+          const errorJson = JSON.parse(errorText);
+          msg = errorJson.message || msg;
+        } catch (e) {}
+
+        console.error(`[Auth] Error ${response.status}:`, errorText);
 
         return {
           success: false,
-          message: msg || 'Credenciales inválidas o usuario inactivo.',
+          message: response.status === 500 ? 'Error interno en el servidor de pruebas' : msg,
         };
       }
 

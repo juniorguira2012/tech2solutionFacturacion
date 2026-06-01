@@ -12,9 +12,9 @@ export class UsersService {
   ) {}
 
   findAll(): Promise<User[]> {
-    // Forzamos la selección del password para que el frontend pueda validar
+    // No seleccionamos el password para el listado general por seguridad
     return this.usersRepository.find({
-      select: ['id', 'nombre', 'email', 'password', 'rol', 'isActive']
+      select: ['id', 'nombre', 'email', 'rol', 'isActive', 'createdAt']
     });
   }
 
@@ -24,7 +24,6 @@ export class UsersService {
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
-    // Preload busca la entidad por ID y le aplica los cambios del DTO sin guardarlos aún
     const user = await this.usersRepository.preload({
       id: id,
       ...updateUserDto,

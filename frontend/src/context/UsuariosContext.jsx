@@ -9,7 +9,10 @@ export const UsuariosProvider = ({ children }) => {
   const { usuario } = useAuth();
 
   // Construimos la URL de la API basándonos en la configuración de entorno o fallback local
-  const API_BASE_URL = import.meta.env.VITE_API_URL;
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+    ? '/api' 
+    : (import.meta.env.VITE_API_URL || '/api');
+    
   const API_URL = `${API_BASE_URL}/users`;
 
   const getAuthHeaders = useCallback(() => ({
@@ -46,9 +49,9 @@ export const UsuariosProvider = ({ children }) => {
         headers: getAuthHeaders(),
         body: JSON.stringify(nuevo)
       });
+
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Error al crear usuario');
+        throw new Error('Error al crear usuario');
       }
       const data = await res.json();
       setUsuarios(prev => [...prev, data]);
@@ -62,15 +65,14 @@ export const UsuariosProvider = ({ children }) => {
   // 3. Actualizar usuario en la DB
   const actualizarUsuario = async (editado) => {
     try {
-      const { id, ...datos } = editado;
-      const res = await fetch(`${API_URL}/${id}`, {
+      const res = await fetch(`${API_URL}/${editado.id}`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
-        body: JSON.stringify(datos)
+        body: JSON.stringify(editado)
       });
+
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || 'Error al actualizar usuario');
+        throw new Error('Error al actualizar usuario');
       }
       const data = await res.json();
       setUsuarios(prev => prev.map(u => u.id === data.id ? data : u));

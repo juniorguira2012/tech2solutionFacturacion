@@ -11,7 +11,7 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
-  @Post('login')
+  @Post()
   create(@Body() createUserDto: CreateUserDto, @Headers('x-user-role') role: string) {
     if (role !== 'admin') throw new UnauthorizedException('Solo el administrador puede crear usuarios');
     return this.usersService.create(createUserDto);

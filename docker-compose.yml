@@ -4,7 +4,8 @@ services:
 
   backend:
     image: juniordone/tech2-backend:latest
-    restart: always
+
+
     environment:
       NODE_ENV: production
       DATABASE_HOST: postgres
@@ -12,7 +13,6 @@ services:
       DATABASE_USER: postgres
       DATABASE_PASSWORD: 24681357
       DATABASE_NAME: tech_two_solution_db
-      FRONTEND_URL: https://inventario.oneredrd.com
 
     networks:
       - network_public
@@ -26,18 +26,12 @@ services:
         - "traefik.docker.network=network_public"
         - "traefik.http.routers.tech2-backend.rule=Host(`inventario.oneredrd.com`) && PathPrefix(`/api`)"
         - "traefik.http.routers.tech2-backend.entrypoints=websecure"
-        # Si tu backend ya tiene el prefijo 'api' en el código, comenta o elimina las siguientes 2 líneas:
-        # - "traefik.http.routers.tech2-backend.middlewares=tech2-api-strip"
-        # - "traefik.http.middlewares.tech2-api-strip.stripprefix.prefixes=/api"
         - "traefik.http.routers.tech2-backend.tls.certresolver=letsencryptresolver"
         - "traefik.http.services.tech2-backend.loadbalancer.server.port=3000"
 
   frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_API_URL: https://inventario.oneredrd.com/api
-    restart: always
+    image: juniordone/tech2-frontend:latest
+
     networks:
       - network_public
 
@@ -48,7 +42,7 @@ services:
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=network_public"
-        - "traefik.http.routers.tech2-frontend.rule=Host(`inventario.oneredrd.com`) && !PathPrefix(`/api`)"
+        - "traefik.http.routers.tech2-frontend.rule=Host(`inventario.oneredrd.com`)"
         - "traefik.http.routers.tech2-frontend.entrypoints=websecure"
         - "traefik.http.routers.tech2-frontend.tls.certresolver=letsencryptresolver"
         - "traefik.http.services.tech2-frontend.loadbalancer.server.port=80"

@@ -11,7 +11,10 @@ export const ClienteProvider = ({ children }) => {
   const { usuario } = useAuth();
 
   // Construimos la URL de la API basándonos en la configuración de entorno o fallback local
-  const API_BASE_URL = import.meta.env.VITE_API_URL;
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+    ? '/api' 
+    : (import.meta.env.VITE_API_URL || '/api');
+
   const API_URL = `${API_BASE_URL}/clients`;
 
   const getAuthHeaders = useCallback(() => ({

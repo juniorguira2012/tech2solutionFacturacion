@@ -5,9 +5,9 @@ import { WarehousesService } from './warehouses.service';
 import { WarehousesController } from './warehouses.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Warehouse])], // <-- CRUCIAL: Registra la entidad aquí
-  controllers: [WarehousesController],
+  imports: [TypeOrmModule.forFeature([Warehouse])],
   providers: [WarehousesService],
-  exports: [WarehousesService], // Por si necesitas usarlo en productos más adelante
+  controllers: [WarehousesController],
+  exports: [WarehousesService],
 })
 export class WarehousesModule {}
