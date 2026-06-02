@@ -16,6 +16,7 @@ import Configuracion from './pages/Configuracion';
 import Usuarios from './pages/Usuarios';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import RolesManager from './pages/RolesManager';
 
 // --- 1. COMPONENTE DE PROTECCIÓN MEJORADO ---
@@ -65,6 +66,7 @@ function App() {
                   {/* RUTA PÚBLICA */}
                 <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
                 <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+                <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
 
                 {/* RUTAS PROTEGIDAS CON "moduloRequerido" */}
                 <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />

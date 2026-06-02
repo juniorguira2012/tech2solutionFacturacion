@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
 import { CreateUserDto, UpdateUserDto } from './user.dto';
+import * as crypto from 'crypto';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UsersService {
@@ -19,11 +21,24 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const newUser = this.usersRepository.create(createUserDto);
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(createUserDto.password, salt);
+    
+    const newUser = this.usersRepository.create({
+      ...createUserDto,
+      password: hashedPassword,
+    });
+    
     return this.usersRepository.save(newUser);
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
+    // Si se está actualizando el password, hay que encriptarlo
+    if (updateUserDto.password) {
+      const salt = await bcrypt.genSalt(10);
+      updateUserDto.password = await bcrypt.hash(updateUserDto.password, salt);
+    }
+
     const user = await this.usersRepository.preload({
       id: id,
       ...updateUserDto,
@@ -39,7 +54,52 @@ export class UsersService {
   async findByEmail(email: string) {
     return this.usersRepository.findOne({
       where: { email },
-      select: ['id', 'nombre', 'email', 'password', 'rol', 'isActive'] // <-- Forzamos el password
+      select: ['id', 'nombre', 'email', 'password', 'rol', 'isActive'],
     });
+  }
+
+  async generateResetToken(email: string) {
+    const user = await this.usersRepository.findOne({ where: { email } });
+    if (!user) {
+      throw new NotFoundException('Usuario no registrado');
+    }
+
+    user.resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetTokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+    await this.usersRepository.save(user);
+    return user.resetToken;
+  }
+
+  async findByResetToken(token: string) {
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect(['user.resetToken', 'user.resetTokenExpiresAt'])
+      .where('user.resetToken = :token', { token })
+      .getOne();
+  }
+
+  async resetPassword(token: string, password: string) {
+    if (!token || !password) {
+      throw new BadRequestException('Token y nueva contraseña requeridos');
+    }
+
+    const user = await this.findByResetToken(token);
+    if (!user) {
+      throw new NotFoundException('Token inválido o expirado');
+    }
+
+    if (!user.resetTokenExpiresAt || user.resetTokenExpiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('El token ha expirado');
+    }
+
+    // Aseguramos que usamos la variable 'password' que viene del DTO
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+    
+    user.resetToken = undefined;
+    user.resetTokenExpiresAt = undefined;
+
+    await this.usersRepository.save(user);
   }
 }

@@ -2,13 +2,56 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, ArrowLeft } from 'lucide-react';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com')
+  ? '/api'
+  : (import.meta.env.VITE_API_URL || '/api');
+
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage('Si este correo existe en el sistema, recibirás instrucciones para restablecer tu contraseña.');
+    setError('');
+    setMessage('');
+
+    // Validación básica de email en cliente
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Por favor, ingresa un correo electrónico válido.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        // Manejar mensajes de error (pueden venir como string o array de validación)
+        const errorMsg = Array.isArray(data?.message) 
+          ? data.message.join(', ') 
+          : data?.message;
+        setError(errorMsg || 'No se pudo enviar el correo. Intenta de nuevo.');
+      } else {
+        setMessage('Si este correo existe en el sistema, recibirás instrucciones para restablecer tu contraseña.');
+      }
+    } catch (err) {
+      console.error('Forgot password error', err);
+      setError('Error de conexión. Verifica que el backend esté activo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -35,6 +78,12 @@ const ForgotPassword = () => {
             />
           </div>
 
+          {error && (
+            <div className="p-4 rounded-2xl border bg-rose-50 border-rose-100 text-rose-700 text-[10px] font-black uppercase tracking-tight leading-tight italic">
+              {error}
+            </div>
+          )}
+
           {message && (
             <div className="p-4 rounded-2xl border bg-emerald-50 border-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-tight leading-tight italic">
               {message}
@@ -43,9 +92,10 @@ const ForgotPassword = () => {
 
           <button
             type="submit"
-            className="w-full bg-slate-900 text-white py-5 rounded-[1.8rem] font-black shadow-2xl hover:bg-black active:scale-[0.97] transition-all uppercase text-[10px] tracking-[0.2em]"
+            disabled={loading}
+            className="w-full bg-slate-900 text-white py-5 rounded-[1.8rem] font-black shadow-2xl hover:bg-black active:scale-[0.97] transition-all uppercase text-[10px] tracking-[0.2em] disabled:cursor-not-allowed disabled:bg-slate-400"
           >
-            Enviar instrucciones
+            {loading ? 'Enviando...' : 'Enviar instrucciones'}
           </button>
 
           <div className="text-center pt-4">

@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional, IsBoolean, MinLength } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsBoolean, MinLength, IsNotEmpty } from 'class-validator';
 
 export class CreateUserDto {
   @IsString()
@@ -17,6 +17,16 @@ export class CreateUserDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  @IsNotEmpty({ message: 'El token es obligatorio' })
+  token: string;
+
+  @IsString()
+  @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres' })
+  password: string;
 }
 
 export class UpdateUserDto {
