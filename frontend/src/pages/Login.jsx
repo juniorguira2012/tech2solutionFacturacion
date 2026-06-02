@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { LogIn, ShieldCheck, UserCircle, Lock, AlertCircle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { LogIn, ShieldCheck, UserCircle, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [form, setForm] = useState({ username: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -58,17 +59,30 @@ const Login = () => {
 
           {/* CAMPO CONTRASEÑA */}
           <div className="space-y-2">
-            <label className="block text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest italic">Clave de Acceso</label>
+            <div className="flex items-center justify-between">
+              <label className="block text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest italic">Clave de Acceso</label>
+              <Link to="/forgot-password" className="text-[10px] font-black uppercase tracking-widest italic text-indigo-600 hover:text-indigo-800">
+                Olvidaste la contraseña?
+              </Link>
+            </div>
             <div className="relative group">
               <input 
-                type="password" 
+                type={showPassword ? 'text' : 'password'} 
                 required
-                className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] outline-none focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/5 transition-all font-bold text-slate-700 placeholder:text-slate-300 text-sm"
+                className="w-full pl-12 pr-14 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] outline-none focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/5 transition-all font-bold text-slate-700 placeholder:text-slate-300 text-sm"
                 placeholder="••••••••"
                 value={form.password}
                 onChange={e => setForm({...form, password: e.target.value})}
               />
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-brand transition-colors" size={20} />
+              <button
+                type="button"
+                onClick={() => setShowPassword(prev => !prev)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 focus:outline-none"
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
             </div>
           </div>
 
