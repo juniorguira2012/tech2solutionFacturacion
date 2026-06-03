@@ -1,326 +1,259 @@
 import React, { useMemo } from 'react';
-import { useAuth } from '../context/AuthContext'; 
-import { 
-  TrendingUp, Users, Package, DollarSign, 
-  Clock, ArrowRight, Receipt, History, ArrowDownRight, Settings, Lock, User
-} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { ShoppingCart, Users, Box, AlertTriangle, ArrowRight, TrendingUp, Clock, Star, PieChart } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
+import { useAuth } from '../context/AuthContext';
 import { useClientes } from '../context/ClienteContext';
 import { useVentas } from '../context/VentasContext';
 
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from 'recharts';
-
 const Home = () => {
   const navigate = useNavigate();
-  const { usuario } = useAuth(); 
-  const { productos = [] } = useInventario();
-  const { clientes = [] } = useClientes();
-  const { historialVentas = [] } = useVentas();
+  const { productos, categorias } = useInventario();
+  const { usuario } = useAuth();
+  const { clientes } = useClientes();
+  const { historialVentas } = useVentas();
 
-  // 1. LÓGICA DE PERMISOS
-  const permisos = useMemo(() => {
-    const savedRoles = localStorage.getItem('posfactura_roles_config');
-    if (savedRoles && usuario) {
-      const config = JSON.parse(savedRoles);
-      return config[usuario.rol]?.modules || { ventas: 'full', inventario: 'none', reportes: 'none', clientes: 'none' };
-    }
-    return usuario?.rol === 'admin' 
-      ? { ventas: 'full', inventario: 'full', reportes: 'full', clientes: 'full' }
-      : { ventas: 'full', inventario: 'none', reportes: 'none', clientes: 'none' };
-  }, [usuario]);
-
-  const sonMismaFecha = (fecha1, fecha2) => {
+  // Lógica de permisos para mostrar solo lo que el usuario puede acceder
+  const puedeVer = (moduloId) => {
+    if (!usuario) return false;
+    if (usuario.rol === 'admin') return true;
     try {
-      const d1 = new Date(fecha1);
-      const d2 = new Date(fecha2);
-      return d1.getFullYear() === d2.getFullYear() &&
-             d1.getMonth() === d2.getMonth() &&
-             d1.getDate() === d2.getDate();
-    } catch { return false; }
+      const savedRoles = localStorage.getItem('posfactura_roles_config');
+      if (!savedRoles) return true;
+      const rolesConfig = JSON.parse(savedRoles);
+      const configDelRol = rolesConfig[usuario.rol];
+      return configDelRol?.modules?.[moduloId] !== 'none';
+    } catch { return true; }
   };
 
-  // KPI: VENTAS DEL DÍA (Personalizado: Si es admin ve todo, si es cajero solo lo suyo)
-  const miVentaHoy = useMemo(() => {
-    const hoy = new Date();
-    return historialVentas
-      .filter(v => {
-        const mismaFecha = sonMismaFecha(v.fecha, hoy);
-        if (usuario?.rol === 'admin') return mismaFecha;
-        // Filtro por ID o Nombre del vendedor (ajusta según tu modelo de datos de Venta)
-        return mismaFecha && (v.vendedorId === usuario?.id || v.vendedor === usuario?.nombre);
-      })
-      .reduce((acc, v) => acc + (Number(v.total) || 0), 0);
-  }, [historialVentas, usuario]);
+  // --- CÁLCULOS ANALÍTICOS ---
+  
+  const totalVentas = useMemo(() => historialVentas.reduce((acc, v) => acc + v.total, 0), [historialVentas]);
+  const totalClientes = clientes.length;
+  const stockCriticoCount = productos.filter(p => Number(p.stock) <= 5).length;
+  const totalProductos = productos.length;
 
-  // GRÁFICO SEMANAL (Mantenido con el estilo visual previo)
-  const datosVentasSemana = useMemo(() => {
-    const diasSemana = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
-    const ultimos7Dias = [];
-    for (let i = 6; i >= 0; i--) {
+  // Ventas de los últimos 7 días
+  const rendimientoSemanal = useMemo(() => {
+    const dias = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+    const hoy = new Date();
+    return Array.from({ length: 7 }).map((_, i) => {
       const d = new Date();
-      d.setDate(d.getDate() - i);
+      d.setDate(hoy.getDate() - (6 - i));
+      const fechaStr = d.toISOString().split('T')[0];
       const totalDia = historialVentas
-        .filter(v => sonMismaFecha(v.fecha, d))
-        .reduce((acc, v) => acc + (Number(v.total) || 0), 0);
-      ultimos7Dias.push({ dia: diasSemana[d.getDay()], total: totalDia });
-    }
-    return ultimos7Dias;
+        .filter(v => v.fecha?.split('T')[0] === fechaStr)
+        .reduce((acc, v) => acc + v.total, 0);
+      return { dia: dias[d.getDay()], total: totalDia };
+    });
   }, [historialVentas]);
 
-  const dataCategorias = useMemo(() => {
-    if (productos.length === 0) return [];
-    const conteo = productos.reduce((acc, p) => {
-      const cat = p.categoria || 'General';
-      acc[cat] = (acc[cat] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.keys(conteo).map(key => ({ name: key, value: conteo[key] }))
-      .sort((a, b) => b.value - a.value).slice(0, 5);
-  }, [productos]);
+  // Top Categorías (por cantidad de productos)
+  const distribucionCategorias = useMemo(() => {
+    return categorias.map(cat => ({
+      nombre: cat.nombre,
+      cantidad: productos.filter(p => p.categoria === cat.nombre).length,
+      color: cat.color
+    })).sort((a, b) => b.cantidad - a.cantidad).slice(0, 4);
+  }, [categorias, productos]);
 
-  // 4. CÁLCULO DINÁMICO DE "MÁS VENDIDOS"
-  const topVendidos = useMemo(() => {
+  // Productos Más Vendidos
+  const masVendidos = useMemo(() => {
     const conteo = {};
-    
-    historialVentas.forEach(venta => {
-      const articulos = venta.items || venta.productos || [];
-      articulos.forEach(item => {
-        const id = item.productoId || item.id;
-        if (!id) return;
-        conteo[id] = (conteo[id] || 0) + (Number(item.cantidad) || 0);
+    historialVentas.forEach(v => {
+      const items = v.items || v.productos || [];
+      items.forEach(item => {
+        const nombre = item.nombre || productos.find(p => p.id === item.productoId)?.nombre || "Producto";
+        conteo[nombre] = (conteo[nombre] || 0) + (Number(item.cantidad) || 0);
       });
     });
-
     return Object.entries(conteo)
-      .map(([id, total]) => {
-        const p = productos.find(prod => String(prod.id) === String(id));
-        return {
-          id,
-          nombre: p?.nombre || "Producto",
-          vendidos: total,
-          stock: p?.stock || 0
-        };
-      })
-      .sort((a, b) => b.vendidos - a.vendidos)
+      .map(([nombre, cant]) => ({ nombre, cant }))
+      .sort((a, b) => b.cant - a.cant)
       .slice(0, 5);
   }, [historialVentas, productos]);
 
-  const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
-  const stockBajo = productos.filter(p => p.stock <= (p.stockMin || 5)).length;
+  const ventasRecientes = historialVentas.slice(0, 5);
 
-  if (!usuario) return null;
+  const stats = [
+    {
+      id: 'ventas',
+      title: 'Venta Global',
+      value: `RD$ ${totalVentas.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+      icon: <ShoppingCart className="text-emerald-600" size={24} />,
+      path: '/ventas',
+      color: 'bg-emerald-50',
+      borderColor: 'border-emerald-100'
+    },
+    {
+      id: 'clientes',
+      title: 'Clientes',
+      value: totalClientes,
+      icon: <Users className="text-blue-600" size={24} />,
+      path: '/clientes',
+      color: 'bg-blue-50',
+      borderColor: 'border-blue-100'
+    },
+    {
+      id: 'inventario',
+      title: 'Productos',
+      value: totalProductos,
+      icon: <Box className="text-indigo-600" size={24} />,
+      path: '/inventario',
+      color: 'bg-indigo-50',
+      borderColor: 'border-indigo-100'
+    },
+    {
+      id: 'inventario',
+      title: 'Stock Crítico',
+      value: stockCriticoCount,
+      icon: <AlertTriangle className="text-rose-600" size={24} />,
+      path: '/inventario',
+      state: { filter: 'low_stock' }, // Pasamos el filtro al componente de inventario
+      color: 'bg-rose-50',
+      borderColor: 'border-rose-100',
+      isAlert: stockCriticoCount > 0
+    }
+  ];
 
   return (
-    <div className="space-y-8 pb-10 animate-in fade-in duration-700">
-      {/* HEADER */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase">
-            Panel <span className="text-brand">Principal</span>
-          </h1>
-          <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 mt-1">
-            <User size={12} className="text-brand" /> {usuario.nombre} — {usuario.rol}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {usuario.rol === 'admin' && (
-            <button onClick={() => navigate('/configuracion')} className="p-3 bg-white text-slate-400 rounded-2xl hover:text-brand border border-slate-200 transition-all shadow-sm">
-              <Settings size={20} />
-            </button>
-          )}
-          {permisos.ventas !== 'none' && (
-            <button onClick={() => navigate('/ventas')} className="flex items-center gap-3 bg-brand text-white px-6 py-3.5 rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 text-xs uppercase tracking-widest">
-              <Receipt size={18} /> Nueva Venta
-            </button>
-          )}
-        </div>
-      </header>
-
-      {/* KPIs PRINCIPALES */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* MI VENTA DEL DÍA: Siempre visible con la lógica de usuario */}
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-brand text-white rounded-2xl shadow-lg shadow-indigo-50 transition-transform group-hover:scale-110 duration-300">
-              <DollarSign size={24} />
-            </div>
-            <span className="text-[9px] font-black text-brand bg-indigo-50 px-2 py-1 rounded-lg uppercase tracking-tighter">Hoy</span>
-          </div>
-          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-            {usuario?.rol === 'admin' ? 'Venta Global' : 'Mis Ventas'}
-          </p>
-          <h3 className="text-2xl font-black text-slate-800 mt-1 italic">
-            RD$ {miVentaHoy.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </h3>
-        </div>
-
-        {permisos.clientes !== 'none' && (
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-                <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl w-fit mb-4"><Users size={24} /></div>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Clientes</p>
-                <h3 className="text-2xl font-black text-slate-800 mt-1 italic">{clientes.length}</h3>
-            </div>
-        )}
-
-        {permisos.inventario !== 'none' && (
-            <>
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-                    <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl w-fit mb-4"><Package size={24} /></div>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Productos</p>
-                    <h3 className="text-2xl font-black text-slate-800 mt-1 italic">{productos.length}</h3>
-                </div>
-
-                <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-                    <div className="p-3 bg-red-50 text-red-500 rounded-2xl w-fit mb-4"><ArrowDownRight size={24} /></div>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Stock Crítico</p>
-                    <h3 className="text-2xl font-black text-red-500 mt-1 italic">{stockBajo}</h3>
-                </div>
-            </>
-        )}
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-black text-slate-800 italic uppercase tracking-tighter">
+          Panel Principal
+        </h1>
+        <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">Dashboard Operativo</p>
       </div>
 
-      {/* SECCIÓN DE GRÁFICOS PROTEGIDA */}
-      {permisos.reportes !== 'none' ? (
-        <div className="grid grid-cols-12 gap-6 animate-in slide-in-from-bottom-5">
-          <div className="col-span-12 lg:col-span-8 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-            <h2 className="font-black text-slate-800 flex items-center gap-2 mb-8 tracking-tighter uppercase italic text-sm">
-              <TrendingUp size={20} className="text-brand" /> Rendimiento Semanal
-            </h2>
-            <div className="h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={datosVentasSemana}>
-                  <defs>
-                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8', fontWeight: 'bold'}} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8', fontWeight: 'bold'}} />
-                  <Tooltip 
-                      contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '15px' }}
-                      formatter={(value) => [`RD$ ${value.toLocaleString()}`, 'Venta']}
-                  />
-                  <Area type="monotone" dataKey="total" stroke="#6366f1" strokeWidth={4} fillOpacity={1} fill="url(#colorTotal)" />
-                </AreaChart>
-              </ResponsiveContainer>
+      {/* Grid de Tarjetas Principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.filter(s => puedeVer(s.id)).map((stat, index) => (
+          <div
+            key={index}
+            onClick={() => navigate(stat.path, { state: stat.state })}
+            className={`cursor-pointer group p-6 rounded-[2.5rem] border-2 ${stat.borderColor} ${stat.color} 
+              hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 flex flex-col justify-between h-52`}
+          >
+            <div className="flex justify-between items-start">
+              <div className="p-4 bg-white rounded-2xl shadow-sm group-hover:rotate-12 transition-transform duration-500">
+                {stat.icon}
+              </div>
+              <div className="h-10 w-10 rounded-full border border-slate-200 flex items-center justify-center bg-white/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <ArrowRight className="text-slate-600" size={16} />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">
+                {stat.title}
+              </p>
+              <h3 className={`text-4xl font-black tracking-tighter ${stat.isAlert ? 'text-rose-600' : 'text-slate-800'}`}>
+                {stat.value}
+              </h3>
             </div>
           </div>
+        ))}
+      </div>
 
-          <div className="col-span-12 lg:col-span-4 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-              <h2 className="font-black text-slate-800 mb-8 tracking-tighter uppercase italic text-sm text-center">Top Categorías</h2>
-              <div className="h-[200px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                      <Pie
-                          data={dataCategorias.length > 0 ? dataCategorias : [{name: 'Sin Datos', value: 1}]}
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={8}
-                          dataKey="value"
-                      >
-                          {dataCategorias.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} cornerRadius={10} />
-                          ))}
-                      </Pie>
-                      <Tooltip />
-                  </PieChart>
-                  </ResponsiveContainer>
+      {/* Segunda Fila: Rendimiento y Recientes */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Rendimiento Semanal */}
+        <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                <TrendingUp size={20} />
               </div>
-              <div className="space-y-3 mt-6">
-                  {dataCategorias.map((c, i) => (
-                      <div key={i} className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
-                          <div className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: COLORS[i % COLORS.length]}}></div>
-                              <span className="text-slate-400">{c.name}</span>
-                          </div>
-                          <span className="text-slate-700">{c.value}</span>
-                      </div>
-                  ))}
-              </div>
-          </div>
-        </div>
-      ) : (
-        /* VISTA BLOQUEADA PARA CAJEROS SIN PERMISO DE REPORTES */
-        <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] py-16 text-center">
-            <div className="h-16 w-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 border border-slate-100">
-                <Lock className="text-slate-300" size={28} />
+              <h2 className="font-black text-slate-800 uppercase italic text-sm tracking-tight">Rendimiento Semanal</h2>
             </div>
-            <h3 className="text-slate-800 font-black uppercase tracking-[0.2em] text-[11px] italic">Métricas de Negocio</h3>
-            <p className="text-slate-400 text-[10px] font-bold mt-2 max-w-xs mx-auto uppercase">Panel restringido a personal administrativo.</p>
-        </div>
-      )}
-
-      {/* TRANSACCIONES (Visible para todos) */}
-      <div className="grid grid-cols-12 gap-6">
-          <div className="col-span-12 lg:col-span-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-8 border-b border-slate-100 flex justify-between items-center">
-                  <h2 className="font-black text-slate-800 flex items-center gap-3 tracking-tighter uppercase italic text-sm">
-                      <Clock size={20} className="text-brand" /> Recientes
-                  </h2>
-                  <button onClick={() => navigate('/historialventas')} className="bg-slate-50 text-slate-400 p-2 rounded-xl hover:text-brand transition-all"><ArrowRight size={20} /></button>
-              </div>
-              <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                      <thead className="bg-slate-50/50 text-slate-400 text-[9px] font-black uppercase tracking-widest border-b border-slate-100">
-                          <tr>
-                              <th className="px-8 py-5">Ref</th>
-                              <th className="px-8 py-5">Cliente</th>
-                              <th className="px-8 py-5">Total</th>
-                              <th className="px-8 py-5 text-center">Estatus</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                          {historialVentas.slice(0, 5).map((venta) => (
-                              <tr key={venta.id} className="hover:bg-slate-50/50 transition-colors group">
-                                  <td className="px-8 py-5 font-mono text-[10px] text-slate-300 group-hover:text-brand font-black">#{venta.id.toString().slice(-4)}</td>
-                                  <td className="px-8 py-5 font-black text-slate-700 text-xs uppercase italic">{venta.cliente}</td>
-                                  <td className="px-8 py-5 font-black text-slate-800 text-sm italic">RD$ {venta.total.toLocaleString('en-US')}</td>
-                                  <td className="px-8 py-5 text-center">
-                                      <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black uppercase">Vendido</span>
-                                  </td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
-              </div>
           </div>
-
-          {/* TENDENCIA (Visible si tiene inventario) */}
-          {(permisos.inventario !== 'none' || permisos.ventas !== 'none') && (
-              <div className="col-span-12 lg:col-span-4 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm p-8">
-                  <h2 className="font-black text-slate-800 mb-8 flex items-center gap-2 tracking-tighter uppercase italic text-sm">
-                      Más Vendidos
-                  </h2>
-                  <div className="space-y-5">
-                      {topVendidos.length > 0 ? topVendidos.map((p, i) => (
-                              <div key={p.id} className="flex items-center justify-between group cursor-default">
-                                  <div className="flex items-center gap-4">
-                                      <div className="h-10 w-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-xs text-slate-400 italic group-hover:bg-brand group-hover:text-white transition-all">
-                                          {i + 1}
-                                      </div>
-                                      <div>
-                                          <p className="text-xs font-black text-slate-700 uppercase tracking-tighter truncate w-32 italic">{p.nombre}</p>
-                                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{p.vendidos || 0} Uds</p>
-                                      </div>
-                                  </div>
-                                  <div className={`text-[9px] font-black px-3 py-1 rounded-xl uppercase ${p.stock <= 5 ? 'bg-red-50 text-red-500' : 'bg-indigo-50 text-brand'}`}>
-                                      Stock: {p.stock}
-                                  </div>
-                              </div>
-                          )) : (
-                            <div className="py-10 text-center">
-                              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Sin datos de ventas</p>
-                            </div>
-                          )}
+          <div className="flex items-end justify-between h-48 gap-2">
+            {rendimientoSemanal.map((d, i) => {
+              const max = Math.max(...rendimientoSemanal.map(r => r.total)) || 1;
+              const height = (d.total / max) * 100;
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
+                  <div className="w-full bg-slate-50 rounded-t-xl relative h-full flex items-end overflow-hidden">
+                    <div 
+                      style={{ height: `${height}%` }}
+                      className="w-full bg-indigo-500 group-hover:bg-indigo-600 transition-all duration-500 rounded-t-xl"
+                    />
                   </div>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{d.dia}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Ventas Recientes */}
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+              <Clock size={20} />
+            </div>
+            <h2 className="font-black text-slate-800 uppercase italic text-sm tracking-tight">Recientes</h2>
+          </div>
+          <div className="space-y-4">
+            {ventasRecientes.map((v, i) => (
+              <div key={i} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors border border-transparent hover:border-slate-100">
+                <div>
+                  <p className="text-[10px] font-black text-slate-800 uppercase">{v.cliente || "Consumidor Final"}</p>
+                  <p className="text-[8px] text-slate-400 font-bold">{new Date(v.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                </div>
+                <span className="text-xs font-black text-emerald-600">RD$ {v.total.toLocaleString()}</span>
               </div>
-          )}
+            ))}
+            {ventasRecientes.length === 0 && <p className="text-center py-10 text-[10px] font-black text-slate-300 uppercase italic">Sin ventas hoy</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Tercera Fila: Categorías y Más Vendidos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        {/* Top Categorías */}
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+              <PieChart size={20} />
+            </div>
+            <h2 className="font-black text-slate-800 uppercase italic text-sm tracking-tight">Top de Categorías</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {distribucionCategorias.map((cat, i) => (
+              <div key={i} className="p-4 rounded-3xl border border-slate-100 bg-slate-50/50">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: cat.color }}></div>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{cat.cantidad} Prods</span>
+                </div>
+                <p className="text-xs font-black text-slate-700 uppercase italic">{cat.nombre}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Más Vendidos */}
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-rose-50 text-rose-600 rounded-2xl">
+              <Star size={20} />
+            </div>
+            <h2 className="font-black text-slate-800 uppercase italic text-sm tracking-tight">Más Vendidos</h2>
+          </div>
+          <div className="space-y-4">
+            {masVendidos.map((p, i) => (
+              <div key={i} className="flex items-center justify-between group">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400 group-hover:bg-rose-500 group-hover:text-white transition-colors">{i+1}</div>
+                  <p className="text-[10px] font-black text-slate-700 uppercase group-hover:translate-x-1 transition-transform">{p.nombre}</p>
+                </div>
+                <span className="px-3 py-1 bg-slate-50 rounded-lg text-[9px] font-black text-slate-500 uppercase tracking-tighter">{p.cant} vendidos</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

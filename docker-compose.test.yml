@@ -25,13 +25,22 @@ services:
   backend_test:
     image: juniordone/tech2-backend:test
     environment:
-      NODE_ENV: docker_forced          
+      NODE_ENV: test          
       DATABASE_HOST: postgres_test     
       DATABASE_PORT: 5432
       DATABASE_USER: postgres
       DATABASE_PASSWORD: tech2_pass_2024
       DATABASE_NAME: tech_two_solution_db_test
       CORS_ORIGIN: "https://inventariotest.oneredrd.com"
+      FRONTEND_URL: "https://inventariotest.oneredrd.com"
+      # Configuración de Gmail
+      EMAIL_HOST: "smtp.gmail.com"
+      EMAIL_PORT: "587"
+      EMAIL_SECURE: "false"
+      EMAIL_USER: "techtwosolution2@gmail.com"
+      EMAIL_PASS: "qsxi qkmw naeo cpyh"
+      EMAIL_FROM: '"Tec2Solution Test" <techtwosolution2@gmail.com>'
+      EMAIL_TLS_REJECT_UNAUTHORIZED: "true"
     networks:
       - network_public
     depends_on:

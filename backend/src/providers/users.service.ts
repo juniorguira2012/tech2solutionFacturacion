@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
@@ -7,11 +7,33 @@ import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnModuleInit {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
   ) {}
+
+  async onModuleInit() {
+    // Creamos un usuario inicial para pruebas si la base de datos está vacía o el correo no existe
+    const adminEmail = 'techtwosolution2@gmail.com'; // El correo de tu Gmail de pruebas
+    const user = await this.findByEmail(adminEmail);
+    
+    if (!user) {
+      console.log('--- SEEDING: Creando usuario administrador de pruebas ---');
+      await this.create({
+        nombre: 'Admin Test',
+        email: adminEmail,
+        password: 'admin123456', // Se encriptará automáticamente en el método create
+        rol: 'admin',
+        isActive: true,
+      });
+    }
+  }
+
+  // Método auxiliar para generar un hash rápido si necesitas actualizar la DB manualmente
+  async getHash(password: string) {
+    return await bcrypt.hash(password, 10);
+  }
 
   findAll(): Promise<User[]> {
     // No seleccionamos el password para el listado general por seguridad
