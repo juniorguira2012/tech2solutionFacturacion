@@ -27,8 +27,16 @@ const Home = () => {
   };
 
   // --- CÁLCULOS ANALÍTICOS ---
-  
-  const totalVentas = useMemo(() => historialVentas.reduce((acc, v) => acc + v.total, 0), [historialVentas]);
+
+  // Filtramos las ventas según el rol: si no es admin, solo ve las suyas
+  const ventasVisibles = useMemo(() => {
+    if (!usuario) return [];
+    if (usuario.rol === 'admin') return historialVentas;
+    // Filtramos por ID del vendedor para mayor precisión
+    return historialVentas.filter(v => String(v.vendedorId) === String(usuario.id));
+  }, [historialVentas, usuario]);
+
+  const totalVentas = useMemo(() => ventasVisibles.reduce((acc, v) => acc + v.total, 0), [ventasVisibles]);
   const totalClientes = clientes.length;
   const stockCriticoCount = productos.filter(p => Number(p.stock) <= 5).length;
   const totalProductos = productos.length;
@@ -41,12 +49,12 @@ const Home = () => {
       const d = new Date();
       d.setDate(hoy.getDate() - (6 - i));
       const fechaStr = d.toISOString().split('T')[0];
-      const totalDia = historialVentas
+      const totalDia = ventasVisibles
         .filter(v => v.fecha?.split('T')[0] === fechaStr)
         .reduce((acc, v) => acc + v.total, 0);
       return { dia: dias[d.getDay()], total: totalDia };
     });
-  }, [historialVentas]);
+  }, [ventasVisibles]);
 
   // Top Categorías (por cantidad de productos)
   const distribucionCategorias = useMemo(() => {
@@ -60,7 +68,7 @@ const Home = () => {
   // Productos Más Vendidos
   const masVendidos = useMemo(() => {
     const conteo = {};
-    historialVentas.forEach(v => {
+    ventasVisibles.forEach(v => {
       const items = v.items || v.productos || [];
       items.forEach(item => {
         const nombre = item.nombre || productos.find(p => p.id === item.productoId)?.nombre || "Producto";
@@ -71,9 +79,9 @@ const Home = () => {
       .map(([nombre, cant]) => ({ nombre, cant }))
       .sort((a, b) => b.cant - a.cant)
       .slice(0, 5);
-  }, [historialVentas, productos]);
+  }, [ventasVisibles, productos]);
 
-  const ventasRecientes = historialVentas.slice(0, 5);
+  const ventasRecientes = ventasVisibles.slice(0, 5);
 
   const stats = [
     {

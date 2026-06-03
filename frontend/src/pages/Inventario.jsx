@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Package, Tags, ArrowLeftRight, CheckCircle,
   ClipboardList, Bell, Layers3, AlertTriangle, RefreshCw,
@@ -18,6 +19,7 @@ import LotesSection from './inventario/LotesSection';
 
 const Inventario = () => {
   const { productos, categorias, setCategorias } = useInventario();
+  const location = useLocation();
 
   const [toast, setToast] = useState({ show: false, mensaje: '', tipo: 'success' });
   const mostrarToast = (mensaje, tipo = 'success') => {
@@ -32,6 +34,13 @@ const Inventario = () => {
   useEffect(() => {
     localStorage.setItem('posfactura_inventario_tab', seccionActiva);
   }, [seccionActiva]);
+
+  // Capturar el redireccionamiento desde el Home para Stock Crítico
+  useEffect(() => {
+    if (location.state?.filter === 'low_stock') {
+      setSeccionActiva('alerta');
+    }
+  }, [location.state]);
 
   const LOW_STOCK_THRESHOLD = 5;
 
