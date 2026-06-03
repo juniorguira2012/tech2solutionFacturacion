@@ -42,8 +42,10 @@ const envPath = path.resolve(__dirname, '..', '..', envFileName);
         password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
         database: configService.get<string>('DATABASE_NAME', 'tech_two_solution_db'),
         autoLoadEntities: true,
-        // Sincroniza en local y en test, pero NUNCA en producción
-        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+        // Prioriza la variable de entorno DATABASE_SYNCHRONIZE si existe, 
+        // de lo contrario mantiene el comportamiento por entorno.
+        synchronize: configService.get<string>('DATABASE_SYNCHRONIZE') === 'true' || 
+                     configService.get<string>('NODE_ENV') !== 'production',
         logging: configService.get<string>('NODE_ENV') !== 'production',
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
       }),

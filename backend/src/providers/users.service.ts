@@ -16,18 +16,25 @@ export class UsersService implements OnModuleInit {
   async onModuleInit() {
     // Creamos un usuario inicial para pruebas si la base de datos está vacía o el correo no existe
     const adminEmail = 'techtwosolution2@gmail.com'; // El correo de tu Gmail de pruebas
-    const user = await this.findByEmail(adminEmail);
-    
-    if (!user) {
-      console.log('--- SEEDING: Creando usuario administrador de pruebas ---');
-      await this.create({
-        nombre: 'Admin Test',
-        email: adminEmail,
-        password: 'admin123456', // Se encriptará automáticamente en el método create
-        rol: 'admin',
-        isActive: true,
-      });
-    }
+
+    // Agregamos un pequeño delay y try-catch para evitar crash si la tabla no existe aún
+    setTimeout(async () => {
+      try {
+        const user = await this.findByEmail(adminEmail);
+        if (!user) {
+          console.log('--- SEEDING: Creando usuario administrador de pruebas ---');
+          await this.create({
+            nombre: 'Admin Test',
+            email: adminEmail,
+            password: 'admin123456',
+            rol: 'admin',
+            isActive: true,
+          });
+        }
+      } catch (error) {
+        console.warn('--- SEEDING SKIPPED: La tabla "users" no existe todavía o la DB no está lista ---');
+      }
+    }, 5000);
   }
 
   // Método auxiliar para generar un hash rápido si necesitas actualizar la DB manualmente

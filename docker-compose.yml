@@ -2,25 +2,56 @@ version: '3.8'
 
 services:
 
-  backend:
-    image: juniordone/tech2-backend:latest
-
-
+  tech2_postgres_prod:  # <── Nombre único para que no choque con ningún otro Postgres
+    image: postgres:15-alpine
     environment:
-      NODE_ENV: production
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      DATABASE_USER: postgres
-      DATABASE_PASSWORD: 24681357
-      DATABASE_NAME: tech_two_solution_db
-
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "24681357"
+      POSTGRES_DB: tech_two_solution_db
+    volumes:
+      - tech2_isolated_prod_db_data:/var/lib/postgresql/data # <── Volumen 100% exclusivo
+    ports:
+      - target: 5432
+        published: 5436  # <── ¡Tu puerto exclusivo de producción!
+        protocol: tcp
+        mode: host       # <── Lo amarra físicamente a la IP del servidor en el puerto 5436
     networks:
       - network_public
-
     deploy:
+      mode: replicated
+      replicas: 1
       restart_policy:
         condition: any
 
+  backend:
+    image: juniordone/tech2-backend:latest
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: tech2_postgres_prod  # <── Le apunta al nuevo servidor aislado
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: "24681357"
+      DATABASE_NAME: tech_two_solution_db
+      CORS_ORIGIN: "https://inventario.oneredrd.com"
+      FRONTEND_URL: "https://inventario.oneredrd.com"
+      DATABASE_SYNCHRONIZE: "true" # Crea las tablas limpias en el nuevo volumen
+      # Configuración de Gmail
+      EMAIL_HOST: "smtp.gmail.com"
+      EMAIL_PORT: "587"
+      EMAIL_SECURE: "false"
+      EMAIL_USER: "techtwosolution2@gmail.com"
+      EMAIL_PASS: "qsxi qkmw naeo cpyh"
+      EMAIL_FROM: '"Tec2Solution Production" <techtwosolution2@gmail.com>'
+      EMAIL_TLS_REJECT_UNAUTHORIZED: "true"
+    networks:
+      - network_public
+    depends_on:
+      - tech2_postgres_prod
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=network_public"
@@ -31,14 +62,13 @@ services:
 
   frontend:
     image: juniordone/tech2-frontend:latest
-
     networks:
       - network_public
-
     deploy:
+      mode: replicated
+      replicas: 1
       restart_policy:
         condition: any
-
       labels:
         - "traefik.enable=true"
         - "traefik.docker.network=network_public"
@@ -50,3 +80,6 @@ services:
 networks:
   network_public:
     external: true
+ 
+volumes:
+  tech2_isolated_prod_db_data: {} # <── Sintaxis limpia con llaves para asegurar que no falle
