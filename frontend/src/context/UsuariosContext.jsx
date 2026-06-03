@@ -5,6 +5,7 @@ const UsuariosContext = createContext();
 
 export const UsuariosProvider = ({ children }) => {
   const [usuarios, setUsuarios] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const { usuario } = useAuth();
 
@@ -37,9 +38,23 @@ export const UsuariosProvider = ({ children }) => {
     }
   }, [usuario, API_URL, getAuthHeaders]);
 
+  const cargarRoles = useCallback(async () => {
+    if (!usuario) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/roles`, { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setRoles(data);
+      }
+    } catch (err) {
+      console.error("Error al cargar roles:", err);
+    }
+  }, [usuario, API_BASE_URL, getAuthHeaders]);
+
   useEffect(() => {
     cargarUsuarios();
-  }, [cargarUsuarios]);
+    cargarRoles();
+  }, [cargarUsuarios, cargarRoles]);
 
   // 2. Agregar usuario en la DB
   const agregarUsuario = async (nuevo) => {
@@ -65,14 +80,17 @@ export const UsuariosProvider = ({ children }) => {
   // 3. Actualizar usuario en la DB
   const actualizarUsuario = async (editado) => {
     try {
-      const res = await fetch(`${API_URL}/${editado.id}`, {
+      const { id, ...datosAEnviar } = editado;
+      const res = await fetch(`${API_URL}/${id}`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
-        body: JSON.stringify(editado)
+        body: JSON.stringify(datosAEnviar)
       });
 
       if (!res.ok) {
-        throw new Error('Error al actualizar usuario');
+        const errorData = await res.json().catch(() => ({}));
+        const mensaje = Array.isArray(errorData.message) ? errorData.message.join(', ') : errorData.message;
+        throw new Error(mensaje || 'Error al actualizar usuario');
       }
       const data = await res.json();
       setUsuarios(prev => prev.map(u => u.id === data.id ? data : u));
@@ -85,7 +103,18 @@ export const UsuariosProvider = ({ children }) => {
 
   // 4. Eliminar usuario en la DB
   const eliminarUsuario = async (id) => {
-    if (id === 1 || id === usuario?.id) return alert("No puedes eliminar al administrador principal ni a tu mismo.");
+    const targetUser = usuarios.find(u => u.id === id);
+    const SUPER_USER_EMAIL = 'techtwosolution2@gmail.com';
+
+    if (id === usuario?.id) return alert("No puedes eliminarte a ti mismo.");
+
+    // Validación de Super Usuario para eliminar otros Admins
+    if (targetUser?.rol === 'admin' && usuario?.email !== SUPER_USER_EMAIL) {
+      return alert(`Acceso denegado. Solo el super usuario (${SUPER_USER_EMAIL}) tiene permisos para eliminar a otros administradores.`);
+    }
+
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a ${targetUser?.nombre}?`)) return;
+
     try {
       const res = await fetch(`${API_URL}/${id}`, {
         method: 'DELETE',
@@ -103,11 +132,13 @@ export const UsuariosProvider = ({ children }) => {
   return (
     <UsuariosContext.Provider value={{ 
       usuarios, 
+      roles,
       loading, 
       agregarUsuario, 
       actualizarUsuario, 
       eliminarUsuario, 
-      recargarUsuarios: cargarUsuarios 
+      recargarUsuarios: cargarUsuarios,
+      recargarRoles: cargarRoles
     }}>
       {children}
     </UsuariosContext.Provider>

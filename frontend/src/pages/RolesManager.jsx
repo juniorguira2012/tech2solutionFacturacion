@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, Save, CheckCircle, Lock, Eye, Edit3, RotateCcw, ShieldCheck, AlertCircle, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useUsuarios } from '../context/UsuariosContext';
 
 const RolesManager = () => {
   const initialRoles = {
@@ -23,6 +24,7 @@ const RolesManager = () => {
 };
 
   const { usuario } = useAuth();
+  const { recargarRoles } = useUsuarios();
   const [rolesConfig, setRolesConfig] = useState(initialRoles);
   const [rolSeleccionado, setRolSeleccionado] = useState('vendedor');
   const [toast, setToast] = useState(false);
@@ -69,6 +71,7 @@ const RolesManager = () => {
         body: JSON.stringify({ name: rolSeleccionado, config: rolesConfig[rolSeleccionado] })
       });
       if (!res.ok) throw new Error("Error al guardar");
+      await recargarRoles();
       setToast(true);
       setTimeout(() => setToast(false), 3000);
     } catch (error) {
@@ -120,6 +123,7 @@ const RolesManager = () => {
       const nuevaConfig = { ...rolesConfig };
       delete nuevaConfig[rolABorrar];
       setRolesConfig(nuevaConfig);
+      await recargarRoles();
       
       if (rolSeleccionado === rolABorrar) {
         setRolSeleccionado('vendedor');

@@ -42,6 +42,17 @@ export class UsersService implements OnModuleInit {
     });
   }
 
+  async findOne(id: number): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+      select: ['id', 'nombre', 'email', 'rol', 'isActive']
+    });
+  }
+
+  async remove(id: number): Promise<void> {
+    await this.usersRepository.delete(id);
+  }
+
   async create(createUserDto: CreateUserDto): Promise<User> {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(createUserDto.password, salt);

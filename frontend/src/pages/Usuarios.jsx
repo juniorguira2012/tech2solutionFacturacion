@@ -10,7 +10,7 @@ import { useUsuarios } from '../context/UsuariosContext'; // Importamos el conte
 const Usuarios = () => {
   const navigate = useNavigate();
   const { usuario } = useAuth();
-  const { usuarios, loading, agregarUsuario, actualizarUsuario, eliminarUsuario } = useUsuarios();
+  const { usuarios, roles, loading, agregarUsuario, actualizarUsuario, eliminarUsuario } = useUsuarios();
   
   // 1. ESTADOS PRINCIPALES
   const [showModal, setShowModal] = useState(false);
@@ -22,23 +22,16 @@ const Usuarios = () => {
   // Si el usuario no es admin, bloqueamos el renderizado inmediatamente
   const esAdmin = usuario?.rol === 'admin';
 
-      const getRolesDinámicos = () => {
-        const savedRoles = localStorage.getItem('posfactura_roles_config');
-        if (savedRoles) {
-          const config = JSON.parse(savedRoles);
-          return Object.keys(config).map(key => ({
-            id: key,
-            nombre: key.charAt(0).toUpperCase() + key.slice(1)
-          }));
-        }
-        return [
-          { id: 'admin', nombre: 'Administrador' },
-          { id: 'vendedor', nombre: 'Vendedor' },
-          { id: 'cajero', nombre: 'Cajero' }
-        ];
-      };
-      
-      const rolesDinámicos = getRolesDinámicos();
+  const rolesDinámicos = roles.length > 0 
+    ? roles.map(r => ({
+        id: r.name,
+        nombre: r.name.charAt(0).toUpperCase() + r.name.slice(1)
+      }))
+    : [
+        { id: 'admin', nombre: 'Administrador' },
+        { id: 'vendedor', nombre: 'Vendedor' },
+        { id: 'cajero', nombre: 'Cajero' }
+      ];
 
   const [nuevoUsuario, setNuevoUsuario] = useState({ 
     nombre: '', email: '', password: '', rol: 'vendedor', isActive: true
@@ -102,7 +95,12 @@ const Usuarios = () => {
     
     try {
       if (editandoId) {
-        await actualizarUsuario({ ...formUsuario, id: editandoId });
+        // Clonamos los datos y eliminamos el password si está vacío
+        const datosActualizados = { ...formUsuario, id: editandoId };
+        if (!datosActualizados.password || datosActualizados.password.trim() === "") {
+          delete datosActualizados.password;
+        }
+        await actualizarUsuario(datosActualizados);
         mostrarToast("Usuario actualizado correctamente");
       } else {
         await agregarUsuario(formUsuario);
