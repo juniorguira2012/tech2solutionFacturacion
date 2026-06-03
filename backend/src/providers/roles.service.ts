@@ -20,6 +20,12 @@ export class RolesService {
     return role;
   }
 
+  async remove(name: string): Promise<void> {
+    const role = await this.findByName(name);
+    if (name === 'admin') throw new Error('No se puede eliminar el rol de administrador');
+    await this.rolesRepository.remove(role);
+  }
+
   async updateConfig(name: string, config: any): Promise<Role> {
     let role = await this.rolesRepository.findOne({ where: { name } });
     

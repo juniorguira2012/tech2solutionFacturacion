@@ -32,7 +32,10 @@ const RolesManager = () => {
   const [deleteModal, setDeleteModal] = useState({ show: false, rol: null });
   const [loading, setLoading] = useState(true);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+  // Sincronizamos la URL con la lógica global del sistema
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+    ? '/api' 
+    : (import.meta.env.VITE_API_URL || '/api');
 
   const fetchRoles = useCallback(async () => {
     try {
@@ -66,6 +69,7 @@ const RolesManager = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-id': usuario?.id || '',
           'x-user-role': usuario?.rol || ''
         },
         body: JSON.stringify({ name: rolSeleccionado, config: rolesConfig[rolSeleccionado] })
@@ -117,7 +121,10 @@ const RolesManager = () => {
       // Opcional: Intentar borrar en backend si existe el endpoint
       await fetch(`${API_BASE_URL}/roles/${rolABorrar}`, { 
         method: 'DELETE',
-        headers: { 'x-user-role': usuario?.rol || '' }
+        headers: { 
+          'x-user-id': usuario?.id || '',
+          'x-user-role': usuario?.rol || '' 
+        }
       });
 
       const nuevaConfig = { ...rolesConfig };
