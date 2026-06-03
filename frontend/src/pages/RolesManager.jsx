@@ -42,9 +42,9 @@ const RolesManager = () => {
       const res = await fetch(`${API_BASE_URL}/roles`);
       if (res.ok) {
         const data = await res.json();
-        // Convertimos el array de la DB al objeto que usa el componente
         const configMap = {};
         data.forEach(r => { configMap[r.name] = r.config; });
+        // Sobrescribimos la configuración local con la de la base de datos
         setRolesConfig(prev => ({ ...prev, ...configMap }));
       }
     } catch (error) {
