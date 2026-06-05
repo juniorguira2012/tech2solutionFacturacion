@@ -43,8 +43,7 @@ const Ventas = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // --- LÓGICA DE CÁLCULO (CORREGIDA) ---
-  // 2. Cálculos actualizados
+  // --- LÓGICA DE CÁLCULO ---
   const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
   const montoDescuento = subtotal * (descuentoPorcentaje / 100);
   const subtotalConDescuento = subtotal - montoDescuento;
@@ -58,7 +57,7 @@ const Ventas = () => {
 
     if (usuario?.rol === 'admin') limite = 100;
     else if (usuario?.rol === 'supervisor') limite = 25;
-    else limite = 5; // Cajeros
+    else limite = 5; 
 
     if (valor > limite) {
       alert(`⚠️ Tu rol (${usuario?.rol}) solo permite hasta el ${limite}%.\nSolicita autorización.`);
@@ -70,112 +69,100 @@ const Ventas = () => {
   };
 
   const finalizarVenta = useCallback(async () => {
-  // 1. Validaciones iniciales
-  if (carrito.length === 0) {
-    alert("El carrito está vacío.");
-    return;
-  }
+    if (carrito.length === 0) {
+      alert("El carrito está vacío.");
+      return;
+    }
 
-  // 2. Confirmación visual con el monto exacto
-  const confirmacion = window.confirm(
-    `RESUMEN DE VENTA\n` +
-    `--------------------------\n` +
-    `Total a cobrar: RD$ ${totalFinal.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n\n` +
-    `¿Desea procesar e imprimir el ticket?`
-  );
+    const confirmacion = window.confirm(
+      `RESUMEN DE VENTA\n` +
+      `--------------------------\n` +
+      `Total a cobrar: RD$ ${totalFinal.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n\n` +
+      `¿Desea procesar e imprimir el ticket?`
+    );
 
-  if (!confirmacion) return;
+    if (!confirmacion) return;
 
-  try {
-    // 3. Preparar datos dinámicos desde configuración
-    const clienteActual = clientes.find(c => c.id.toString() === clienteId.toString()) || { nombre: "Consumidor Final", rnc: "" };
+    try {
+      const clienteActual = clientes.find(c => c.id.toString() === clienteId.toString()) || { nombre: "Consumidor Final", rnc: "" };
 
-    const nuevaVenta = {
-      cliente: clienteActual.nombre,
-      rnc: clienteActual.rnc || "",
-      subtotal: Number(subtotal),
-      descuento: Number(montoDescuento),
-      itbis: Number(impuesto),
-      total: Number(totalFinal),
-      items: carrito.map(item => ({
-        productoId: Number(item.id),
-        cantidad: Number(item.cantidad),
-        precio: Number(item.precio)
-      })),
-      vendedorId: usuario?.id?.toString(),
+      const nuevaVenta = {
+        cliente: clienteActual.nombre,
+        rnc: clienteActual.rnc || "",
+        subtotal: Number(subtotal),
+        descuento: Number(montoDescuento),
+        itbis: Number(impuesto),
+        total: Number(totalFinal),
+        items: carrito.map(item => ({
+          productoId: Number(item.id),
+          cantidad: Number(item.cantidad),
+          precio: Number(item.precio)
+        })),
+        vendedorId: usuario?.id?.toString(),
+      };
+
+      const resVenta = await registrarVenta(nuevaVenta);
+
+      if (resVenta && resVenta.success === false) {
+        throw new Error(resVenta.error || "Error al registrar la venta en el servidor.");
+      }
+
+      try {
+        await descontarStock(carrito);
+      } catch (stockError) {
+        console.error("Error al descontar stock:", stockError);
+        alert(`Venta registrada pero hay error en stock: ${stockError.message}`);
+      }
+
+      imprimirTicket(nuevaVenta, carrito);
+
+      setCarrito([]);
+      setDescuentoPorcentaje(0);
+      setBusquedaCliente("");
+
+      const consumidor = clientes.find(c => c.nombre.toUpperCase().includes("CONSUMIDOR"));
+      if (consumidor) {
+        setClienteId(consumidor.id.toString());
+      }
+
+      setTimeout(() => {
+        inputBusquedaRef.current?.focus();
+      }, 100);
+
+    } catch (error) {
+      console.error("Error en flujo de venta:", error);
+      alert(`Error: ${error.message}`);
+    }
+  }, [carrito, totalFinal, clienteId, clientes, usuario, subtotal, montoDescuento, impuesto, registrarVenta, descontarStock]);
+
+  useEffect(() => {
+    const manejarTeclado = (e) => {
+      if (e.key === 'F10') {
+        e.preventDefault();
+        finalizarVenta();
+      }
+      if (e.key === 'F2') {
+        e.preventDefault();
+        inputBusquedaRef.current?.focus();
+      }
     };
 
-    // 4. Ejecutar operaciones críticas - primero registrar la venta
-    const resVenta = await registrarVenta(nuevaVenta);
-
-    if (resVenta && resVenta.success === false) {
-      throw new Error(resVenta.error || "Error al registrar la venta en el servidor.");
-    }
-
-    // 5. Descontar stock en la base de datos (Backend)
-    try {
-      await descontarStock(carrito);
-    } catch (stockError) {
-      console.error("Error al descontar stock:", stockError);
-      alert(`Venta registrada pero hay error en stock: ${stockError.message}`);
-    }
-
-    // 6. Impresión (se dispara después de registrar)
-    imprimirTicket(nuevaVenta, carrito);
-
-    // 7. Limpieza y reset de interfaz
-    setCarrito([]);
-    setDescuentoPorcentaje(0);
-    setBusquedaCliente("");
-
-    // Buscamos el ID del consumidor final para dejarlo seleccionado para la próxima venta
-    const consumidor = clientes.find(c => c.nombre.toUpperCase().includes("CONSUMIDOR"));
-    if (consumidor) {
-      setClienteId(consumidor.id.toString());
-    }
-
-    // Devolvemos el foco al buscador de productos para el siguiente cliente
-    setTimeout(() => {
-      inputBusquedaRef.current?.focus();
-    }, 100);
-
-  } catch (error) {
-    console.error("Error en flujo de venta:", error);
-    alert(`Error: ${error.message}`);
-  }
-}, [carrito, totalFinal, clienteId, clientes, usuario, subtotal, montoDescuento, impuesto, registrarVenta, descontarStock]);
-
-  useEffect(() => {
-  const manejarTeclado = (e) => {
-    // Si presiona F10
-    if (e.key === 'F10') {
-      e.preventDefault(); // Evita que el navegador abra cosas por defecto
-      finalizarVenta();
-    }
-    
-    // OPCIONAL: F2 para enfocar el buscador de productos rápidamente
-    if (e.key === 'F2') {
-      e.preventDefault();
-      inputBusquedaRef.current?.focus();
-    }
-  };
-
-  window.addEventListener('keydown', manejarTeclado);
-  return () => window.removeEventListener('keydown', manejarTeclado);
+    window.addEventListener('keydown', manejarTeclado);
+    return () => window.removeEventListener('keydown', manejarTeclado);
   }, [finalizarVenta]);
 
-  // --- FILTRADO DE CLIENTES (CORREGIDO) ---
+  // --- FILTRADO DE CLIENTES ---
   useEffect(() => {
-  if (!busquedaCliente.trim()) {
-    setResultadosClientes([]);
-    return;
-  }
-  const filtrados = clientes.filter(c => 
-    c.nombre.toLowerCase().includes(busquedaCliente.toLowerCase()) || 
-    (c.rnc && c.rnc.includes(busquedaCliente))
-  );
-  setResultadosClientes(filtrados);
-}, [busquedaCliente, clientes]);
+    if (!busquedaCliente.trim()) {
+      setResultadosClientes([]);
+      return;
+    }
+    const filtrados = clientes.filter(c => 
+      c.nombre.toLowerCase().includes(busquedaCliente.toLowerCase()) || 
+      (c.rnc && c.rnc.includes(busquedaCliente))
+    );
+    setResultadosClientes(filtrados);
+  }, [busquedaCliente, clientes]);
 
   // --- INICIALIZAR CLIENTE ---
   useEffect(() => {
@@ -214,7 +201,7 @@ const Ventas = () => {
 
     setCarrito(prev => {
       if (itemExistente) return prev.map(item => item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item);
-      return [...prev, { ...producto, cantidad: 1 }];
+      return [...prev, { ...producto, className: 'item-carrito', cantidad: 1 }];
     });
     setBusqueda("");
     setResultados([]);
@@ -229,7 +216,7 @@ const Ventas = () => {
       cliente: clienteSeleccionado?.nombre || "Consumidor Final",
       clienteId,
       items: [...carrito],
-      descuento: descuentoPorcentaje, // Guardamos el descuento aplicado
+      descuento: descuentoPorcentaje, 
       total: totalFinal,
       hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       vendedorId: usuario?.id,
@@ -249,44 +236,40 @@ const Ventas = () => {
     setShowAbiertasModal(false);
   };
 
-
   const esRangoAlto = usuario?.rol === 'admin' || usuario?.rol === 'supervisor';
   const formatoFecha = fechaHora.toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   const formatoHora = fechaHora.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
-    <div className="h-[calc(100vh-100px)] flex flex-col gap-4 overflow-hidden p-2">
+    <div className="h-full flex flex-col gap-3 p-1 md:p-4 overflow-y-auto md:overflow-hidden">
       
-      {/* HEADER POS */}
-      <header className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+      {/* HEADER POS (Mejorado para colapsar limpio en móviles) */}
+      <header className="flex flex-col lg:flex-row lg:justify-between lg:items-center bg-white p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm gap-3 shrink-0">
         <div className="flex flex-col">
-          <h1 className="text-xl font-black text-slate-800 tracking-tight leading-none mb-1.5 uppercase italic">Tech2Solution POS</h1>
-          <div className="flex items-center gap-2 text-slate-500">
-            <span className="text-brand font-black text-[10px] px-2 py-0.5 bg-indigo-50 rounded-lg border border-indigo-100 uppercase italic">
+          <h1 className="text-base md:text-xl font-black text-slate-800 tracking-tight uppercase italic">Tech2Solution POS</h1>
+          <div className="flex flex-wrap items-center gap-2 text-slate-500 mt-1">
+            <span className="text-brand font-black text-[9px] px-2 py-0.5 bg-indigo-50 rounded-lg border border-indigo-100 uppercase italic">
               Cajero: {usuario?.nombre} {esRangoAlto && `(${usuario?.rol.toUpperCase()})`}
             </span>
-            <span className="text-[10px] font-bold uppercase tracking-tight">{formatoFecha} | {formatoHora}</span>
+            <span className="text-[9px] font-bold uppercase tracking-tight">{formatoFecha} | {formatoHora}</span>
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowAbiertasModal(true)} className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-600 border border-amber-100 rounded-xl font-black text-[10px] uppercase hover:bg-amber-100 transition-all shadow-sm">
-            <Receipt size={14} /> Abiertas ({facturasAbiertas.length})
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setShowAbiertasModal(true)} className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 bg-amber-50 text-amber-600 border border-amber-100 rounded-xl font-black text-[10px] uppercase hover:bg-amber-100 transition-all">
+            <Receipt size={14} /> <span>Abiertas ({facturasAbiertas.length})</span>
           </button>
-          <button onClick={guardarEnAbiertas} disabled={carrito.length === 0} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-brand border border-indigo-100 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-100 transition-all disabled:opacity-50">
-            <Save size={14} /> Pausar
+          <button onClick={guardarEnAbiertas} disabled={carrito.length === 0} className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 bg-indigo-50 text-brand border border-indigo-100 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-100 transition-all disabled:opacity-50">
+            <Save size={14} /> <span>Pausar</span>
           </button>
 
-          <div className="w-[1px] h-8 bg-slate-200 mx-1"></div>
-
-          {/* BUSCADOR DE CLIENTES (Reemplaza al Select) */}
-          <div className="relative group">
-            <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 shadow-inner w-64">
-              <UserIcon size={16} className={clienteId ? "text-brand" : "text-slate-300"} />
+          <div className="relative w-full sm:w-64 mt-1 sm:mt-0">
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100 shadow-inner">
+              <UserIcon size={14} className={clienteId ? "text-brand" : "text-slate-300"} />
               <input 
                 type="text"
                 className="bg-transparent outline-none text-[11px] font-black uppercase text-slate-700 w-full placeholder:text-slate-300"
-                placeholder="Buscar Cliente / RNC..."
+                placeholder="Cliente / RNC..."
                 value={busquedaCliente}
                 onChange={(e) => {
                   setBusquedaCliente(e.target.value);
@@ -301,9 +284,8 @@ const Ventas = () => {
               )}
             </div>
 
-            {/* Lista Desplegable de Resultados */}
             {mostrarListaClientes && resultadosClientes.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 shadow-2xl rounded-2xl z-[120] max-h-60 overflow-y-auto p-2 animate-in fade-in slide-in-from-top-2">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 shadow-2xl rounded-2xl z-[120] max-h-48 overflow-y-auto p-2">
                 {resultadosClientes.map(c => (
                   <div 
                     key={c.id} 
@@ -312,10 +294,10 @@ const Ventas = () => {
                       setBusquedaCliente(c.nombre);
                       setMostrarListaClientes(false);
                     }}
-                    className="flex flex-col px-4 py-2 hover:bg-indigo-50 rounded-xl cursor-pointer transition-colors border-b border-slate-50 last:border-0"
+                    className="flex flex-col px-3 py-2 hover:bg-indigo-50 rounded-xl cursor-pointer transition-colors border-b border-slate-50 last:border-0"
                   >
                     <span className="text-[10px] font-black text-slate-700 uppercase">{c.nombre}</span>
-                    <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">RNC: {c.rnc || '---'} • {c.categoria}</span>
+                    <span className="text-[8px] text-slate-400 font-bold uppercase">RNC: {c.rnc || '---'}</span>
                   </div>
                 ))}
               </div>
@@ -324,13 +306,16 @@ const Ventas = () => {
         </div>
       </header>
 
-      {/* CUERPO POS */}
-      <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
-        <div className="col-span-8 flex flex-col min-h-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          {/* BUSCADOR DE PRODUCTOS */}
-          <div className="p-4 border-b border-slate-100 relative z-20">
+      {/* CUERPO POS (Cambiado a flex-col en móviles para dar espacio vertical real) */}
+      <div className="flex-1 flex flex-col md:grid md:grid-cols-12 gap-3 min-h-0 overflow-hidden">
+        
+        {/* PANEL IZQUIERDO: BUSCADOR Y LISTA DEL CARRITO */}
+        <div className="flex flex-col md:col-span-7 lg:col-span-8 min-h-[320px] md:min-h-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          
+          {/* BUSCADOR DE PRODUCTOS (Asegurado con z-index y padding consistente) */}
+          <div className="p-3 border-b border-slate-100 bg-white relative z-30 shrink-0">
             <div className="relative">
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input 
                 ref={inputBusquedaRef} 
                 autoFocus 
@@ -338,57 +323,59 @@ const Ventas = () => {
                 value={busqueda} 
                 onChange={(e) => setBusqueda(e.target.value)} 
                 placeholder="Buscar producto por nombre o SKU..." 
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-brand outline-none text-sm font-medium" 
+                className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 focus:border-brand outline-none text-xs font-medium bg-slate-50/50" 
               />
             </div>
+            
+            {/* Resultados del Buscador */}
             {resultados.length > 0 && (
-              <div className="absolute left-4 right-4 top-[68px] z-50 bg-white border border-slate-200 shadow-2xl rounded-xl max-h-60 overflow-y-auto p-2">
+              <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-white border border-slate-200 shadow-2xl rounded-xl max-h-48 overflow-y-auto p-1.5">
                 {resultados.map(prod => (
-                  <div key={prod.id} onClick={() => handleAgregar(prod)} className="flex justify-between items-center px-4 py-3 hover:bg-indigo-50 rounded-xl cursor-pointer transition-colors">
-                    <div>
-                      <span className="font-bold text-slate-700 text-sm uppercase">{prod.nombre}</span>
-                      <span className="block text-[10px] font-black text-slate-400">DISPONIBLE: {prod.stock}</span>
+                  <div key={prod.id} onClick={() => { handleAgregar(prod); setBusqueda(""); }} className="flex justify-between items-center gap-2 px-3 py-2.5 hover:bg-indigo-50 rounded-lg cursor-pointer transition-colors border-b border-slate-50 last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <span className="font-bold text-slate-700 text-xs uppercase block truncate">{prod.nombre}</span>
+                      <span className="block text-[9px] font-black text-slate-400">STOCK: {prod.stock}</span>
                     </div>
-                    <span className="font-black text-brand text-sm">RD$ {prod.precio.toLocaleString()}</span>
+                    <span className="font-black text-brand text-xs whitespace-nowrap">RD$ {prod.precio.toLocaleString()}</span>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* TABLA DEL CARRITO */}
-          <div className="flex-1 overflow-y-auto">
+          {/* TABLA DEL CARRITO (Scroll interno protegido) */}
+          <div className="flex-1 overflow-y-auto min-h-0">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 sticky top-0 border-b border-slate-100 font-black uppercase text-[10px] text-slate-400 tracking-widest italic">
+              <thead className="bg-slate-50 sticky top-0 border-b border-slate-100 font-black uppercase text-[9px] text-slate-400 tracking-widest italic z-10">
                 <tr>
-                  <th className="px-6 py-3">Producto</th>
-                  <th className="px-6 py-3 text-center">Cant.</th>
-                  <th className="px-6 py-3 text-right">Subtotal</th>
-                  <th className="px-6 py-3"></th>
+                  <th className="px-4 py-2.5">Producto</th>
+                  <th className="px-2 py-2.5 text-center">Cant.</th>
+                  <th className="px-4 py-2.5 text-right">Subtotal</th>
+                  <th className="px-3 py-2.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-bold">
                 {carrito.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="py-20 text-center opacity-20">
-                      <CartIcon size={40} className="mx-auto mb-2" />
-                      <p className="text-[10px] uppercase font-black tracking-widest">Carrito Vacío</p>
+                    <td colSpan="4" className="py-12 text-center opacity-25">
+                      <CartIcon size={32} className="mx-auto mb-1.5 text-slate-400" />
+                      <p className="text-[9px] uppercase font-black tracking-widest">Carrito Vacío</p>
                     </td>
                   </tr>
                 ) : (
                   carrito.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-3 uppercase text-slate-700">{item.nombre}</td>
-                      <td className="px-6 py-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => setCarrito(prev => prev.map(i => i.id === item.id ? {...i, cantidad: Math.max(1, i.cantidad - 1)} : i))} className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200"><MinusIcon size={12}/></button>
-                          <span className="w-6 text-center font-black">{item.cantidad}</span>
-                          <button onClick={() => handleAgregar(item)} className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200"><PlusIcon size={12}/></button>
+                      <td className="px-4 py-2.5 uppercase text-slate-700 max-w-[140px] truncate">{item.nombre}</td>
+                      <td className="px-2 py-2.5 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button onClick={() => setCarrito(prev => prev.map(i => i.id === item.id ? {...i, cantidad: Math.max(1, i.cantidad - 1)} : i))} className="p-1 rounded-md bg-slate-100 hover:bg-slate-200"><MinusIcon size={10}/></button>
+                          <span className="w-5 text-center font-black text-[11px]">{item.cantidad}</span>
+                          <button onClick={() => handleAgregar(item)} className="p-1 rounded-md bg-slate-100 hover:bg-slate-200"><PlusIcon size={10}/></button>
                         </div>
                       </td>
-                      <td className="px-6 py-3 text-right font-black italic">RD$ {(item.precio * item.cantidad).toLocaleString()}</td>
-                      <td className="px-6 py-3 text-right">
-                        <button onClick={() => setCarrito(carrito.filter(i => i.id !== item.id))} className="text-slate-200 hover:text-red-500 transition-colors"><TrashIcon size={16}/></button>
+                      <td className="px-4 py-2.5 text-right font-black italic text-slate-800">RD$ {(item.precio * item.cantidad).toLocaleString()}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <button onClick={() => setCarrito(carrito.filter(i => i.id !== item.id))} className="text-slate-300 hover:text-red-500 transition-colors"><TrashIcon size={14}/></button>
                       </td>
                     </tr>
                   ))
@@ -398,24 +385,23 @@ const Ventas = () => {
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: TOTALES */}
-        <div className="col-span-4 flex flex-col gap-4">
-          <div className="flex-1 bg-white p-6 rounded-[2rem] border border-slate-200 shadow-xl flex flex-col justify-between">
-            <div className="space-y-6">
-              <div className="flex justify-between border-b border-slate-100 pb-3 font-black uppercase text-[10px] tracking-widest italic text-slate-700">
+        {/* PANEL DERECHO: TOTALES Y PAGO */}
+        <div className="md:col-span-5 lg:col-span-4 flex flex-col shrink-0">
+          <div className="bg-white p-4 md:p-5 rounded-[1.5rem] border border-slate-200 shadow-md flex flex-col justify-between gap-4">
+            <div className="space-y-4">
+              <div className="flex justify-between border-b border-slate-100 pb-2 font-black uppercase text-[9px] tracking-widest italic text-slate-600">
                 <h2>Detalle de Cobro</h2>
-                <TicketIcon size={16} className="text-brand" />
+                <TicketIcon size={14} className="text-brand" />
               </div>
               
-              <div className="space-y-3 text-xs font-black uppercase">
+              <div className="space-y-2 text-xs font-black uppercase">
                 <div className="flex justify-between items-center text-slate-400">
-                  <span className="text-[10px]">Subtotal Bruto</span>
+                  <span className="text-[9px]">Subtotal Bruto</span>
                   <span className="text-slate-800">RD$ {subtotal.toLocaleString()}</span>
                 </div>
                 
-                {/* BOTÓN DESCUENTO DINÁMICO */}
-                <div className="flex justify-between items-center group cursor-pointer" onClick={() => setShowDescuentoModal(true)}>
-                  <span className="text-[10px] text-slate-400 group-hover:text-brand flex items-center gap-1 transition-colors">
+                <div className="flex justify-between items-center cursor-pointer group" onClick={() => setShowDescuentoModal(true)}>
+                  <span className="text-[9px] text-slate-400 group-hover:text-brand flex items-center gap-1 transition-colors">
                     Descuento ({descuentoPorcentaje}%) <Edit3 size={10}/>
                   </span>
                   <span className="text-rose-500 font-black">
@@ -424,15 +410,15 @@ const Ventas = () => {
                 </div>
 
                 <div className="flex justify-between items-center text-slate-400">
-                  <span className="text-[10px]">ITBIS ({itbisGlobal}%)</span>
+                  <span className="text-[9px]">ITBIS ({itbisGlobal}%)</span>
                   <span className="text-slate-800">RD$ {impuesto.toLocaleString()}</span>
                 </div>
               </div>
 
-              <div className="pt-6 border-t-2 border-dashed border-slate-100 text-center uppercase">
-                <p className="text-[10px] font-black text-slate-400 mb-1 tracking-widest">Total a Pagar</p>
-                <div className="text-4xl font-black text-slate-800 tracking-tighter italic">
-                  <span className="text-sm align-top mr-1 font-bold text-slate-400">RD$</span>
+              <div className="pt-4 border-t border-dashed border-slate-200 text-center uppercase">
+                <p className="text-[9px] font-black text-slate-400 mb-0.5 tracking-widest">Total a Pagar</p>
+                <div className="text-2xl md:text-3xl font-black text-slate-800 tracking-tighter italic">
+                  <span className="text-xs align-top mr-0.5 font-bold text-slate-400">RD$</span>
                   {totalFinal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
               </div>
@@ -441,37 +427,38 @@ const Ventas = () => {
             <button 
               onClick={finalizarVenta} 
               disabled={carrito.length === 0} 
-              className={`w-full py-5 rounded-2xl font-black text-sm shadow-xl transition-all uppercase flex flex-col items-center justify-center ${
+              className={`w-full py-4 rounded-xl font-black text-xs shadow-md transition-all uppercase flex flex-col items-center justify-center ${
                 carrito.length > 0 ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-100 text-slate-300'
               }`}
             >
               <div className="flex items-center gap-2">
-                <DollarIcon size={18} /> 
+                <DollarIcon size={16} /> 
                 <span>Finalizar Factura</span>
               </div>
-              <span className="text-[9px] opacity-70 mt-1">[ Presione F10 ]</span>
+              <span className="text-[8px] opacity-70 mt-0.5">[ Presione F10 ]</span>
             </button>
           </div>
         </div>
+
       </div>
 
-      {/* MODALES (Descuento y Abiertas) */}
+      {/* --- MODALES SE MANTIENEN IDÉNTICOS --- */}
       {showDescuentoModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xs overflow-hidden animate-in zoom-in-95">
-            <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-xs overflow-hidden">
+            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
               <div>
                 <h3 className="font-black uppercase text-xs tracking-widest italic">Aplicar Descuento</h3>
-                <p className="text-[9px] text-slate-400 font-bold uppercase">Rol: {usuario?.rol}</p>
+                <p className="text-[9px] text-slate-400 font-bold uppercase">Rol: {usuario?.role || usuario?.rol}</p>
               </div>
-              <button onClick={() => setShowDescuentoModal(false)}><X size={20} /></button>
+              <button onClick={() => setShowDescuentoModal(false)}><X size={18} /></button>
             </div>
-            <div className="p-8">
-              <div className="relative mb-6">
-                <input type="number" autoFocus value={tempDescuento} onChange={(e) => setTempDescuento(e.target.value)} placeholder="0" className="w-full text-5xl font-black text-center outline-none text-slate-800" />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300">%</span>
+            <div className="p-6">
+              <div className="relative mb-4">
+                <input type="number" autoFocus value={tempDescuento} onChange={(e) => setTempDescuento(e.target.value)} placeholder="0" className="w-full text-4xl font-black text-center outline-none text-slate-800" />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xl font-black text-slate-300">%</span>
               </div>
-              <button onClick={aplicarDescuentoSeguro} className="w-full bg-brand text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg hover:bg-indigo-600 transition-all">Confirmar</button>
+              <button onClick={aplicarDescuentoSeguro} className="w-full bg-brand text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md hover:bg-indigo-600 transition-all">Confirmar</button>
             </div>
           </div>
         </div>
@@ -479,25 +466,30 @@ const Ventas = () => {
 
       {showAbiertasModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
-            <div className="p-6 bg-amber-50 border-b border-amber-100 flex justify-between items-center font-black uppercase text-xs italic tracking-widest">
+          <div className="bg-white rounded-[1.5rem] shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-4 bg-amber-50 border-b border-amber-100 flex justify-between items-center font-black uppercase text-xs italic tracking-widest">
               <h3>Facturas en Espera</h3>
-              <button onClick={() => setShowAbiertasModal(false)}><X size={24} /></button>
+              <button onClick={() => setShowAbiertasModal(false)}><X size={20} /></button>
             </div>
-            <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
-              {facturasAbiertas.map(f => (
-                <div key={f.id} onClick={() => recuperarFactura(f)} className="p-4 border border-slate-100 rounded-2xl hover:border-brand hover:bg-slate-50 cursor-pointer flex justify-between items-center group transition-all">
-                  <div>
-                    <p className="text-slate-800 font-black text-sm uppercase group-hover:text-brand transition-colors">{f.cliente}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">{f.hora} {esRangoAlto && `• ${f.vendedorNombre}`}</p>
+            <div className="p-4 space-y-2 max-h-64 overflow-y-auto">
+              {facturasAbiertas.length === 0 ? (
+                <p className="text-center text-[10px] text-slate-400 uppercase py-6 font-bold">No hay facturas pausadas</p>
+              ) : (
+                facturasAbiertas.map(f => (
+                  <div key={f.id} onClick={() => recuperarFactura(f)} className="p-3 border border-slate-100 rounded-xl hover:border-brand hover:bg-slate-50 cursor-pointer flex justify-between items-center group transition-all">
+                    <div>
+                      <p className="text-slate-800 font-black text-xs uppercase group-hover:text-brand transition-colors">{f.cliente}</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase">{f.hora} {esRangoAlto && `• ${f.vendedorNombre}`}</p>
+                    </div>
+                    <p className="text-brand font-black italic text-xs">RD$ {f.total.toLocaleString()}</p>
                   </div>
-                  <p className="text-brand font-black italic">RD$ {f.total.toLocaleString()}</p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 };

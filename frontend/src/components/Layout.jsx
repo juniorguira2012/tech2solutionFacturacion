@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock } from 'lucide-react';
+import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const Layout = ({ children }) => {
-  const [confirmarSalir, setConfirmarSalir] = useState(false);  
+  const [confirmarSalir, setConfirmarSalir] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { usuario, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
-  };
+  }
+
+  const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   // --- LÓGICA DE PERMISOS CORREGIDA ---
   const puedeVer = (moduloId) => {
@@ -57,7 +61,7 @@ export const Layout = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans">
-      <aside className="w-64 bg-brand text-white flex flex-col shadow-2xl z-20">
+      <aside className="hidden md:flex w-64 bg-brand text-white flex-col shadow-2xl z-20 shrink-0">
         <div className="p-8">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 bg-white rounded-lg flex items-center justify-center">
@@ -95,7 +99,6 @@ export const Layout = ({ children }) => {
                   {item.icon}
                   {item.name}
                 </div>
-                {/* Pequeño candado si es solo lectura para avisar al cajero */}
                 {esSoloLectura(item.id) && <Lock size={12} className="opacity-40" />}
               </NavLink>
             )
@@ -145,13 +148,91 @@ export const Layout = ({ children }) => {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-8 min-h-screen">
-          <div className="max-w-7xl mx-auto">
-            {children}
+      {/* Contenedor de Contenido (Header + Main) */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        
+        {/* Header móvil azul */}
+        <header className="w-full md:hidden bg-brand text-white sticky top-0 z-30 px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleMobileMenu}
+              className="h-9 w-9 bg-white rounded-lg flex items-center justify-center text-brand transition-colors hover:bg-white/20"
+              aria-label="Abrir menú"
+            >
+              <Menu size={20} />
+            </button>
+            <div>
+              <p className="text-sm font-black uppercase tracking-tight">Tech2Solution</p>
+              <p className="text-[10px] text-white/80 uppercase">{usuario?.nombre || 'Usuario'}</p>
+            </div>
           </div>
-        </div>
-      </main>
+        </header>
+
+        {mobileMenuOpen && (
+          <>
+            <div
+              className="fixed inset-0 bg-slate-900/40 z-30"
+              onClick={closeMobileMenu}
+            />
+            <div className="md:hidden fixed inset-x-0 top-0 mt-16 bg-white shadow-xl z-40 border-b border-slate-200">
+              <div className="px-4 py-4 space-y-1">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-sm font-black uppercase">Navegación</p>
+                    <p className="text-[10px] text-slate-500">Elige una sección</p>
+                  </div>
+                  <button
+                    onClick={closeMobileMenu}
+                    className="p-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                    aria-label="Cerrar menú"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {menuItems.map((item) => (
+                (item.id === 'inicio' || puedeVer(item.id)) && (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={closeMobileMenu}
+                      className={({ isActive }) =>
+                        `flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 font-bold text-sm ${
+                          isActive ? 'bg-slate-100 text-brand shadow-sm' : 'hover:bg-slate-100 text-slate-700'
+                        }`
+                      }
+                    >
+                      <div className="flex items-center gap-3">
+                        {item.icon}
+                        {item.name}
+                      </div>
+                      {esSoloLectura(item.id) && <Lock size={12} className="opacity-40" />}
+                    </NavLink>
+                  )
+                ))}
+
+                <button
+                  onClick={() => {
+                    setConfirmarSalir(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-start gap-3 px-4 py-3 rounded-xl text-sm font-black uppercase tracking-widest text-red-500 hover:bg-red-50"
+                >
+                  <LogOut size={16} /> Cerrar Sesión
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-8 min-h-screen pt-4 md:pt-8">
+            <div className="max-w-7xl mx-auto">
+              {children}
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
   );
 };
