@@ -15,7 +15,10 @@ export const Layout = ({ children }) => {
   }
 
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
-  const closeMobileMenu = () => setMobileMenuOpen(false);
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
+    setConfirmarSalir(false);
+  };
 
   // --- LÓGICA DE PERMISOS CORREGIDA ---
   const puedeVer = (moduloId) => {
@@ -211,15 +214,31 @@ export const Layout = ({ children }) => {
                   )
                 ))}
 
-                <button
-                  onClick={() => {
-                    setConfirmarSalir(true);
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full flex items-center justify-start gap-3 px-4 py-3 rounded-xl text-sm font-black uppercase tracking-widest text-red-500 hover:bg-red-50"
-                >
-                  <LogOut size={16} /> Cerrar Sesión
-                </button>
+                <div className="pt-4 mt-4 border-t border-slate-100">
+                  {!confirmarSalir ? (
+                    <button
+                      onClick={() => setConfirmarSalir(true)}
+                      className="w-full flex items-center justify-start gap-3 px-4 py-3 rounded-xl text-sm font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all"
+                    >
+                      <LogOut size={16} /> Cerrar Sesión
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2 p-2 bg-slate-50 rounded-xl animate-in fade-in zoom-in duration-200">
+                      <button
+                        onClick={handleLogout}
+                        className="flex-1 flex items-center justify-center gap-1 px-3 py-3 rounded-xl bg-red-500 text-white text-[10px] font-black uppercase transition-all"
+                      >
+                        <Check size={14} /> Confirmar
+                      </button>
+                      <button
+                        onClick={() => setConfirmarSalir(false)}
+                        className="flex-1 flex items-center justify-center gap-1 px-3 py-3 rounded-xl bg-slate-200 text-slate-600 text-[10px] font-black uppercase transition-all"
+                      >
+                        <X size={14} /> No
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </>

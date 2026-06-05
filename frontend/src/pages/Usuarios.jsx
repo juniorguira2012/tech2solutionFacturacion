@@ -134,7 +134,7 @@ const Usuarios = () => {
             <ArrowLeft size={24} />
           </button>
           <div>
-            <h1 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase leading-none">Cuentas de Acceso</h1>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tighter italic uppercase leading-none">Cuentas de Acceso</h1>
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
               <Shield size={12} className="text-brand" /> Control de Seguridad 
             </p>
