@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import {
   Package, Tags, ArrowLeftRight, CheckCircle,
   ClipboardList, Bell, Layers3, AlertTriangle, RefreshCw,
-  Warehouse, Ruler, Braces, Plug, Truck
+  Warehouse, Ruler, Braces, Plug, Truck, HandHelping
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import AlmacenSection from './inventario/AlmacenSection';
@@ -16,6 +16,7 @@ import CamposPersonalizadosSection from './inventario/CamposPersonalizadosSectio
 import IntegracionesSection from './inventario/IntegracionesSection';
 import ProveedoresSection from './inventario/ProveedoresSection';
 import LotesSection from './inventario/LotesSection';
+import ComodatoSection from './inventario/ComodatoSection';
 
 const Inventario = () => {
   const { productos, categorias, setCategorias } = useInventario();
@@ -55,13 +56,14 @@ const Inventario = () => {
     { id: 'lotes', label: 'Lotes Unidades', icon: Layers3 },
     { id: 'unidades', label: 'Unidades', icon: Ruler },
     { id: 'campos', label: 'Campos Personalizados', icon: Braces },
+    { id: 'comodato', label: 'Comodato', icon: HandHelping },
     { id: 'integraciones', label: 'Integraciones', icon: Plug },
   ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-10 border-b border-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-12 border-b border-slate-100">
           {seccionesInventario.map(seccion => {
             const Icon = seccion.icon;
             const activo = seccionActiva === seccion.id;
@@ -126,6 +128,8 @@ const Inventario = () => {
           </div>
           ) : seccionActiva === 'lotes' ? (
             <LotesSection />
+          ) : seccionActiva === 'comodato' ? (
+            <ComodatoSection mostrarToast={mostrarToast} />
           ) : null}
         </div>
       </section>

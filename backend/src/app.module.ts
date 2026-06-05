@@ -13,6 +13,7 @@ import { WarehousesModule } from './movements/warehouses.module';
 import { UsersModule } from './providers/users.module';
 import { ClientsModule } from './providers/clients.module';
 import { RolesModule } from './providers/roles.module';
+import { ComodatosModule } from './comodatos/comodatos.module';
 
 // Evaluamos los 3 posibles archivos según el entorno
 let envFileName = '.env'; // Por defecto desarrollo local
@@ -22,7 +23,11 @@ if (process.env.NODE_ENV === 'production') {
   envFileName = '.env.test';
 }
 
+// Subimos dos niveles para llegar a la raíz del proyecto desde backend/src/
 const envPath = path.resolve(__dirname, '..', '..', envFileName);
+
+// Debug: Esto te ayudará a ver en la consola si el backend encuentra el archivo .env
+console.log(`Cargando configuración desde: ${envPath}`);
 
 @Module({
   imports: [
@@ -37,7 +42,7 @@ const envPath = path.resolve(__dirname, '..', '..', envFileName);
         type: 'postgres',
         host: configService.get<string>('DATABASE_HOST', 'localhost'),
         // Corregido para TypeScript usando coalescencia nula:
-        port: parseInt(configService.get<string>('DATABASE_PORT') ?? '5432', 10),
+        port: parseInt(configService.get<string>('DATABASE_PORT', '5432'), 10),
         username: configService.get<string>('DATABASE_USER', 'postgres'),
         password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
         database: configService.get<string>('DATABASE_NAME', 'tech_two_solution_db'),
@@ -47,7 +52,6 @@ const envPath = path.resolve(__dirname, '..', '..', envFileName);
         synchronize: configService.get<string>('DATABASE_SYNCHRONIZE') === 'true' || 
                      configService.get<string>('NODE_ENV') !== 'production',
         logging: configService.get<string>('NODE_ENV') !== 'production',
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
       }),
     }),
     ProductsModule,
@@ -59,6 +63,7 @@ const envPath = path.resolve(__dirname, '..', '..', envFileName);
     UsersModule,
     ClientsModule,
     RolesModule,
+    ComodatosModule,
   ],
 })
 export class AppModule {}

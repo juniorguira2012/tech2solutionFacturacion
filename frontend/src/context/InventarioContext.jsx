@@ -11,6 +11,7 @@ export const InventarioProvider = ({ children }) => {
   const [errorConexion, setErrorConexion] = useState(null);
   const [conteos, setConteos] = useState([]);
   const [lotes, setLotes] = useState([]);
+  const [prestamos, setPrestamos] = useState([]);
   const [refreshIndex, setRefreshIndex] = useState(0);
 
   const { usuario } = useAuth();
@@ -579,6 +580,67 @@ const registrarMovimientosMasivos = async (payload) => {
     }
   }, [API_BASE_URL]);
 
+  // --- GESTIÓN DE COMODATO (PRÉSTAMOS) ---
+  const cargarPrestamos = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comodatos`, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Error al cargar préstamos');
+      const data = await res.json();
+      setPrestamos(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error cargando comodatos:", err);
+      setPrestamos([]);
+    }
+  }, [API_BASE_URL]);
+
+  const crearPrestamo = async (payload) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comodatos`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ...payload,
+          usuarioId: usuario?.id // Vinculamos quién registra el préstamo
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Error al registrar préstamo');
+      }
+
+      const data = await res.json();
+      setPrestamos(prev => [data, ...prev]);
+      setRefreshIndex(prev => prev + 1); // Refrescamos productos para actualizar stock
+      return true;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const devolverPrestamo = async (comodatoId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/comodatos/${comodatoId}/devolver`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Error al devolver préstamo');
+      }
+
+      const data = await res.json();
+      setPrestamos(prev => prev.map(p => p.id === comodatoId ? data : p));
+      setRefreshIndex(prev => prev + 1); // Refrescamos productos para actualizar stock
+      return true;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
   // --- Al final de InventarioContext.jsx ---
 
 return (
@@ -597,6 +659,10 @@ return (
     unidadesMedida, 
     conteos,
     lotes,
+    prestamos,
+    cargarPrestamos,
+    crearPrestamo,
+    devolverPrestamo,
     cargarLotes,
     cargarConteos,
     crearConteo,
