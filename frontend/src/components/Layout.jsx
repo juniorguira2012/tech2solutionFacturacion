@@ -1,12 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock, Menu } from 'lucide-react';
+import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock, Menu, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useInventario } from '../context/InventarioContext';
 
 export const Layout = ({ children }) => {
   const [confirmarSalir, setConfirmarSalir] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const { usuario, logout } = useAuth();
+  const { prestamos, cargarPrestamos } = useInventario();
+  const hasAlertedRef = useRef(false);
+
+  const comodatosVencidos = useMemo(() => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    return prestamos.filter(item => {
+      if (item.estado !== 'activo' || !item.fechaLimite) return false;
+      const limite = new Date(item.fechaLimite);
+      const limiteAjustado = new Date(limite.getFullYear(), limite.getMonth(), limite.getDate());
+      limiteAjustado.setHours(0, 0, 0, 0);
+      return hoy >= limiteAjustado;
+    });
+  }, [prestamos]);
+
+  const comodatosVencidosCount = comodatosVencidos.length;
+
+  // Lógica para la alerta sonora
+  useEffect(() => {
+    if (comodatosVencidosCount > 0 && !hasAlertedRef.current) {
+      const playNotification = () => {
+        const audio = new Audio('/notification.mp3'); // Asegúrate de poner este archivo en la carpeta /public
+        audio.play().catch(error => {
+          console.warn("El navegador bloqueó el auto-play. Se requiere interacción previa del usuario.", error);
+        });
+        hasAlertedRef.current = true;
+      };
+      playNotification();
+    }
+    if (comodatosVencidosCount === 0) {
+      hasAlertedRef.current = false;
+    }
+  }, [comodatosVencidosCount]);
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -154,8 +189,8 @@ export const Layout = ({ children }) => {
       {/* Contenedor de Contenido (Header + Main) */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         
-        {/* Header móvil azul */}
-        <header className="w-full md:hidden bg-brand text-white sticky top-0 z-30 px-4 py-3 flex items-center justify-between shrink-0">
+        {/* Header Global */}
+        <header className="w-full bg-brand md:bg-transparent text-white md:text-slate-800 sticky top-0 z-30 px-4 md:px-8 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={toggleMobileMenu}
@@ -164,10 +199,86 @@ export const Layout = ({ children }) => {
             >
               <Menu size={20} />
             </button>
-            <div>
+            <div className="md:hidden">
               <p className="text-sm font-black uppercase tracking-tight">Tech2Solution</p>
               <p className="text-[10px] text-white/80 uppercase">{usuario?.nombre || 'Usuario'}</p>
             </div>
+          </div>
+
+          {/* Campana de Notificaciones */}
+          <div className="relative">
+            <div 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative cursor-pointer p-2 hover:bg-white/10 md:hover:bg-slate-100 rounded-xl transition-all group"
+            >
+              <Bell size={22} className={comodatosVencidosCount > 0 ? "text-amber-400 md:text-amber-500 animate-bounce" : "text-white md:text-slate-400"} />
+              {comodatosVencidosCount > 0 && (
+                <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-black h-4 w-4 rounded-full flex items-center justify-center border-2 border-brand md:border-white">
+                  {comodatosVencidosCount}
+                </span>
+              )}
+            </div>
+
+            {/* Menú Desplegable de Notificaciones */}
+            {showNotifications && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setShowNotifications(false)}
+                />
+                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Préstamos Vencidos</h3>
+                    <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{comodatosVencidosCount}</span>
+                  </div>
+                  
+                  <div className="max-h-80 overflow-y-auto">
+                    {comodatosVencidos.length > 0 ? (
+                      comodatosVencidos.map((item) => (
+                        <div 
+                          key={item.id}
+                          onClick={() => {
+                            navigate('/inventario', { state: { tab: 'comodato' } });
+                            setShowNotifications(false);
+                          }}
+                          className="p-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                              <UserCircle size={16} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-black text-slate-800 uppercase truncate">{item.responsable}</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase truncate">
+                                {item.producto?.nombre || item.herramienta || 'Herramienta'}
+                              </p>
+                              <p className="text-[8px] font-black text-rose-500 uppercase mt-1">
+                                Venció: {new Date(item.fechaLimite).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-8 text-center">
+                        <Check size={24} className="mx-auto text-emerald-500 mb-2" />
+                        <p className="text-[10px] font-black text-slate-400 uppercase">Todo al día</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <button 
+                    onClick={() => {
+                      navigate('/inventario', { state: { tab: 'comodato' } });
+                      setShowNotifications(false);
+                    }}
+                    className="w-full p-3 bg-slate-50 text-brand text-[9px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors border-t border-slate-100"
+                  >
+                    Ver todo en Comodatos
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </header>
 

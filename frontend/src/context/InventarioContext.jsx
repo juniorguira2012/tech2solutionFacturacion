@@ -591,7 +591,7 @@ const registrarMovimientosMasivos = async (payload) => {
       console.error("Error cargando comodatos:", err);
       setPrestamos([]);
     }
-  }, [API_BASE_URL]);
+  }, [API_BASE_URL, usuario]); // Mantener usuario aquí para que el useCallback no cambie innecesariamente
 
   const crearPrestamo = async (payload) => {
     try {
@@ -640,6 +640,10 @@ const registrarMovimientosMasivos = async (payload) => {
       throw err;
     }
   };
+
+  useEffect(() => {
+    if (usuario) cargarPrestamos();
+  }, [usuario, cargarPrestamos, refreshIndex]); // Añadir refreshIndex aquí
 
   // --- Al final de InventarioContext.jsx ---
 

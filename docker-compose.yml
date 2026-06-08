@@ -34,7 +34,7 @@ services:
       DATABASE_NAME: tech_two_solution_db
       CORS_ORIGIN: "https://inventario.oneredrd.com"
       FRONTEND_URL: "https://inventario.oneredrd.com"
-      DATABASE_SYNCHRONIZE: "false" # Crea las tablas limpias en el nuevo volumen
+      DATABASE_SYNCHRONIZE: "true" # Crea las tablas limpias en el nuevo volumen
       # Configuración de Gmail
       EMAIL_HOST: "smtp.gmail.com"
       EMAIL_PORT: "587"

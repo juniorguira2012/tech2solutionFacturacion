@@ -1,4 +1,4 @@
-import { IsNumber, IsString, IsOptional } from 'class-validator';
+import { IsNumber, IsString, IsOptional, IsDateString } from 'class-validator';
 
 export class CreateComodatoDto {
   @IsNumber()
@@ -10,6 +10,14 @@ export class CreateComodatoDto {
   @IsOptional()
   @IsString()
   nota?: string;
+
+  @IsOptional()
+  @IsString()
+  fechaEntrega?: string;
+
+  @IsOptional()
+  @IsDateString()
+  fechaLimite?: string;
 
   @IsOptional()
   @IsNumber()

@@ -102,7 +102,10 @@ export class ComodatosService {
     }
 
     // Marcar comodato como devuelto
-    await this.comodatosRepository.update(id, { estado: 'devuelto' });
+    await this.comodatosRepository.update(id, { 
+      estado: 'devuelto',
+      fechaDevolucion: new Date() 
+    });
     return this.findOne(id);
   }
 

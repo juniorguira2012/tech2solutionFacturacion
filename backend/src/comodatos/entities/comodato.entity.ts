@@ -28,6 +28,15 @@ export class Comodato {
   @Column({ type: 'text', nullable: true })
   nota: string;
 
+  @Column({ type: 'timestamp', nullable: true })
+  fechaEntrega: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  fechaLimite: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  fechaDevolucion: Date;
+
   @Column({ nullable: true })
   usuarioId: number;
 

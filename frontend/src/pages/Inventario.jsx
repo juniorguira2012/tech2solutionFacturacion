@@ -41,6 +41,9 @@ const Inventario = () => {
     if (location.state?.filter === 'low_stock') {
       setSeccionActiva('alerta');
     }
+    if (location.state?.tab) {
+      setSeccionActiva(location.state.tab);
+    }
   }, [location.state]);
 
   const LOW_STOCK_THRESHOLD = 5;

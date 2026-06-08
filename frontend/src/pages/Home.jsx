@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Users, Box, AlertTriangle, ArrowRight, TrendingUp, Clock, Star, PieChart } from 'lucide-react';
+import { ShoppingCart, Users, Box, AlertTriangle, ArrowRight, TrendingUp, Clock, Star, PieChart, HandHelping } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import { useAuth } from '../context/AuthContext';
 import { useClientes } from '../context/ClienteContext';
@@ -121,7 +121,7 @@ const Home = () => {
       color: 'bg-rose-50',
       borderColor: 'border-rose-100',
       isAlert: stockCriticoCount > 0
-    }
+    },
   ];
 
   return (
