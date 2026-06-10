@@ -48,7 +48,10 @@ export class ComodatosService {
   }
 
   async findAll(): Promise<Comodato[]> {
-    return await this.comodatosRepository.find({ relations: ['producto', 'usuario'] });
+    return await this.comodatosRepository.find({ 
+      relations: ['producto', 'usuario'],
+      order: { fechaCreacion: 'DESC' } 
+    });
   }
 
   async findOne(id: number): Promise<Comodato> {

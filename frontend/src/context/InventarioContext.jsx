@@ -704,7 +704,8 @@ const registrarMovimientosMasivos = async (payload) => {
       }
 
       const data = await res.json();
-      setPrestamos(prev => [data, ...prev]);
+      // Esto inserta el nuevo préstamo al inicio del array (arriba)
+      setPrestamos(prev => [data, ...prev]); 
       setRefreshIndex(prev => prev + 1); // Refrescamos productos para actualizar stock
       return true;
     } catch (err) {
@@ -744,6 +745,7 @@ const registrarMovimientosMasivos = async (payload) => {
 return (
   <InventarioContext.Provider value={{ 
     productos, 
+    prestamos,
     movimientos, 
     loading, 
     errorConexion, 
@@ -757,7 +759,6 @@ return (
     unidadesMedida, 
     conteos,
     lotes,
-    prestamos,
     cargarPrestamos,
     crearPrestamo,
     devolverPrestamo,
@@ -784,10 +785,11 @@ return (
     restaurarProducto,           // <-- Exponemos la nueva función
     actualizarProducto,
     descontarStock,
-    registrarMovimiento,         // <-- Asegúrate de que termine en "o" (Minúscula, plural de la función)
-    registrarTransferencia,      // <-- Nueva función para transferencias
-    registrarMovimientosMasivos, // <-- Tu nueva función masiva
+    registrarMovimiento,         
+    registrarTransferencia,      
+    registrarMovimientosMasivos,
     cargarMovimientos,
+    cargarConteos,
     recargarInventario: () => setRefreshIndex(prev => prev + 1)
   }}>
     {children}
