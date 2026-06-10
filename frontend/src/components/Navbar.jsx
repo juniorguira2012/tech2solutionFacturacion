@@ -31,8 +31,8 @@ const Navbar = () => {
               </div>
             </div>
 
-            {/* Menú Desktop (Oculto en móviles con hidden, visible en md:flex) */}
-            <div className="hidden md:flex items-center space-x-4">
+            {/* Menú Desktop (CAMBIADO de md:flex a lg:flex) */}
+            <div className="hidden lg:flex items-center space-x-4">
               {navLinks.map((link) => (
                 <a
                   key={link.name}
@@ -45,24 +45,44 @@ const Navbar = () => {
               ))}
             </div>
 
-            {/* Botón Hamburguesa (Visible solo en móviles con md:hidden) */}
-            <div className="flex items-center md:hidden">
+            {/* Botón Hamburguesa (CAMBIADO de md:hidden a lg:hidden) */}
+            <div className="flex items-center lg:hidden">
               <button
                 onClick={toggleMenu}
                 aria-label="Toggle Menu"
                 className="inline-flex items-center justify-center p-2 rounded-xl text-slate-500 hover:text-brand hover:bg-slate-100 focus:outline-none transition-all"
               >
-                {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                {isMenuOpen ? (
+                  <X size={24} />
+                ) : (
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    width="24" 
+                    height="24" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    className="lucide lucide-menu" 
+                    aria-hidden="true"
+                  >
+                    <path d="M4 5h16"></path>
+                    <path d="M4 12h16"></path>
+                    <path d="M4 19h16"></path>
+                  </svg>
+                )}
               </button>
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Menú Desplegable Móvil (Full Screen Overlay / Drawer) */}
+      {/* Menú Desplegable Móvil (CAMBIADO de md:hidden a lg:hidden) */}
       {isMenuOpen && (
-        <div className="fixed inset-0 z-[100] md:hidden flex flex-col bg-white animate-in fade-in duration-200">
-          {/* Cabecera del menú móvil para poder cerrarlo de forma cómoda */}
+        <div className="fixed inset-0 z-[100] hidden lg:hidden flex flex-col bg-white animate-in fade-in duration-200">
+          {/* Cabecera del menú móvil */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <div className="bg-brand p-1.5 rounded-lg text-white">
@@ -95,7 +115,7 @@ const Navbar = () => {
             ))}
           </div>
           
-          {/* Tarjeta de Perfil de Usuario abajo fija en móvil */}
+          {/* Tarjeta de Perfil */}
           <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-brand/10 flex items-center justify-center text-brand font-black">

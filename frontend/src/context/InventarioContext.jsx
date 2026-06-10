@@ -13,6 +13,7 @@ export const InventarioProvider = ({ children }) => {
   const [lotes, setLotes] = useState([]);
   const [prestamos, setPrestamos] = useState([]);
   const [refreshIndex, setRefreshIndex] = useState(0);
+  const [verEliminados, setVerEliminados] = useState(false);
 
   const { usuario } = useAuth();
   
@@ -71,21 +72,21 @@ export const InventarioProvider = ({ children }) => {
   }, [unidadesMedida]);
 
   // --- Helpers ---
-  const getInventoryPermission = () => {
+  const getInventoryPermission = useCallback(() => {
     if (usuario?.rol === 'admin') return 'full';
     try {
       const savedRoles = localStorage.getItem('posfactura_roles_config');
       const config = savedRoles ? JSON.parse(savedRoles) : {};
       return config[usuario?.rol]?.modules?.inventario || 'none';
     } catch { return 'none'; }
-  };
+  }, [usuario?.rol]);
 
-  const getAuthHeaders = () => ({
+  const getAuthHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
     'x-user-id': usuario?.id || '', // Aseguramos que el ID del usuario se envíe
     'x-user-role': usuario?.rol || '',
     'x-inventory-permission': getInventoryPermission(),
-  });
+  }), [usuario?.id, usuario?.rol, getInventoryPermission]);
 
   // 1. Cargar productos
   useEffect(() => {
@@ -96,22 +97,31 @@ export const InventarioProvider = ({ children }) => {
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 8000);
 
-    fetch(API_URL, { signal: controller.signal, headers: getAuthHeaders() })
+    // Agregamos el query parameter isActive según el estado verEliminados
+    const urlConFiltro = verEliminados === 'all'
+      ? `${API_URL}?isActive=all`
+      : `${API_URL}?isActive=${verEliminados ? 'false' : 'true'}`;
+
+    console.log("InventarioContext: Intentando cargar productos desde:", urlConFiltro);
+
+    fetch(urlConFiltro, { signal: controller.signal, headers: getAuthHeaders() })
       .then(res => {
         if (!res.ok) throw new Error(`Error: ${res.status}`);
         return res.json();
       })
       .then(data => {
+        console.log("InventarioContext: Productos recibidos con éxito:", data);
         setProductos(Array.isArray(data) ? data : []);
       })
       .catch(err => {
-        setErrorConexion(err.name === 'AbortError' ? "Tiempo de espera agotado" : "Error de conexión");
+        console.error("InventarioContext: Error al cargar productos:", err);
+        setErrorConexion(err.name === 'AbortError' ? "Tiempo de espera agotado" : `Error de conexión: ${err.message}`);
       })
       .finally(() => {
         window.clearTimeout(timeoutId);
         setLoading(false);
       });
-  }, [usuario, refreshIndex, API_URL]);
+  }, [usuario, refreshIndex, API_URL, verEliminados, getAuthHeaders]);
 
   // Efecto para cargar catálogos (Proveedores y Almacenes)
   useEffect(() => {
@@ -344,12 +354,44 @@ const registrarMovimientosMasivos = async (payload) => {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
-      if (!res.ok) throw new Error('No se pudo eliminar');
+      
+      // Si el backend responde con error (como el 500 de la FK), entramos aquí
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        // Atrapamos el mensaje real del backend (NestJS suele mandarlo en errorData.message)
+        const msg = Array.isArray(errorData.message) ? errorData.message[0] : errorData.message;
+        throw new Error(msg || 'Error de integridad en el servidor.');
+      }
+
+      // SI TODO SALIÓ BIEN (Status 200), lo removemos de la vista de inmediato
       setProductos(prev => prev.filter(p => p.id !== id));
       return true;
     } catch (err) {
-      console.error(err);
-      return false;
+      console.error("Error al intentar eliminar producto:", err.message);
+      throw err; // Se relanza para que el modal o componente de la UI muestre el alert con el error
+    }
+  };
+
+  // Restaurar Producto
+  const restaurarProducto = async (id) => {
+    try {
+      const res = await fetch(`${API_URL}/${id}/restore`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const msg = Array.isArray(errorData.message) ? errorData.message[0] : errorData.message;
+        throw new Error(msg || 'Error al intentar restaurar el producto.');
+      }
+
+      // Lo quitamos de la lista actual (que es la de eliminados)
+      setProductos(prev => prev.filter(p => p.id !== id));
+      return true;
+    } catch (err) {
+      console.error("Error al restaurar producto:", err.message);
+      throw err;
     }
   };
 
@@ -681,8 +723,11 @@ return (
     actualizarAlmacen,
     eliminarAlmacen,
     setAlmacenesDetallados, // <-- Exponemos el setter para AlmacenSection
-    agregarProducto, 
+    agregarProducto,
+    verEliminados,
+    setVerEliminados,
     eliminarProducto,
+    restaurarProducto,           // <-- Exponemos la nueva función
     actualizarProducto,
     descontarStock,
     registrarMovimiento,         // <-- Asegúrate de que termine en "o" (Minúscula, plural de la función)

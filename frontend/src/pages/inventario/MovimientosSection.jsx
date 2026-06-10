@@ -4,6 +4,7 @@ import { ArrowLeftRight, List, Download, Truck, RefreshCw, Trash2, Search, X } f
 import { useInventario } from '../../context/InventarioContext';
 import { useVentas } from '../../context/VentasContext';
 import { useAuth } from '../../context/AuthContext';
+import { useUsuarios } from '../../context/UsuariosContext';
 
 // Importación de la lógica y subcomponentes extraídos
 import { useMovimientosForm } from '../../hooks/useMovimientosForm';
@@ -15,6 +16,7 @@ const MovimientosSection = ({ mostrarToast }) => {
   const { productos, movimientos, proveedores, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, cargarMovimientos, loading, recargarInventario, almacenesDetallados } = useInventario();
   const { historialVentas } = useVentas();
   const { usuario } = useAuth();
+  const { usuarios } = useUsuarios();
   
   // Mapeamos los almacenes detallados a una lista de nombres para el selector
   const almacenesNombres = useMemo(() => almacenesDetallados.map(a => a.nombre), [almacenesDetallados]);
@@ -111,6 +113,7 @@ const MovimientosSection = ({ mostrarToast }) => {
     setItemsEnCarritoMovimiento([...itemsEnCarritoMovimiento, { 
       ...producto, 
       almacen: producto.almacen || 'Principal',
+      lote: '',
       cantidadMovimiento: tipoMovimiento === 'despachar' ? Math.min(1, producto.stock) : 1,
     }]);
     setBusquedaCarrito('');
@@ -166,6 +169,12 @@ const MovimientosSection = ({ mostrarToast }) => {
   const processarMovimientoMasivo = async () => {
     if (itemsEnCarritoMovimiento.length === 0) return;
     
+    // Validación: Asegurar proveedor en entradas
+    if ((tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && !proveedorSeleccionado) {
+      mostrarToast?.("Por favor seleccione el proveedor de la mercancía", "warning");
+      return;
+    }
+
     try {
       const tipo = tipoMovimiento === 'despachar' ? 'DESPACHAR' : 'RECIBIR';
       const prefijoNota = tipo === 'RECIBIR' ? 'Recibo de Inventario' : 'Despacho de Inventario';
@@ -185,7 +194,8 @@ const MovimientosSection = ({ mostrarToast }) => {
         items: itemsEnCarritoMovimiento.map(item => ({
           productoId: item.id,
           cantidad: Number(item.cantidadMovimiento),
-          almacen: item.almacen || 'Principal'
+          almacen: item.almacen || 'Principal',
+          lote: item.lote
         })),
         referencia: facturaEncontrada?.id || undefined,
         usuarioId: Number(usuario?.id)
@@ -270,7 +280,7 @@ const MovimientosSection = ({ mostrarToast }) => {
 
     const headers = ["Fecha", "Producto", "Código", "Usuario", "Tipo", "Cantidad", "Stock Final", "Nota"];
     const rows = movimientosFiltrados.map(m => {
-      const usuarioObj = usuariosList.find(u => Number(u.id) === Number(m.usuarioId));
+      const usuarioObj = usuarios.find(u => Number(u.id) === Number(m.usuarioId));
       const nombreUsuario = usuarioObj ? usuarioObj.nombre : (m.usuarioId || 'Sistema');
 
       return [
@@ -405,7 +415,7 @@ const MovimientosSection = ({ mostrarToast }) => {
                   <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">{mov.almacenOrigen || 'N/A'}</td>
                   <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">{mov.almacenDestino || 'N/A'}</td>
                   <td className="px-6 py-3 font-bold text-slate-400 uppercase italic">
-                    {usuariosList.find(u => Number(u.id) === Number(mov.usuarioId))?.nombre || mov.usuarioId || 'Sistema'}
+                    {usuarios.find(u => Number(u.id) === Number(mov.usuarioId))?.nombre || mov.usuarioId || 'Sistema'}
                   </td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${
@@ -521,7 +531,10 @@ const MovimientosSection = ({ mostrarToast }) => {
                         <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 sticky top-0">
                           <tr>
                             <th className="px-6 py-4">Producto</th>
-                            <th className="px-6 py-4 w-32">Cantidad</th>
+                            <th className="px-6 py-4 w-24">Cantidad</th>
+                            {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
+                              <th className="px-6 py-4 w-32">Lote</th>
+                            )}
                             <th className="px-6 py-4"></th>
                           </tr>
                         </thead>
@@ -545,6 +558,21 @@ const MovimientosSection = ({ mostrarToast }) => {
                                   }}
                                 />
                               </td>
+                              {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
+                                <td className="px-6 py-3">
+                                  <input 
+                                    type="text"
+                                    placeholder="Nº Lote"
+                                    className="w-full p-2 border rounded-lg font-bold text-xs uppercase"
+                                    value={item.lote || ''}
+                                    onChange={(e) => {
+                                      const nuevaLista = [...itemsEnCarritoMovimiento];
+                                      nuevaLista[idx].lote = e.target.value;
+                                      setItemsEnCarritoMovimiento(nuevaLista);
+                                    }}
+                                  />
+                                </td>
+                              )}
                               <td className="px-6 py-3 text-right">
                                 <button onClick={() => setItemsEnCarritoMovimiento(itemsEnCarritoMovimiento.filter(i => i.id !== item.id))} className="text-red-400 hover:text-red-600">
                                   <X size={18} />

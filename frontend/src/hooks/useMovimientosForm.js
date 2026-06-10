@@ -9,7 +9,8 @@ export const useMovimientosForm = (
     productoId: '',
     cantidad: 1,
     almacenDestino: 'Principal',
-    nota: ''
+    nota: '',
+    lote: ''
   });
 
   // 2. Estados independientes para el formulario de transferencia
@@ -87,6 +88,7 @@ export const useMovimientosForm = (
         productoId: Number(prod.id),
         tipo: tipoMovimiento.toUpperCase(),
         cantidad: Number(movimientoData.cantidad),
+        lote: movimientoData.lote,
         almacenDestino: String(movimientoData.almacenDestino), 
         nota: String(movimientoData.nota || ''),
         usuarioId: usuario?.id ? String(usuario.id) : undefined

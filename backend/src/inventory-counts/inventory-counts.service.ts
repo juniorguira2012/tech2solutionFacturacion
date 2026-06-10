@@ -7,6 +7,7 @@ import { Product } from '../products/entities/product.entity';
 import { CreateInventoryCountDto } from './dto/create-inventory-count.dto';
 import { AddCountItemDto } from './dto/add-count-item.dto';
 import { UpdateCountItemDto } from './dto/update-count-item.dto';
+import { AuditLog } from './entities/audit-log.entity';
 
 @Injectable()
 export class InventoryCountsService {
@@ -17,6 +18,8 @@ export class InventoryCountsService {
     private readonly countItemRepository: Repository<CountItem>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(AuditLog)
+    private readonly auditLogRepository: Repository<AuditLog>,
   ) {}
 
   async create(
@@ -252,12 +255,24 @@ export class InventoryCountsService {
     }
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, usuarioId: string): Promise<void> {
     try {
-      const result = await this.inventoryCountRepository.delete(id);
-      if (result.affected === 0) {
-        throw new NotFoundException(`Conteo con ID ${id} no encontrado`);
-      }
+      const conteo = await this.findOne(id);
+
+      // Registramos el log de auditoría antes de eliminar
+      await this.auditLogRepository.save({
+        accion: 'ELIMINAR_CONTEO_FISICO',
+        entidadId: id.toString(),
+        entidadTipo: 'InventoryCount',
+        usuarioId: usuarioId,
+        detalles: {
+          almacen: conteo.almacen,
+          descripcion: conteo.descripcion,
+          fechaCreacion: conteo.createdAt,
+        }
+      });
+
+      await this.inventoryCountRepository.delete(id);
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       throw new BadRequestException(`Error al eliminar conteo: ${error.message}`);

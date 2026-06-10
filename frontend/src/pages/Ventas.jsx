@@ -17,7 +17,7 @@ const Ventas = () => {
 
   /// --- CONTEXTOS ---
   const { registrarVenta } = useVentas();
-  const { productos, descontarStock } = useInventario();
+  const { productos, descontarStock, setVerEliminados } = useInventario();
   const { clientes } = useClientes();
   const { usuario } = useAuth();
 
@@ -37,6 +37,12 @@ const Ventas = () => {
   // --- CONFIGURACIÓN Y TIEMPO ---
   const itbisGlobal = Number(localStorage.getItem('posfactura_itbis')) || 18;
   const [fechaHora, setFechaHora] = useState(new Date());
+
+  // Al entrar a la pantalla de ventas, forzamos al contexto a ignorar eliminados
+  // por si el usuario venía de la sección de inventario con filtros aplicados.
+  useEffect(() => {
+    if (setVerEliminados) setVerEliminados(false);
+  }, [setVerEliminados]);
 
   useEffect(() => {
     const timer = setInterval(() => setFechaHora(new Date()), 1000);
@@ -188,8 +194,11 @@ const Ventas = () => {
   useEffect(() => {
     if (!busqueda.trim()) return setResultados([]);
     const filtrados = productos.filter(p => 
-      p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
-      (p.sku && p.sku.toLowerCase().includes(busqueda.toLowerCase()))
+      p.isActive !== false && (
+        p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
+        (p.sku && p.sku.toLowerCase().includes(busqueda.toLowerCase())) ||
+        (p.codigo && p.codigo.toLowerCase().includes(busqueda.toLowerCase()))
+      )
     );
     setResultados(filtrados);
   }, [busqueda, productos]);

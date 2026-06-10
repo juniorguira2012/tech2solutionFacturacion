@@ -28,8 +28,14 @@ export class ProductsService {
   }
 
   // Obtener todos los productos (Lo que usará tu tabla de Inventario)
-  async findAll() {
+  async findAll(isActive: boolean | 'all' = true) {
+    if (isActive === 'all') {
+      return await this.productRepository.find({
+        order: { id: 'DESC' },
+      });
+    }
     return await this.productRepository.find({
+      where: { isActive }, // Usar el parámetro recibido
       order: { id: 'DESC' }, // Los más nuevos primero
     });
   }
@@ -65,11 +71,33 @@ async update(id: number, updateProductDto: UpdateProductDto) {
     console.error("Error en DB:", message);
     throw new BadRequestException(`Error de persistencia: ${message}`);
   }
-}
+ }
 
-  // Eliminar (Borrado físico)
   async remove(id: number) {
+    // 1. Verificamos que el producto exista primero
     const producto = await this.findOne(id);
-    return await this.productRepository.remove(producto);
+    
+    if (!producto.isActive) {
+      throw new BadRequestException(`El producto con ID ${id} ya se encuentra inactivo.`);
+    }
+
+    // 2. Usamos .update() directo apuntando al ID. 
+    // Esto modifica ÚNICAMENTE la tabla 'products' e ignora por completo el 'cascade: true'
+    await this.productRepository.update(id, { isActive: false });
+    
+    // 3. Retornamos el objeto actualizado de forma segura para la respuesta del controlador
+    return { ...producto, isActive: false };
+  }
+
+  // Restaurar producto (Borrado lógico inverso)
+  async restore(id: number) {
+    const producto = await this.findOne(id); // Valida que exista (incluso si está inactivo)
+    
+    if (producto.isActive) {
+      throw new BadRequestException(`El producto con ID ${id} ya está activo.`);
+    }
+
+    producto.isActive = true;
+    return await this.productRepository.save(producto);
   }
 }

@@ -5,6 +5,7 @@ import { Movement } from './entities/movement.entity';
 import { Product } from '../products/entities/product.entity';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { ProductWarehouseStock } from '../products/entities/product-warehouse-stock.entity';
+import { InventoryBatch } from './entities/inventory-batch.entity';
 
 @Injectable()
 export class MovementsService {
@@ -39,31 +40,22 @@ export class MovementsService {
     if (!existeStock) {
       const stockInicial = isAbsolute ? cantidadNueva : (cantidadNueva < 0 ? 0 : cantidadNueva);
       
-      await manager
-        .createQueryBuilder()
-        .insert()
-        .into(ProductWarehouseStock)
-        .values({
-          productoId: idProducto,
-          almacen: nombreAlmacen,
-          cantidad: stockInicial,
-        })
-        .execute();
-        
+      const nuevoStockEntry = manager.create(ProductWarehouseStock, {
+        productoId: idProducto,
+        almacen: nombreAlmacen,
+        cantidad: stockInicial,
+      });
+      await manager.save(ProductWarehouseStock, nuevoStockEntry);
+
     } else {
       const nuevaCantidadCalculada = isAbsolute 
         ? cantidadNueva 
         : Number(existeStock.cantidad) + cantidadNueva;
 
-      await manager
-        .createQueryBuilder()
-        .update(ProductWarehouseStock)
-        .set({ cantidad: nuevaCantidadCalculada })
-        .where('productoId = :productoId AND almacen = :almacen', { 
-          productoId: idProducto, 
-          almacen: nombreAlmacen 
-        })
-        .execute();
+      await manager.update(ProductWarehouseStock, 
+        { productoId: idProducto, almacen: nombreAlmacen },
+        { cantidad: nuevaCantidadCalculada }
+      );
     }
   }
 
@@ -81,17 +73,14 @@ export class MovementsService {
     const expiryDate = new Date();
     expiryDate.setFullYear(expiryDate.getFullYear() + 1); // +1 año por defecto
 
-    await manager.createQueryBuilder()
-      .insert()
-      .into('inventory_batches')
-      .values({
-        productoId: productoId,
-        numeroLote: batchNumber,
-        cantidad: cantidad,
-        almacen: almacen,
-        fechaVencimiento: expiryDate,
-      })
-      .execute();
+    const batchEntry = manager.create(InventoryBatch, {
+      productoId: productoId,
+      numeroLote: batchNumber,
+      cantidad: cantidad,
+      almacen: almacen,
+      fechaVencimiento: expiryDate,
+    });
+    await manager.save(InventoryBatch, batchEntry);
 
     return batchNumber;
   }

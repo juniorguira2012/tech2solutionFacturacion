@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
@@ -26,8 +27,12 @@ export class ProductsController {
   }
 
   @Get()
-  findAll() {
-    return this.productsService.findAll();
+  findAll(@Query('isActive') isActive?: string) {
+    // Si no se envía el parámetro, por defecto mostramos los activos (true)
+    let showActive: boolean | 'all' = true;
+    if (isActive === 'false') showActive = false;
+    if (isActive === 'all') showActive = 'all';
+    return this.productsService.findAll(showActive);
   }
 
   @Get(':id')
@@ -48,5 +53,11 @@ export class ProductsController {
   @UseGuards(InventoryWriteGuard)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.productsService.remove(id);
+  }
+
+  @Patch(':id/restore')
+  @UseGuards(InventoryWriteGuard)
+  restore(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.restore(id);
   }
 }

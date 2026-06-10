@@ -5,6 +5,7 @@ import {
   ArrowRight, Warehouse, BarChart3, Edit3, Trash2, X, Search, Save, AlertTriangle, ChevronLeft, ScanLine
 } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
+import { useAuth } from '../../context/AuthContext';
 import { useScanner } from '../../hooks/useScanner';
 
 const ConteoFisicoSection = ({ mostrarToast }) => {
@@ -13,8 +14,10 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
     conteos, 
     cargarConteos, 
     crearConteo, 
+    eliminarConteo,
     almacenesDetallados 
   } = useInventario();
+  const { usuario } = useAuth();
 
   const [vista, setVista] = useState(() => {
     return localStorage.getItem('posfactura_conteo_vista') || 'grid';
@@ -35,6 +38,11 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
   useEffect(() => {
     localStorage.setItem('posfactura_conteo_vista', vista);
   }, [vista]);
+
+  // Debug de datos recibidos del contexto
+  useEffect(() => {
+    console.log("ConteoFisicoSection: Datos de conteos en el componente:", conteos);
+  }, [conteos]);
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -58,6 +66,17 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
       mostrarToast?.("Error al iniciar el conteo", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEliminar = async (id) => {
+    if (window.confirm("¿Estás seguro de que deseas eliminar permanentemente esta auditoría física? Esta acción no se puede deshacer.")) {
+      try {
+        await eliminarConteo(id);
+        mostrarToast?.("Auditoría eliminada correctamente", "success");
+      } catch (error) {
+        mostrarToast?.(error.message || "Error al eliminar la auditoría", "error");
+      }
     }
   };
 
@@ -198,9 +217,15 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
                       className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-brand bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-all">
                     Continuar <ArrowRight size={12}/>
                   </button>
-                  <button className="h-8 w-8 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-all">
-                    <Trash2 size={13}/>
-                  </button>
+                  {usuario?.rol === 'admin' && (
+                    <button 
+                      onClick={() => handleEliminar(conteo.id)}
+                      className="h-8 w-8 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-all"
+                      title="Eliminar Auditoría"
+                    >
+                      <Trash2 size={13}/>
+                    </button>
+                  )}
                 </div>
               </div>
             </article>
@@ -251,7 +276,13 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
                   <td className="px-6 py-4 text-right text-slate-400">
                     <div className="flex justify-end gap-2">
                       <button onClick={() => handleContinuarConteo(conteo)} className="p-2 hover:text-brand transition-all"><ArrowRight size={14}/></button>
-                      <button className="p-2 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"><Trash2 size={14}/></button>
+                      {usuario?.rol === 'admin' && (
+                        <button 
+                          onClick={() => handleEliminar(conteo.id)}
+                          className="p-2 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                          title="Eliminar Auditoría"
+                        ><Trash2 size={14}/></button>
+                      )}
                     </div>
                   </td>
                 </tr>

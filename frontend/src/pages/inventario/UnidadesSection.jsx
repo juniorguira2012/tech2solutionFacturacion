@@ -8,7 +8,16 @@ const UnidadesSection = () => {
   const [unidadDraft, setUnidadDraft] = useState({ codigo: '', nombre: '' });
 
   const agregarUnidad = () => {
-    const nuevo = { id: Date.now(), codigo: (unidadDraft.codigo || 'UND').toUpperCase(), nombre: unidadDraft.nombre || 'Nueva Unidad', activo: true };
+    // Validación básica
+    if (!unidadDraft.codigo.trim() || !unidadDraft.nombre.trim()) return;
+
+    const nuevo = { 
+      id: Date.now(), 
+      codigo: unidadDraft.codigo.toUpperCase().trim(), 
+      nombre: unidadDraft.nombre.trim(), 
+      activo: true 
+    };
+    
     setUnidadesMedida(prev => [...prev, nuevo]);
     setUnidadDraft({ codigo: '', nombre: '' });
     setEditingUnidadId(null);
@@ -20,13 +29,19 @@ const UnidadesSection = () => {
   };
 
   const guardarUnidadEditada = (id) => {
-    setUnidadesMedida(prev => prev.map(u => u.id === id ? { ...u, codigo: (unidadDraft.codigo||u.codigo).toUpperCase(), nombre: unidadDraft.nombre || u.nombre } : u));
+    setUnidadesMedida(prev => prev.map(u => 
+      u.id === id 
+        ? { ...u, codigo: (unidadDraft.codigo || u.codigo).toUpperCase(), nombre: unidadDraft.nombre || u.nombre } 
+        : u
+    ));
     setEditingUnidadId(null);
     setUnidadDraft({ codigo: '', nombre: '' });
   };
 
   const toggleUnidadActivo = (id) => {
-    setUnidadesMedida(prev => prev.map(u => u.id === id ? { ...u, activo: !u.activo } : u));
+    setUnidadesMedida(prev => prev.map(u => 
+      u.id === id ? { ...u, activo: !u.activo } : u
+    ));
   };
 
   return (
@@ -41,12 +56,50 @@ const UnidadesSection = () => {
         </div>
         <div className="ml-auto">
           <button type="button" onClick={() => { setEditingUnidadId('new'); setUnidadDraft({codigo:'', nombre:''}); }} className="h-9 px-3 rounded-lg bg-emerald-500 text-white font-black flex items-center gap-2 text-[10px] uppercase">
-            <Plus size={14}/> Nueva unidad
+            <Plus size={14}/> Nueva unidad {/* Este es el botón que el usuario quiere que funcione */}
           </button>
         </div>
       </div>
 
       <div className="space-y-2 mt-4">
+        {/* --- FORMULARIO PARA NUEVA UNIDAD (Fila Dinámica) --- */}
+        {editingUnidadId === 'new' && (
+          <div className="flex items-center gap-3 p-3 bg-emerald-50/50 border border-emerald-200 rounded-xl animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="w-24">
+              <input 
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs uppercase font-bold placeholder:normal-case focus:outline-none focus:border-emerald-500" 
+                placeholder="Ej: UND"
+                value={unidadDraft.codigo} 
+                onChange={(e) => setUnidadDraft({...unidadDraft, codigo: e.target.value})}
+              />
+            </div>
+            <div className="flex-1">
+              <input 
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:border-emerald-500" 
+                placeholder="Nombre de la unidad (Ej: Unidad)"
+                value={unidadDraft.nombre} 
+                onChange={(e) => setUnidadDraft({...unidadDraft, nombre: e.target.value})}
+              />
+            </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <button 
+                onClick={agregarUnidad} 
+                className="px-3 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                title="Guardar Unidad"
+              >
+                <CheckCircle size={14}/>
+              </button>
+              <button 
+                onClick={() => setEditingUnidadId(null)} 
+                className="px-3 py-2 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-colors"
+                title="Cancelar"
+              >
+                <X size={14}/>
+              </button>
+            </div>
+          </div>
+        )}
+
         {unidadesMedida.map(u => (
           <div key={u.id} className="flex items-center gap-3 p-3 bg-white border rounded-xl">
             {editingUnidadId === u.id ? (

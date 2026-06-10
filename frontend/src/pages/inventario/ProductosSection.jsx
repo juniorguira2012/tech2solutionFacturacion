@@ -3,7 +3,7 @@ import {
   Package, Search, Edit3, Trash2, Plus, X,
   FileText, Warehouse, Settings,
   MinusCircle, LayoutGrid, List,
-  Image, AlertTriangle, CheckCircle
+  Image, AlertTriangle, CheckCircle, MapPin
 } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 import { useAuth } from '../../context/AuthContext';
@@ -60,11 +60,14 @@ const ProductosSection = ({ mostrarToast }) => {
     loading,
     eliminarProducto,
     agregarProducto,
+    restaurarProducto,
     actualizarProducto,
     categorias, // Mantener categorías aquí
     almacenesDetallados, // <-- Obtenemos los almacenes del contexto
     proveedores,
-    unidadesMedida
+    unidadesMedida,
+    verEliminados,
+    setVerEliminados
   } = useInventario();
   const { usuario } = useAuth();
 
@@ -74,6 +77,20 @@ const ProductosSection = ({ mostrarToast }) => {
   const [filtroProducto, setFiltroProducto] = useState('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [almacenFiltro, setAlmacenFiltro] = useState('todos');
+
+  // Sincroniza el filtro local con el estado del contexto para traer eliminados de la DB
+  const handleCambioFiltro = (filtro) => {
+    setFiltroProducto(filtro);
+
+    // Para "todos" cargamos la lista completa (activos y eliminados).
+    if (filtro === 'eliminados') {
+      setVerEliminados(true);
+    } else if (filtro === 'todos') {
+      setVerEliminados('all');
+    } else {
+      setVerEliminados(false);
+    }
+  };
 
   // Cargar configuración global de campos personalizados (Atributos Adicionales)
   const camposConfigGlobal = useMemo(() => {
@@ -306,7 +323,7 @@ const handleEliminar = (prod) => {
       (filtroProducto === 'productos' && p.categoria !== 'Servicios') ||
       (filtroProducto === 'servicios' && p.categoria === 'Servicios') ||
       (filtroProducto === 'activos' && estaActivo) ||
-      (filtroProducto === 'eliminados' && !estaActivo);
+      (filtroProducto === 'eliminados' && p.isActive === false);
     return coincideBusqueda && coincideAlmacen && coincideTipo;
   }), [productos, searchTerm, almacenFiltro, filtroProducto]);
 
@@ -326,12 +343,12 @@ const handleEliminar = (prod) => {
       {/* Toolbar */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-2">
         <div className="flex flex-wrap gap-1.5">
-          {['todos', 'productos', 'servicios', 'activos', 'eliminados'].map(f => (
-            <button key={f} onClick={() => setFiltroProducto(f)}
+          {['todos', 'productos', 'servicios', 'activos', 'eliminados'].map(tipo => (
+            <button key={tipo} onClick={() => handleCambioFiltro(tipo)}
               className={`px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${
-                filtroProducto === f ? 'bg-brand text-white border-brand shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                filtroProducto === tipo ? 'bg-brand text-white border-brand shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
               }`}>
-              {f}
+              {tipo}
             </button>
           ))}
         </div>
@@ -385,40 +402,46 @@ const handleEliminar = (prod) => {
                     <p className="font-black text-slate-900 text-xs italic whitespace-nowrap">RD$ {formatPrice(prod.precio)}</p>
                   </div>
                   {prod.proveedor && <p className="text-[8px] font-black text-brand uppercase tracking-widest -mt-1">{prod.proveedor.nombre}</p>}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className={`rounded-lg p-1.5 border ${prod.stock <= LOW_STOCK_THRESHOLD ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                  <div className="flex gap-2">
+                    <div className={`w-14 shrink-0 rounded-lg p-1.5 border ${prod.stock <= LOW_STOCK_THRESHOLD ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
                       <p className="text-[8px] font-black uppercase opacity-70">Stock</p>
-                      <span className="text-sm font-black">{prod.stock}</span>
+                      <span className="text-xs font-black">{prod.stock}</span>
                     </div>
-                    <div className="bg-slate-50 p-1.5 rounded-lg border overflow-hidden">
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Por Almacén</p>
-                      <div className="max-h-[30px] overflow-y-auto">
-                        {prod.warehouseStocks && prod.warehouseStocks.length > 0 ? (
-                          prod.warehouseStocks.map(ws => (
-                            <div key={ws.id} className="flex justify-between items-center gap-1">
-                              <span className="text-[7px] font-black truncate uppercase text-slate-500">{ws.almacen}:</span>
-                              <span className="text-[7px] font-black text-slate-700">{ws.cantidad}</span>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-[9px] font-black truncate">{prod.almacen || 'Principal'}</p>
+                    <div 
+                      className="flex-1 bg-slate-50 p-1.5 rounded-lg border overflow-hidden cursor-help"
+                      title={`Almacén: ${prod.almacen || 'Principal'}${prod.ubicacion ? `\nUbicación: ${prod.ubicacion}` : ''}`}
+                    >
+                      <p className="text-[8px] font-black text-slate-400 uppercase">Almacén / Ubicación</p>
+                      <div className="max-h-[40px] overflow-y-auto flex flex-col justify-center">
+                        <p className="text-[9px] font-black truncate text-slate-700 uppercase leading-tight">
+                          {prod.almacen || 'Principal'}
+                        </p>
+                        {prod.ubicacion && (
+                          <div className="flex items-center gap-1 text-brand mt-0.5">
+                            <MapPin size={10} strokeWidth={3} />
+                            <span className="text-[8px] font-black truncate uppercase">{prod.ubicacion}</span>
+                          </div>
                         )}
                       </div>
                     </div>
                   </div>
-                  {permisoInventario === 'full' && (
-                    <div className="flex gap-2 pt-1">
-                      <button onClick={() => abrirEditar(prod)} className="flex-1 py-1.5 text-[9px] font-black uppercase bg-indigo-50 text-brand rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-colors">
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleEliminar(prod)}
-                        className="p-1.5 text-red-400 bg-red-50 rounded-lg hover:bg-red-100 hover:text-red-600 transition-colors"
+                  <div className="px-1 py-1 text-right flex items-center justify-end gap-1 border-t border-slate-50 mt-2">
+                    {prod.isActive === false ? (
+                      <button 
+                        onClick={() => restaurarProducto(prod.id)} 
+                        className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
                       >
-                        <Trash2 size={13}/>
+                        Restaurar
                       </button>
-                    </div>
-                  )}
+                    ) : (
+                      <>
+                        <button onClick={() => abrirEditar(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
+                        {permisoInventario === 'full' && (
+                          <button onClick={() => handleEliminar(prod)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               </article>
             ))}
@@ -428,8 +451,8 @@ const handleEliminar = (prod) => {
             <thead className="bg-slate-50 border-b text-[9px] font-black uppercase text-slate-400">
               <tr>
                 <th className="px-6 py-4">Producto</th>
-                <th className="px-6 py-4">Almacén</th>
-                <th className="px-6 py-4 text-center">Stock</th>
+                <th className="px-6 py-4 w-1/3">Almacén / Ubicación</th>
+                <th className="px-6 py-4 text-center w-20">Stock</th>
                 <th className="px-6 py-4 text-right">Precio</th>
                 <th className="px-6 py-4"></th>
               </tr>
@@ -438,13 +461,37 @@ const handleEliminar = (prod) => {
               {productosFiltrados.map(prod => (
                 <tr key={prod.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-3 font-black text-slate-700 uppercase text-xs">{prod.nombre}</td>
-                  <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">{prod.almacen || 'Principal'}</td>
+                  <td className="px-6 py-3">
+                    <div 
+                      className="flex flex-col cursor-help"
+                      title={`Almacén: ${prod.almacen || 'Principal'}${prod.ubicacion ? `\nUbicación: ${prod.ubicacion}` : ''}`}
+                    >
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">{prod.almacen || 'Principal'}</span>
+                      {prod.ubicacion && (
+                        <div className="flex items-center gap-1 text-brand">
+                          <MapPin size={10} />
+                          <span className="text-[9px] font-black uppercase italic">{prod.ubicacion}</span>
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-6 py-3 text-center font-black">{prod.stock}</td>
                   <td className="px-6 py-3 text-right font-black italic">RD$ {formatPrice(prod.precio)}</td>
                   <td className="px-6 py-3 text-right flex items-center justify-end gap-1">
-                    <button onClick={() => abrirEditar(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
-                    {permisoInventario === 'full' && (
-                      <button onClick={() => handleEliminar(prod)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                    {prod.isActive === false ? (
+                      <button 
+                        onClick={() => restaurarProducto(prod.id)} 
+                        className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
+                      >
+                        Restaurar
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => abrirEditar(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
+                        {permisoInventario === 'full' && (
+                          <button onClick={() => handleEliminar(prod)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                        )}
+                      </>
                     )}
                   </td>
                 </tr>

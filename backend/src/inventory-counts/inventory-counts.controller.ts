@@ -227,11 +227,13 @@ export class InventoryCountsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeInventoryCount(
     @Param('id') id: string,
+    @Headers('x-user-id') userId: string,
+    @Headers('x-user-role') userRole: string,
     @Headers('x-inventory-permission') permission: string,
   ) {
-    if (permission !== 'full') {
-      throw new UnauthorizedException('No tienes permiso para eliminar conteos');
+    if (userRole !== 'admin' && permission !== 'full') {
+      throw new UnauthorizedException('Solo administradores pueden eliminar auditorías físicas');
     }
-    return this.service.remove(Number(id));
+    return this.service.remove(Number(id), userId);
   }
 }

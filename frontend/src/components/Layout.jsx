@@ -30,7 +30,7 @@ export const Layout = ({ children }) => {
   useEffect(() => {
     if (comodatosVencidosCount > 0 && !hasAlertedRef.current) {
       const playNotification = () => {
-        const audio = new Audio('/notification.mp3'); // Asegúrate de poner este archivo en la carpeta /public
+        const audio = new Audio('../../public/notificacion.mp3'); // Asegúrate de poner este archivo en la carpeta /public
         audio.play().catch(error => {
           console.warn("El navegador bloqueó el auto-play. Se requiere interacción previa del usuario.", error);
         });
@@ -96,7 +96,7 @@ export const Layout = ({ children }) => {
     { name: 'Usuarios', path: '/usuarios', icon: <UserCircle size={20} />, id: 'configuracion' }, 
     { name: 'Reportes', path: '/reportes', icon: <BarChart3 size={20} />, id: 'reportes' },
   ];
-
+  
   return (
     <div className="flex h-screen bg-slate-50 font-sans">
       <aside className="hidden md:flex w-64 bg-brand text-white flex-col shadow-2xl z-20 shrink-0">
@@ -189,16 +189,19 @@ export const Layout = ({ children }) => {
       {/* Contenedor de Contenido (Header + Main) */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         
-        {/* Header Global */}
+        {/* --- HEADER GLOBAL --- */}
         <header className="w-full bg-brand md:bg-transparent text-white md:text-slate-800 sticky top-0 z-30 px-4 md:px-8 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
+            
+            {/* AGREGADO: 'md:hidden' para que se oculte por completo en tu laptop */}
             <button
               onClick={toggleMobileMenu}
-              className="h-9 w-9 bg-white rounded-lg flex items-center justify-center text-brand transition-colors hover:bg-white/20"
+              className="h-9 w-9 bg-white rounded-lg flex items-center justify-center text-brand transition-colors hover:bg-white/20 md:hidden"
               aria-label="Abrir menú"
             >
               <Menu size={20} />
             </button>
+
             <div className="md:hidden">
               <p className="text-sm font-black uppercase tracking-tight">Tech2Solution</p>
               <p className="text-[10px] text-white/80 uppercase">{usuario?.nombre || 'Usuario'}</p>
