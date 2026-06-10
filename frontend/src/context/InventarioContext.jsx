@@ -51,25 +51,11 @@ export const InventarioProvider = ({ children }) => {
 
   const [proveedores, setProveedores] = useState([]);
 
-  const [unidadesMedida, setUnidadesMedida] = useState(() => {
-    try {
-      const saved = localStorage.getItem('posfactura_unidades_medida');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return [
-      { id: 1, codigo: 'CJ', nombre: 'Caja', activo: true },
-      { id: 2, codigo: 'LB', nombre: 'Libra', activo: true },
-      { id: 3, codigo: 'UND', nombre: 'Unidad', activo: true },
-    ];
-  });
+  const [unidadesMedida, setUnidadesMedida] = useState([]);
 
   useEffect(() => {
     localStorage.setItem('posfactura_categorias', JSON.stringify(categorias));
   }, [categorias]);
-
-  useEffect(() => {
-    localStorage.setItem('posfactura_unidades_medida', JSON.stringify(unidadesMedida));
-  }, [unidadesMedida]);
 
   // --- Helpers ---
   const getInventoryPermission = useCallback(() => {
@@ -145,6 +131,72 @@ export const InventarioProvider = ({ children }) => {
       })
       .catch(err => console.error("Error almacenes:", err));
   }, [usuario, refreshIndex, API_BASE_URL]);
+
+  // --- GESTIÓN DE UNIDADES DE MEDIDA (DB) ---
+  const cargarUnidadesMedida = useCallback(async () => {
+    if (!usuario) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/units-of-measure`, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Error al cargar unidades');
+      const data = await res.json();
+      setUnidadesMedida(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error cargando unidades:", err);
+    }
+  }, [API_BASE_URL, getAuthHeaders, usuario]);
+
+  const agregarUnidadMedida = async (nueva) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/units-of-measure`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          codigo: nueva.codigo,
+          nombre: nueva.nombre,
+          activo: nueva.activo ?? true
+        })
+      });
+
+      // 🚨 ¡AQUÍ ESTÁ EL TRUCO! Si NestJS responde con error (400, 404, 500), lo capturamos correctamente
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ Error detallado desde NestJS:", errorData);
+        
+        // Si el ValidationPipe de NestJS devuelve un array de mensajes, los unimos
+        const mensajeObj = Array.isArray(errorData.message) 
+          ? errorData.message.join(', ') 
+          : errorData.message;
+          
+        throw new Error(mensajeObj || `Error del servidor (${res.status})`);
+      }
+
+        const data = await res.json();
+        
+        // Sincronizamos el estado local agregando el objeto real con el ID que generó Postgres
+        setUnidadesMedida(prev => [data, ...prev]); 
+        return true;
+      } catch (err) {
+        console.error("🔴 Error en agregarUnidadMedida [Context]:", err.message);
+        throw err; // Re-lanzamos el error real para que UnidadesSection lo atrape en su catch
+      }
+    };
+
+  const actualizarUnidadMedida = async (id, editada) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/units-of-measure/${id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(editada)
+      });
+      if (!res.ok) throw new Error('Error al actualizar unidad');
+      const data = await res.json();
+      setUnidadesMedida(prev => prev.map(u => u.id === id ? data : u));
+      return true;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
 
   // 1.1 Cargar Movimientos (Kardex)
   const cargarMovimientos = useCallback(async (productoId = null) => {
@@ -710,7 +762,9 @@ return (
     crearPrestamo,
     devolverPrestamo,
     cargarLotes,
-    cargarConteos,
+    cargarUnidadesMedida,
+    agregarUnidadMedida,
+    actualizarUnidadMedida,
     crearConteo,
     obtenerConteo,
     agregarItemAConteo,

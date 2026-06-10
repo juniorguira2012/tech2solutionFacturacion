@@ -5,6 +5,7 @@
     "frontend:dev": "npm run dev --prefix frontend"
   },
   "dependencies": {
+    "@nestjs/mapped-types": "*",
     "bcryptjs": "^3.0.3"
   }
 }

@@ -14,6 +14,7 @@ import { UsersModule } from './providers/users.module';
 import { ClientsModule } from './providers/clients.module';
 import { RolesModule } from './providers/roles.module';
 import { ComodatosModule } from './comodatos/comodatos.module';
+import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module';
 
 // Evaluamos los 3 posibles archivos según el entorno
 let envFileName = '.env'; // Por defecto desarrollo local
@@ -64,6 +65,7 @@ console.log(`Cargando configuración desde: ${envPath}`);
     ClientsModule,
     RolesModule,
     ComodatosModule,
+    UnitsOfMeasureModule,
   ],
 })
 export class AppModule {}

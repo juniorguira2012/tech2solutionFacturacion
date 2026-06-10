@@ -137,7 +137,7 @@ const Inventario = () => {
         </div>
       </section>
 
-      {seccionActiva === 'unidades' && <UnidadesSection />}
+      {seccionActiva === 'unidades' && <UnidadesSection mostrarToast={mostrarToast} />}
 
       {seccionActiva === 'campos' && <CamposPersonalizadosSection />}
 
