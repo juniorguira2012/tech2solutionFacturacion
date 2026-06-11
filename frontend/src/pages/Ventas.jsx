@@ -2,13 +2,68 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Search as SearchIcon, Plus as PlusIcon, Minus as MinusIcon, 
   Trash2 as TrashIcon, User as UserIcon, ShoppingCart as CartIcon, 
-  DollarSign as DollarIcon, Ticket as TicketIcon, Clock, Receipt, X, Save, Edit3
+  DollarSign as DollarIcon, Ticket as TicketIcon, Clock, Receipt, X, Save, Edit3,
+  AlertTriangle, CheckCircle2, Loader2
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import { useClientes } from '../context/ClienteContext';
 import { useVentas } from '../context/VentasContext';
 import { useAuth } from '../context/AuthContext';
 import { imprimirTicket } from '../utils/printer';
+
+const VentaDialog = ({ dialog, onClose }) => {
+  if (!dialog.open) return null;
+
+  const isSuccess = dialog.type === 'success';
+  const isWarning = dialog.type === 'warning';
+  const isConfirm = dialog.type === 'confirm';
+  const Icon = isSuccess ? CheckCircle2 : AlertTriangle;
+
+  return (
+    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-slate-950/55 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="px-8 pt-8 pb-5 text-center">
+          <div className={`h-16 w-16 mx-auto rounded-2xl flex items-center justify-center ${
+            isSuccess ? 'bg-emerald-50 text-emerald-500' : isWarning ? 'bg-amber-50 text-amber-500' : 'bg-indigo-50 text-brand'
+          }`}>
+            {dialog.loading ? <Loader2 size={32} className="animate-spin" /> : <Icon size={34} />}
+          </div>
+          <h3 className="mt-5 text-xl font-black text-slate-800 uppercase italic tracking-tight">{dialog.title}</h3>
+          <p className="mt-2 text-xs font-bold text-slate-400 leading-relaxed uppercase tracking-wide">{dialog.message}</p>
+          {dialog.total && (
+            <div className="mt-6 rounded-2xl bg-slate-50 border border-slate-100 px-5 py-4">
+              <span className="block text-[9px] font-black uppercase tracking-[0.25em] text-slate-400">Total a cobrar</span>
+              <strong className="block mt-1 text-3xl font-black text-slate-900 tracking-tight">RD$ {dialog.total}</strong>
+            </div>
+          )}
+        </div>
+
+        <div className="flex border-t border-slate-100">
+          {isConfirm && (
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={dialog.loading}
+              className="flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:bg-slate-50 transition-colors border-r border-slate-100 disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={isConfirm ? dialog.onConfirm : onClose}
+            disabled={dialog.loading}
+            className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white transition-colors disabled:opacity-70 ${
+              isSuccess ? 'bg-emerald-500 hover:bg-emerald-600' : isWarning ? 'bg-amber-500 hover:bg-amber-600' : 'bg-brand hover:bg-indigo-700'
+            }`}
+          >
+            {dialog.loading ? 'Procesando' : isConfirm ? 'Procesar' : 'Aceptar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Ventas = () => {
   const [busquedaCliente, setBusquedaCliente] = useState("");
@@ -27,6 +82,7 @@ const Ventas = () => {
   const [resultados, setResultados] = useState([]);
   const [clienteId, setClienteId] = useState("");
   const [showAbiertasModal, setShowAbiertasModal] = useState(false);
+  const [ventaDialog, setVentaDialog] = useState({ open: false });
   const inputBusquedaRef = useRef(null);
 
   // --- ESTADOS PARA DESCUENTOS ---
@@ -55,6 +111,13 @@ const Ventas = () => {
   const subtotalConDescuento = subtotal - montoDescuento;
   const impuesto = subtotalConDescuento * (itbisGlobal / 100);
   const totalFinal = subtotalConDescuento + impuesto;
+  const formatoMoneda = useCallback((valor) => (
+    Number(valor).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  ), []);
+
+  const cerrarVentaDialog = useCallback(() => {
+    setVentaDialog({ open: false });
+  }, []);
 
   // --- VALIDACIÓN DE PERMISOS PARA DESCUENTO ---
   const aplicarDescuentoSeguro = () => {
@@ -74,21 +137,8 @@ const Ventas = () => {
     setShowDescuentoModal(false);
   };
 
-  const finalizarVenta = useCallback(async () => {
-    if (carrito.length === 0) {
-      alert("El carrito está vacío.");
-      return;
-    }
-
-    const confirmacion = window.confirm(
-      `RESUMEN DE VENTA\n` +
-      `--------------------------\n` +
-      `Total a cobrar: RD$ ${totalFinal.toLocaleString(undefined, { minimumFractionDigits: 2 })}\n\n` +
-      `¿Desea procesar e imprimir el ticket?`
-    );
-
-    if (!confirmacion) return;
-
+  const procesarVenta = useCallback(async () => {
+    setVentaDialog(prev => ({ ...prev, loading: true }));
     try {
       const clienteActual = clientes.find(c => c.id.toString() === clienteId.toString()) || { nombre: "Consumidor Final", rnc: "" };
 
@@ -113,11 +163,13 @@ const Ventas = () => {
         throw new Error(resVenta.error || "Error al registrar la venta en el servidor.");
       }
 
+      let stockWarning = null;
+
       try {
         await descontarStock(carrito);
       } catch (stockError) {
         console.error("Error al descontar stock:", stockError);
-        alert(`Venta registrada pero hay error en stock: ${stockError.message}`);
+        stockWarning = stockError.message;
       }
 
       imprimirTicket(nuevaVenta, carrito);
@@ -135,11 +187,53 @@ const Ventas = () => {
         inputBusquedaRef.current?.focus();
       }, 100);
 
+      if (stockWarning) {
+        setVentaDialog({
+          open: true,
+          type: 'warning',
+          title: 'Venta registrada',
+          message: `El ticket fue generado, pero hubo un problema al descontar stock: ${stockWarning}`,
+        });
+      } else {
+        setVentaDialog({
+          open: true,
+          type: 'success',
+          title: 'Venta completada',
+          message: `La factura de ${clienteActual.nombre} fue registrada e impresa correctamente.`,
+          total: formatoMoneda(totalFinal),
+        });
+      }
     } catch (error) {
       console.error("Error en flujo de venta:", error);
-      alert(`Error: ${error.message}`);
+      setVentaDialog({
+        open: true,
+        type: 'warning',
+        title: 'No se pudo completar',
+        message: error.message || 'Ocurrió un error al registrar la venta.',
+      });
     }
-  }, [carrito, totalFinal, clienteId, clientes, usuario, subtotal, montoDescuento, impuesto, registrarVenta, descontarStock]);
+  }, [carrito, totalFinal, clienteId, clientes, usuario, subtotal, montoDescuento, impuesto, registrarVenta, descontarStock, formatoMoneda]);
+
+  const finalizarVenta = useCallback(async () => {
+    if (carrito.length === 0) {
+      setVentaDialog({
+        open: true,
+        type: 'warning',
+        title: 'Carrito vacío',
+        message: 'Agrega al menos un producto antes de finalizar la venta.',
+      });
+      return;
+    }
+
+    setVentaDialog({
+      open: true,
+      type: 'confirm',
+      title: 'Confirmar venta',
+      message: 'Revisa el total antes de procesar e imprimir el ticket.',
+      total: formatoMoneda(totalFinal),
+      onConfirm: procesarVenta,
+    });
+  }, [carrito.length, totalFinal, formatoMoneda, procesarVenta]);
 
   useEffect(() => {
     const manejarTeclado = (e) => {
@@ -498,6 +592,8 @@ const Ventas = () => {
           </div>
         </div>
       )}
+
+      <VentaDialog dialog={ventaDialog} onClose={cerrarVentaDialog} />
 
     </div>
   );

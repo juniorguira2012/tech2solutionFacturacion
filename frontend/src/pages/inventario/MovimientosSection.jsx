@@ -13,7 +13,7 @@ import { FormMovimientoSimple } from './FormMovimientoSimple';
 import { FormAjuste } from '../../components/FormAjuste';
 
 const MovimientosSection = ({ mostrarToast }) => {
-  const { productos, movimientos, proveedores, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, cargarMovimientos, loading, recargarInventario, almacenesDetallados } = useInventario();
+  const { productos, movimientos, proveedores, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, cargarMovimientos, recargarInventario, almacenesDetallados } = useInventario();
   const { historialVentas } = useVentas();
   const { usuario } = useAuth();
   const { usuarios } = useUsuarios();
@@ -56,16 +56,6 @@ const MovimientosSection = ({ mostrarToast }) => {
   const [facturaEncontrada, setFacturaEncontrada] = useState(null);
   const [itemsDevolucion, setItemsDevolucion] = useState([]);
 
-  // Obtener lista de usuarios para resolver nombres de forma eficiente
-  const usuariosList = useMemo(() => {
-    try {
-      const saved = localStorage.getItem('posfactura_usuarios_list');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  }, []);
-
   // Lógica de búsqueda para el carrito de movimientos masivos
   useEffect(() => {
     if (!busquedaCarrito.trim()) {
@@ -95,7 +85,7 @@ const MovimientosSection = ({ mostrarToast }) => {
   // Cargar historial al montar el componente
   useEffect(() => {
     cargarMovimientos();
-  }, []);
+  }, [cargarMovimientos]);
 
   // Gestión del carrito masivo (Recibir / Despachar)
   const agregarAlCarritoMovimiento = (producto) => {
@@ -112,7 +102,7 @@ const MovimientosSection = ({ mostrarToast }) => {
 
     setItemsEnCarritoMovimiento([...itemsEnCarritoMovimiento, { 
       ...producto, 
-      almacen: producto.almacen || 'Principal',
+      almacen: producto.almacen || almacenesNombres[0] || 'Principal',
       lote: '',
       cantidadMovimiento: tipoMovimiento === 'despachar' ? Math.min(1, producto.stock) : 1,
     }]);
@@ -175,6 +165,12 @@ const MovimientosSection = ({ mostrarToast }) => {
       return;
     }
 
+    const lineaInvalida = itemsEnCarritoMovimiento.find(item => Number(item.cantidadMovimiento) <= 0 || !item.almacen);
+    if (lineaInvalida) {
+      mostrarToast?.(`Revisa cantidad y almacén para ${lineaInvalida.nombre}`, "warning");
+      return;
+    }
+
     try {
       const tipo = tipoMovimiento === 'despachar' ? 'DESPACHAR' : 'RECIBIR';
       const prefijoNota = tipo === 'RECIBIR' ? 'Recibo de Inventario' : 'Despacho de Inventario';
@@ -201,38 +197,30 @@ const MovimientosSection = ({ mostrarToast }) => {
         usuarioId: Number(usuario?.id)
       };
 
-      const exito = await registrarMovimientosMasivos(payload); 
+      // Ejecutamos la petición al backend
+      const resultado = await registrarMovimientosMasivos(payload); 
 
-      if (exito) {
-        mostrarToast?.("Todo el inventario ha sido procesado correctamente", "success");
+      // 🚨 CORRECCIÓN CRÍTICA: Validamos si retornó datos (si no hay error, es exitoso)
+      if (resultado) {
+        // Si tu backend devuelve un array, contamos los elementos; si no, usamos el largo del carrito
+        const totalLineas = Array.isArray(resultado) ? resultado.length : (resultado.count || itemsEnCarritoMovimiento.length);
+        
+        // 1. Mostramos la notificación verde de éxito
+        mostrarToast?.(`${totalLineas} línea${totalLineas === 1 ? '' : 's'} de inventario procesada${totalLineas === 1 ? '' : 's'} correctamente`, "success");
+        
+        // 2. Limpiamos el carrito multi-línea para que no se dupliquen datos
         setItemsEnCarritoMovimiento([]); 
+        
+        // 3. Cerramos el modal de una vez por todas
         cerrarModal();
+        
+        // 4. Refrescamos el inventario de la pantalla principal para ver el stock actualizado
         recargarInventario();
       }
     } catch (error) {
       console.error("Error en flujo masivo:", error);
       mostrarToast?.(error.message || "Error crítico: No se pudo procesar el ingreso", "error");
     }
-  };
-
-  // Lógica de Devoluciones por Factura
-  const buscarFactura = () => {
-    const factura = historialVentas.find(v => v.id === busquedaFactura.trim());
-    if (!factura) {
-      mostrarToast?.('Factura no encontrada', 'error');
-      setFacturaEncontrada(null);
-      return;
-    }
-    setFacturaEncontrada(factura);
-    const items = factura.items.map(item => {
-      const p = productos.find(prod => prod.id === item.productoId);
-      return {
-        ...item,
-        nombre: p?.nombre || 'Producto desconocido',
-        cantidadADevolver: item.cantidad
-      };
-    });
-    setItemsDevolucion(items);
   };
 
   const procesarDevolucionFactura = async () => {
@@ -531,6 +519,7 @@ const MovimientosSection = ({ mostrarToast }) => {
                         <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 sticky top-0">
                           <tr>
                             <th className="px-6 py-4">Producto</th>
+                            <th className="px-6 py-4 w-28">Almacén</th>
                             <th className="px-6 py-4 w-24">Cantidad</th>
                             {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
                               <th className="px-6 py-4 w-32">Lote</th>
@@ -544,6 +533,21 @@ const MovimientosSection = ({ mostrarToast }) => {
                               <td className="px-6 py-3 font-bold text-slate-700">
                                 <p className="text-xs uppercase font-black">{item.nombre}</p>
                                 <p className="text-[9px] text-slate-400 font-bold">STOCK: {item.stock}</p>
+                              </td>
+                              <td className="px-6 py-3">
+                                <select
+                                  className="w-28 p-2 border rounded-lg font-black text-[10px] uppercase bg-white"
+                                  value={item.almacen || ''}
+                                  onChange={(e) => {
+                                    const nuevaLista = [...itemsEnCarritoMovimiento];
+                                    nuevaLista[idx].almacen = e.target.value;
+                                    setItemsEnCarritoMovimiento(nuevaLista);
+                                  }}
+                                >
+                                  {(almacenesNombres.length > 0 ? almacenesNombres : ['Principal']).map(almacen => (
+                                    <option key={almacen} value={almacen}>{almacen}</option>
+                                  ))}
+                                </select>
                               </td>
                               <td className="px-6 py-3">
                                 <input 
@@ -688,6 +692,8 @@ const MovimientosSection = ({ mostrarToast }) => {
                   setAjusteProductoId={formProps.setAjusteProductoId}
                   almacenDestino={formProps.ajusteAlmacen}       // Enlazado con ajusteAlmacen del hook
                   setAlmacenDestino={formProps.setAjusteAlmacen}  // Enlazado con setAjusteAlmacen del hook
+                  almacenDestino={formProps.ajusteAlmacen}
+                  setAlmacenDestino={formProps.setAjusteAlmacen}
                   ajusteCantidad={formProps.ajusteCantidad}
                   setAjusteCantidad={formProps.setAjusteCantidad}
                   ajusteCosto={formProps.ajusteCosto}

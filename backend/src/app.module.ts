@@ -15,6 +15,7 @@ import { ClientsModule } from './providers/clients.module';
 import { RolesModule } from './providers/roles.module';
 import { ComodatosModule } from './comodatos/comodatos.module';
 import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module';
+import { InventoryBatch } from './movements/entities/inventory-batch.entity';
 
 // Evaluamos los 3 posibles archivos según el entorno
 let envFileName = '.env'; // Por defecto desarrollo local
@@ -41,15 +42,13 @@ console.log(`Cargando configuración desde: ${envPath}`);
       inject: [ConfigService],
       useFactory: (configService: ConfigService): TypeOrmModuleOptions => ({
         type: 'postgres',
+        entities: [InventoryBatch,],
         host: configService.get<string>('DATABASE_HOST', 'localhost'),
-        // Corregido para TypeScript usando coalescencia nula:
         port: parseInt(configService.get<string>('DATABASE_PORT', '5432'), 10),
         username: configService.get<string>('DATABASE_USER', 'postgres'),
         password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
         database: configService.get<string>('DATABASE_NAME', 'tech_two_solution_db'),
         autoLoadEntities: true,
-        // Prioriza la variable de entorno DATABASE_SYNCHRONIZE si existe, 
-        // de lo contrario mantiene el comportamiento por entorno.
         synchronize: configService.get<string>('DATABASE_SYNCHRONIZE') === 'true' || 
                      configService.get<string>('NODE_ENV') !== 'production',
         logging: configService.get<string>('NODE_ENV') !== 'production',

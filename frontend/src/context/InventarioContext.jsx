@@ -287,7 +287,7 @@ const registrarMovimientosMasivos = async (payload) => {
     setRefreshIndex(prev => prev + 1);
     cargarMovimientos(); 
     
-    return true;
+    return data;
   } catch (err) {
     const errorMsg = `Error de conexión con la API (${API_BASE_URL}): ${err.message}`;
     console.error(errorMsg, err);

@@ -169,6 +169,9 @@ export class MovementsService {
   /**
    * Crear un movimiento individual
    */
+ /**
+   * Crear un movimiento individual (Corregido y blindado por almacén)
+   */
   async create(createMovementDto: CreateMovementDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -186,12 +189,26 @@ export class MovementsService {
       const tipoNormalizado = tipo.toUpperCase();
       const cantidadNumerica = Number(cantidad);
       let nuevoStock = producto.stock;
-      const targetAlmacen = almacenDestino || almacenOrigen || producto.almacen || 'Principal';
+      
+      // Determinamos cuál es el almacén objetivo de la operación comercial
+      const targetAlmacen = (almacenDestino || almacenOrigen || producto.almacen || 'Principal').trim();
 
       if (tipoNormalizado === 'TRANSFERIR') {
         if (!almacenOrigen || !almacenDestino) {
           throw new BadRequestException('Para una transferencia se requiere un almacén de origen y uno de destino.');
         }
+        
+        // CORRECCIÓN EXTRA: Validar stock en origen también en transferencias individuales
+        const stockOrigen = await queryRunner.manager.findOne(ProductWarehouseStock, {
+          where: { productoId: producto.id, almacen: almacenOrigen.trim() }
+        });
+        const disponibleOrigen = stockOrigen ? Number(stockOrigen.cantidad) : 0;
+        if (disponibleOrigen < cantidadNumerica) {
+          throw new BadRequestException(
+            `Stock insuficiente en almacén de origen '${almacenOrigen}'. Disponible: ${disponibleOrigen}, Requerido: ${cantidadNumerica}`
+          );
+        }
+
         await this.updateWarehouseStock(queryRunner.manager, productoId, almacenOrigen, -cantidadNumerica);
         await this.updateWarehouseStock(queryRunner.manager, productoId, almacenDestino, cantidadNumerica);
         
@@ -206,11 +223,19 @@ export class MovementsService {
           batchGenerated = await this.generateAndSaveBatch(queryRunner.manager, productoId, cantidadNumerica, targetAlmacen, lote);
 
         } else if (tiposDecremento.includes(tipoNormalizado)) {
-          if (producto.stock < cantidadNumerica) {
+          // 🚨 BLINDAJE CRÍTICO: Buscar y validar stock real en el almacén específico, no el global
+          const stockEnAlmacen = await queryRunner.manager.findOne(ProductWarehouseStock, {
+            where: { productoId: producto.id, almacen: targetAlmacen }
+          });
+          
+          const cantidadDisponibleAlmacen = stockEnAlmacen ? Number(stockEnAlmacen.cantidad) : 0;
+
+          if (cantidadDisponibleAlmacen < cantidadNumerica) {
             throw new BadRequestException(
-              `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock}, Solicitado: ${cantidadNumerica}`
+              `Stock insuficiente en el almacén '${targetAlmacen}' para ${producto.nombre}. Disponible: ${cantidadDisponibleAlmacen}, Solicitado: ${cantidadNumerica}`
             );
           }
+
           nuevoStock -= cantidadNumerica; 
           await this.updateWarehouseStock(queryRunner.manager, productoId, targetAlmacen, -cantidadNumerica);
 
@@ -239,13 +264,13 @@ export class MovementsService {
         precio: producto.precio 
       });
 
-      // BLINDAJE CRÍTICAL: Se inyecta la instancia 'producto' completa para eliminar el error 500 de Postgres
+      // Se inyecta la instancia 'producto' completa para eliminar el error de Postgres
       const movement = queryRunner.manager.create(Movement, {
         producto: producto, 
         tipo: tipoNormalizado,
         cantidad: cantidadNumerica,
         nuevoStock: Number(nuevoStock),
-        nota: batchGenerated ? `${nota} | Lote: ${batchGenerated}` : nota,
+        nota: batchGenerated ? `${nota || ''} | Lote: ${batchGenerated}` : nota,
         usuarioId: usuarioId ? String(usuarioId) : undefined,
         almacenOrigen: almacenOrigen || targetAlmacen,
         almacenDestino: almacenDestino || targetAlmacen,
@@ -271,6 +296,10 @@ export class MovementsService {
    */
   async createBulk(bulkData: { tipo: string; nota: string; items: any[]; usuarioId?: any; referencia?: string }) {
     const { tipo, nota, items, usuarioId, referencia } = bulkData;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException('Debe incluir al menos una línea de mercancía');
+    }
     
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -280,15 +309,28 @@ export class MovementsService {
       const movimientosCreados: Movement[] = [];
       const tipoNormalizado = tipo ? tipo.trim().toUpperCase() : 'RECIBIR';
       const finalUsuarioId = (usuarioId && !isNaN(Number(usuarioId))) ? String(usuarioId) : undefined;
+      const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION_FACTURA'];
+      const tiposDecremento = ['SALIDA', 'DESPACHAR', 'DESCARTAR', 'DEVOLUCION'];
 
-      for (const item of items) {
+      if (!tiposIncremento.includes(tipoNormalizado) && !tiposDecremento.includes(tipoNormalizado)) {
+        throw new BadRequestException(`Tipo de movimiento masivo no válido: ${tipo}`);
+      }
+
+      for (const [index, item] of items.entries()) {
         const { productoId, cantidad, almacen, lote } = item;
         const idNum = Number(productoId);
+        const numeroLinea = index + 1;
         
-        if (!productoId || isNaN(idNum)) continue;
+        if (!productoId || isNaN(idNum)) {
+          throw new BadRequestException(`Línea ${numeroLinea}: producto inválido`);
+        }
         
         const cantidadNumerica = Number(cantidad);
-        if (isNaN(cantidadNumerica) || cantidadNumerica <= 0) continue;
+        if (isNaN(cantidadNumerica) || cantidadNumerica <= 0) {
+          throw new BadRequestException(`Línea ${numeroLinea}: la cantidad debe ser mayor a 0`);
+        }
+
+        const almacenNormalizado = String(almacen || 'Principal').trim() || 'Principal';
 
         const producto = await queryRunner.manager.findOne(Product, { where: { id: idNum } });
         
@@ -296,16 +338,14 @@ export class MovementsService {
           throw new NotFoundException(`Producto ID ${productoId} no encontrado en la base de datos`);
         }
 
-        const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION_FACTURA'];
-        const tiposDecremento = ['SALIDA', 'DESPACHAR', 'DESCARTAR', 'DEVOLUCION'];
         let nuevoStock = producto.stock;
         let batchInfo = '';
 
         if (tiposIncremento.includes(tipoNormalizado)) {
           nuevoStock += cantidadNumerica;
-          await this.updateWarehouseStock(queryRunner.manager, Number(productoId), almacen || 'Principal', cantidadNumerica);
+          await this.updateWarehouseStock(queryRunner.manager, Number(productoId), almacenNormalizado, cantidadNumerica);
           // CREACIÓN AUTOMÁTICA DE LOTE
-          batchInfo = await this.generateAndSaveBatch(queryRunner.manager, idNum, cantidadNumerica, almacen || 'Principal', lote);
+          batchInfo = await this.generateAndSaveBatch(queryRunner.manager, idNum, cantidadNumerica, almacenNormalizado, lote);
         } 
         else if (tiposDecremento.includes(tipoNormalizado)) {
           if (producto.stock < cantidadNumerica) {
@@ -314,9 +354,7 @@ export class MovementsService {
             );
           }
           nuevoStock -= cantidadNumerica;
-          await this.updateWarehouseStock(queryRunner.manager, Number(productoId), almacen || 'Principal', -cantidadNumerica);
-        } else {
-          throw new BadRequestException(`Tipo de movimiento masivo no válido: ${tipo}`);
+          await this.updateWarehouseStock(queryRunner.manager, Number(productoId), almacenNormalizado, -cantidadNumerica);
         }
 
         // Actualización atómica del stock global
@@ -329,10 +367,10 @@ export class MovementsService {
           tipo: tipoNormalizado,
           cantidad: cantidadNumerica,
           nuevoStock: producto.stock,
-          nota: `${nota}${batchInfo ? ` | Lote: ${batchInfo}` : ''} | Almacén: ${almacen || 'General'}`,
+          nota: `${nota || ''}${batchInfo ? ` | Lote: ${batchInfo}` : ''} | Almacén: ${almacenNormalizado}`,
           costoUnitario: producto.precio ? Number(producto.precio) : undefined,
-          almacenOrigen: almacen || 'Principal',
-          almacenDestino: almacen || 'Principal',
+          almacenOrigen: almacenNormalizado,
+          almacenDestino: almacenNormalizado,
           referencia: referencia ? String(referencia) : undefined,
           usuarioId: finalUsuarioId,
         });
@@ -340,6 +378,10 @@ export class MovementsService {
         const guardado = await queryRunner.manager.save(Movement, nuevoMovimiento);
         
         movimientosCreados.push(guardado);
+      }
+
+      if (movimientosCreados.length === 0) {
+        throw new BadRequestException('No se procesó ninguna línea de mercancía');
       }
 
       await queryRunner.commitTransaction();
