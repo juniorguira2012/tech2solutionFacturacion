@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { 
   Search as SearchIcon, Plus as PlusIcon, Minus as MinusIcon, 
   Trash2 as TrashIcon, User as UserIcon, ShoppingCart as CartIcon, 
@@ -75,6 +75,28 @@ const Ventas = () => {
   const { productos, descontarStock, setVerEliminados } = useInventario();
   const { clientes } = useClientes();
   const { usuario } = useAuth();
+  
+  // Load company data from local storage
+  const companyData = useMemo(() => {
+    try {
+      const savedConfig = localStorage.getItem('posfactura_config');
+      return savedConfig ? JSON.parse(savedConfig) : { 
+        nombre: 'Mi Negocio S.A.', 
+        rnc: '',
+        telefono: '',
+        direccion: '',
+        mensaje: '¡Gracias por su compra!' 
+      };
+    } catch (e) {
+      console.error("Error loading company data from local storage:", e);
+      return {}; // Return empty object or default values if parsing fails
+    }
+  }, []);
+  
+  // Cargar el tamaño del papel configurado
+  const papelSize = useMemo(() => {
+    return localStorage.getItem('posfactura_papel') || '80mm';
+  }, []);
 
   // --- ESTADOS PRINCIPALES ---
   const [carrito, setCarrito] = useState([]);
@@ -84,6 +106,13 @@ const Ventas = () => {
   const [showAbiertasModal, setShowAbiertasModal] = useState(false);
   const [ventaDialog, setVentaDialog] = useState({ open: false });
   const inputBusquedaRef = useRef(null);
+
+  // Ref para rastrear si el componente está montado
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // --- ESTADOS PARA DESCUENTOS ---
   const [descuentoPorcentaje, setDescuentoPorcentaje] = useState(0);
@@ -116,7 +145,9 @@ const Ventas = () => {
   ), []);
 
   const cerrarVentaDialog = useCallback(() => {
-    setVentaDialog({ open: false });
+    if (mountedRef.current) { // Solo actualizar si el componente sigue montado
+      setVentaDialog({ open: false });
+    }
   }, []);
 
   // --- VALIDACIÓN DE PERMISOS PARA DESCUENTO ---
@@ -138,7 +169,9 @@ const Ventas = () => {
   };
 
   const procesarVenta = useCallback(async () => {
-    setVentaDialog(prev => ({ ...prev, loading: true }));
+    if (!mountedRef.current) return; // Evitar cualquier operación si el componente ya no está montado
+
+    setVentaDialog(prev => ({ ...prev, loading: true })); // Inicia el estado de carga
     try {
       const clienteActual = clientes.find(c => c.id.toString() === clienteId.toString()) || { nombre: "Consumidor Final", rnc: "" };
 
@@ -160,6 +193,7 @@ const Ventas = () => {
       const resVenta = await registrarVenta(nuevaVenta);
 
       if (resVenta && resVenta.success === false) {
+        if (!mountedRef.current) return; // Evitar actualizaciones si el componente se desmontó durante la espera
         throw new Error(resVenta.error || "Error al registrar la venta en el servidor.");
       }
 
@@ -169,10 +203,13 @@ const Ventas = () => {
         await descontarStock(carrito);
       } catch (stockError) {
         console.error("Error al descontar stock:", stockError);
+        if (!mountedRef.current) return; // Evitar actualizaciones si el componente se desmontó durante la espera
         stockWarning = stockError.message;
       }
 
-      imprimirTicket(nuevaVenta, carrito);
+      // Usamos el objeto devuelto por el servidor (resVenta.venta) para imprimir, 
+      // ya que este contiene el ID real y la fecha generada por la DB.
+      imprimirTicket(resVenta.venta, carrito, companyData, papelSize);
 
       setCarrito([]);
       setDescuentoPorcentaje(0);
@@ -184,24 +221,30 @@ const Ventas = () => {
       }
 
       setTimeout(() => {
-        inputBusquedaRef.current?.focus();
+        if (mountedRef.current) { // Solo enfocar si el componente sigue montado
+          inputBusquedaRef.current?.focus();
+        }
       }, 100);
 
       if (stockWarning) {
-        setVentaDialog({
-          open: true,
-          type: 'warning',
-          title: 'Venta registrada',
-          message: `El ticket fue generado, pero hubo un problema al descontar stock: ${stockWarning}`,
-        });
+        if (mountedRef.current) { // Solo actualizar si el componente sigue montado
+          setVentaDialog({
+            open: true,
+            type: 'warning',
+            title: 'Venta registrada',
+            message: `El ticket fue generado, pero hubo un problema al descontar stock: ${stockWarning}`,
+          });
+        }
       } else {
-        setVentaDialog({
-          open: true,
-          type: 'success',
-          title: 'Venta completada',
-          message: `La factura de ${clienteActual.nombre} fue registrada e impresa correctamente.`,
-          total: formatoMoneda(totalFinal),
-        });
+        if (mountedRef.current) { // Solo actualizar si el componente sigue montado
+          setVentaDialog({
+            open: true,
+            type: 'success',
+            title: 'Venta completada',
+            message: `La factura de ${clienteActual.nombre} fue registrada e impresa correctamente.`,
+            total: formatoMoneda(totalFinal),
+          });
+        }
       }
     } catch (error) {
       console.error("Error en flujo de venta:", error);
@@ -212,7 +255,7 @@ const Ventas = () => {
         message: error.message || 'Ocurrió un error al registrar la venta.',
       });
     }
-  }, [carrito, totalFinal, clienteId, clientes, usuario, subtotal, montoDescuento, impuesto, registrarVenta, descontarStock, formatoMoneda]);
+  }, [carrito, totalFinal, clienteId, clientes, usuario, subtotal, montoDescuento, impuesto, registrarVenta, descontarStock, formatoMoneda, companyData, mountedRef, papelSize]);
 
   const finalizarVenta = useCallback(async () => {
     if (carrito.length === 0) {

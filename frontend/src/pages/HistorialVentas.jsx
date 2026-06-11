@@ -7,10 +7,13 @@ const HistorialVentas = () => {
   const { historialVentas } = useVentas();
   const [filtro, setFiltro] = useState("");
 
+  const companyData = JSON.parse(localStorage.getItem('posfactura_config') || '{}');
+  const papelSize = localStorage.getItem('posfactura_papel') || '80mm';
+
   const reimprimir = (venta) => {
     // Usamos los items guardados en la venta para el ticket
     if (venta.items) {
-      imprimirTicket(venta, venta.items);
+      imprimirTicket(venta, venta.items, companyData, papelSize);
     } else {
       alert("No hay detalles disponibles para esta factura antigua.");
     }
