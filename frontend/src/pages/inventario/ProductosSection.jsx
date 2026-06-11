@@ -199,15 +199,54 @@ const ProductosSection = ({ mostrarToast }) => {
       mostrarToast?.('No hay productos para exportar', 'error');
       return;
     }
+
     const encabezados = ['Código', 'Producto', 'Tipo', 'Precio', 'Stock', 'Almacén'];
-    const filas = productosFiltrados.map(p => [
-      `"${p.codigo || ''}"`, `"${p.nombre}"`, `"${p.categoria}"`, `"${p.precio}"`, `"${p.stock}"`, `"${p.almacen || 'Principal'}"`
-    ].join(','));
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + encabezados.join(',') + '\n' + filas.join('\n');
-    const link = document.createElement('a');
-    link.setAttribute('href', encodeURI(csvContent));
-    link.setAttribute('download', `Inventario_${new Date().toLocaleDateString()}.csv`);
-    link.click();
+    
+    // 1. Limpiamos y formateamos las filas de forma segura
+    const filas = productosFiltrados.map(p => {
+      // Helper para escapar comillas dobles internas y envolver el texto si tiene comas
+      const mapearCampo = (valor) => {
+        const texto = String(valor ?? '').replace(/"/g, '""'); // Escapa comillas dobles internas
+        return `"${texto}"`; // Envuelve el campo en comillas para proteger las comas
+      };
+
+      return [
+        mapearCampo(p.codigo),
+        mapearCampo(p.nombre),
+        mapearCampo(p.categoria),
+        mapearCampo(p.precio),
+        mapearCampo(p.stock),
+        mapearCampo(p.almacen || 'Principal')
+      ].join(',');
+    });
+
+    // 2. Unimos todo el contenido estructurado
+    const csvContent = 'sep=,\n' + encabezados.join(',') + '\n' + filas.join('\n');
+
+    try {
+      // 3. 🚨 EL TRUCO PARA EXCEL: Añadir el BOM UTF-8 (\uFEFF) al Blob para que reconozca acentos y caracteres latinos
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      // 4. Creamos el link de descarga virtual temporal
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Reemplazamos barras del formato de fecha para evitar problemas en nombres de archivos según el OS
+      const fechaFormateada = new Date().toLocaleDateString().replace(/\//g, '-');
+      link.setAttribute('download', `Inventario_${fechaFormateada}.csv`);
+      
+      // 5. Ejecutamos la descarga y limpiamos la memoria
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url); // Libera el objeto de la memoria del navegador
+
+      mostrarToast?.('Inventario exportado con éxito', 'success');
+    } catch (error) {
+      console.error("Error al exportar CSV:", error);
+      mostrarToast?.('No se pudo generar el archivo de exportación', 'error');
+    }
   };
 
   // ─── Guardar / Editar ───────────────────────────────────────────────────────

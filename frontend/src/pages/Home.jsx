@@ -85,11 +85,11 @@ const Home = () => {
 
   const stats = [
     {
-      id: 'ventas',
+      id: 'reportes',
       title: 'Venta Global',
       value: `RD$ ${totalVentas.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
       icon: <ShoppingCart className="text-emerald-600" size={24} />,
-      path: '/ventas',
+      path: '/reportes',
       color: 'bg-emerald-50',
       borderColor: 'border-emerald-100'
     },
