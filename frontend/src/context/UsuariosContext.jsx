@@ -67,11 +67,19 @@ export const UsuariosProvider = ({ children }) => {
       });
 
       if (!res.ok) {
-        throw new Error('Error al crear usuario');
+        const errorData = await res.json().catch(() => ({}));
+        const mensaje = Array.isArray(errorData.message) ? errorData.message.join(', ') : errorData.message;
+        throw new Error(mensaje || 'Error al crear usuario');
       }
       const data = await res.json();
-      setUsuarios(prev => [...prev, data]);
-      return true;
+      setUsuarios(prev => {
+        const existeEnLista = prev.some(u => u.id === data.id);
+        if (existeEnLista) {
+          return prev.map(u => u.id === data.id ? data : u);
+        }
+        return [...prev, data];
+      });
+      return data;
     } catch (err) {
       console.error("Error al agregar usuario:", err);
       throw err;

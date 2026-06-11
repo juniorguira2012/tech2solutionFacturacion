@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
@@ -70,13 +70,36 @@ export class UsersService implements OnModuleInit {
   async create(createUserDto: CreateUserDto): Promise<User> {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(createUserDto.password, salt);
+    const email = createUserDto.email.trim().toLowerCase();
+
+    const existingUser = await this.usersRepository.findOne({
+      where: { email },
+    });
+
+    if (existingUser?.isActive) {
+      throw new ConflictException('Ya existe un usuario activo con este correo');
+    }
+
+    if (existingUser) {
+      existingUser.nombre = createUserDto.nombre;
+      existingUser.password = hashedPassword;
+      existingUser.rol = createUserDto.rol;
+      existingUser.isActive = createUserDto.isActive ?? true;
+
+      const restoredUser = await this.usersRepository.save(existingUser);
+      delete (restoredUser as Partial<User>).password;
+      return restoredUser;
+    }
     
     const newUser = this.usersRepository.create({
       ...createUserDto,
+      email,
       password: hashedPassword,
     });
     
-    return this.usersRepository.save(newUser);
+    const savedUser = await this.usersRepository.save(newUser);
+    delete (savedUser as Partial<User>).password;
+    return savedUser;
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
@@ -95,7 +118,9 @@ export class UsersService implements OnModuleInit {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
     }
 
-    return this.usersRepository.save(user);
+    const savedUser = await this.usersRepository.save(user);
+    delete (savedUser as Partial<User>).password;
+    return savedUser;
   }
 
   async findByEmail(email: string) {
