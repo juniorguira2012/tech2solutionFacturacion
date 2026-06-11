@@ -514,29 +514,29 @@ const MovimientosSection = ({ mostrarToast }) => {
                   </div>
 
                   <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                    <div className="max-h-48 overflow-y-auto">
+                    <div className="max-h-64 overflow-y-auto">
                       <table className="w-full text-left">
-                        <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 sticky top-0">
+                        <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 sticky top-0">
                           <tr>
-                            <th className="px-6 py-4">Producto</th>
-                            <th className="px-6 py-4 w-28">Almacén</th>
-                            <th className="px-6 py-4 w-24">Cantidad</th>
+                            <th className="px-4 py-2.5">Producto</th>
+                            <th className="px-4 py-2.5 w-28">Almacén</th>
+                            <th className="px-4 py-2.5 w-24">Cantidad</th>
                             {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
-                              <th className="px-6 py-4 w-32">Lote</th>
+                              <th className="px-4 py-2.5 w-32">Lote</th>
                             )}
-                            <th className="px-6 py-4"></th>
+                            <th className="px-4 py-2.5"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y">
                           {itemsEnCarritoMovimiento.map((item, idx) => (
                             <tr key={item.id} className="text-sm">
-                              <td className="px-6 py-3 font-bold text-slate-700">
-                                <p className="text-xs uppercase font-black">{item.nombre}</p>
-                                <p className="text-[9px] text-slate-400 font-bold">STOCK: {item.stock}</p>
+                              <td className="px-4 py-2 font-bold text-slate-700">
+                                <p className="text-[10px] uppercase font-black leading-tight">{item.nombre}</p>
+                                <p className="text-[8px] text-slate-400 font-bold">STOCK: {item.stock}</p>
                               </td>
-                              <td className="px-6 py-3">
+                              <td className="px-4 py-2">
                                 <select
-                                  className="w-28 p-2 border rounded-lg font-black text-[10px] uppercase bg-white"
+                                  className="w-full p-1.5 border rounded-lg font-black text-[9px] uppercase bg-white"
                                   value={item.almacen || ''}
                                   onChange={(e) => {
                                     const nuevaLista = [...itemsEnCarritoMovimiento];
@@ -549,11 +549,11 @@ const MovimientosSection = ({ mostrarToast }) => {
                                   ))}
                                 </select>
                               </td>
-                              <td className="px-6 py-3">
+                              <td className="px-4 py-2">
                                 <input 
                                   type="number" min="1"
                                   max={tipoMovimiento === 'despachar' ? item.stock : undefined}
-                                  className="w-20 p-2 border rounded-lg font-black text-center text-xs"
+                                  className="w-full p-1.5 border rounded-lg font-black text-center text-[10px]"
                                   value={item.cantidadMovimiento}
                                   onChange={(e) => {
                                     const nuevaLista = [...itemsEnCarritoMovimiento];
@@ -563,11 +563,11 @@ const MovimientosSection = ({ mostrarToast }) => {
                                 />
                               </td>
                               {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
-                                <td className="px-6 py-3">
+                                <td className="px-4 py-2">
                                   <input 
                                     type="text"
                                     placeholder="Nº Lote"
-                                    className="w-full p-2 border rounded-lg font-bold text-xs uppercase"
+                                    className="w-full p-1.5 border rounded-lg font-bold text-[10px] uppercase"
                                     value={item.lote || ''}
                                     onChange={(e) => {
                                       const nuevaLista = [...itemsEnCarritoMovimiento];
@@ -577,7 +577,7 @@ const MovimientosSection = ({ mostrarToast }) => {
                                   />
                                 </td>
                               )}
-                              <td className="px-6 py-3 text-right">
+                              <td className="px-4 py-2 text-right">
                                 <button onClick={() => setItemsEnCarritoMovimiento(itemsEnCarritoMovimiento.filter(i => i.id !== item.id))} className="text-red-400 hover:text-red-600">
                                   <X size={18} />
                                 </button>
