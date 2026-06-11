@@ -31,12 +31,12 @@ export class ProductsService {
   async findAll(isActive: boolean | 'all' = true) {
     if (isActive === 'all') {
       return await this.productRepository.find({
-        order: { id: 'DESC' },
+        order: { createdAt: 'DESC' }, // Ordenar por fecha de creación descendente
       });
     }
     return await this.productRepository.find({
       where: { isActive }, // Usar el parámetro recibido
-      order: { id: 'DESC' }, // Los más nuevos primero
+      order: { createdAt: 'DESC' }, // Los más nuevos primero
     });
   }
 

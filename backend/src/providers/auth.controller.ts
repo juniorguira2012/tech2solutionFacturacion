@@ -21,6 +21,10 @@ export class AuthController {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
+    if (user.isActive === false) {
+      throw new UnauthorizedException('Usuario suspendido por administración');
+    }
+
     // Comparación segura de hashes
     const isPasswordValid = await bcrypt.compare(body.password, user.password);
     if (!isPasswordValid) {

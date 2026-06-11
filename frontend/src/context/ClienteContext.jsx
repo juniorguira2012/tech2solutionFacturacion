@@ -20,7 +20,8 @@ export const ClienteProvider = ({ children }) => {
   const getAuthHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
     'x-user-id': usuario?.id || '',
-    'x-user-role': usuario?.rol || '',
+    'x-user-role': usuario?.rol || '', // Rol del usuario
+    'x-clients-permission': usuario?.permisos?.modules?.clientes || 'none', // Permiso específico para clientes
   }), [usuario]);
 
   // 1. Cargar clientes desde la base de datos al iniciar
@@ -31,7 +32,8 @@ export const ClienteProvider = ({ children }) => {
       const res = await fetch(API_URL, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Error al obtener clientes del servidor');
       const data = await res.json();
-      setClientes(Array.isArray(data) ? data : []);
+      const clientesActivos = Array.isArray(data) ? data.filter(c => c.isActive !== false) : [];
+      setClientes(clientesActivos);
     } catch (err) {
       console.error("Error en cargarClientes:", err);
     } finally {
@@ -53,8 +55,8 @@ export const ClienteProvider = ({ children }) => {
       });
       if (!res.ok) throw new Error('Error al crear cliente');
       const data = await res.json();
-      setClientes(prev => [...prev, data]);
-      return true;
+      setClientes(prev => [...prev, data].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      return data;
     } catch (err) {
       console.error(err);
       throw err;
@@ -72,8 +74,8 @@ export const ClienteProvider = ({ children }) => {
       });
       if (!res.ok) throw new Error('Error al actualizar cliente');
       const data = await res.json();
-      setClientes(prev => prev.map(c => c.id === data.id ? data : c));
-      return true;
+      setClientes(prev => prev.map(c => c.id === data.id ? data : c).sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      return data;
     } catch (err) {
       console.error(err);
       throw err;
@@ -82,18 +84,20 @@ export const ClienteProvider = ({ children }) => {
 
   // 4. Eliminar cliente en la DB
   const eliminarCliente = async (id) => {
-    if (id === 1) return alert("No puedes eliminar al Consumidor Final");
     try {
       const res = await fetch(`${API_URL}/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
-      if (!res.ok) throw new Error('No se pudo eliminar el cliente');
+      const data = await res.json().catch(() => ({})); // Siempre intentar leer el JSON
+      if (!res.ok) { // Si la respuesta no es OK, lanzar un error
+        throw new Error(data.message || `Error al eliminar cliente: ${res.status}`);
+      }
       setClientes(prev => prev.filter(c => c.id !== id));
       return true;
     } catch (err) {
       console.error(err);
-      return false;
+      throw err; // Propaga el error para que el componente lo capture
     }
   };
 

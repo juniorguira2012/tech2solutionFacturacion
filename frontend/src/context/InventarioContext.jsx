@@ -399,6 +399,23 @@ const registrarMovimientosMasivos = async (payload) => {
     }
   };
 
+  const eliminarCliente = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/clients/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'El servidor rechazó la eliminación del cliente');
+      }
+      // Actualizar estado local si es necesario
+      return true;
+    } catch (err) {
+      throw err;
+    }
+  };
+
   // 3. Eliminar Producto
   const eliminarProducto = async (id) => {
     try {

@@ -1,22 +1,69 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   UserPlus, Trash2, ArrowLeft, 
-  CheckCircle, X, Edit2, KeyRound, Power, Shield, Lock
+  CheckCircle, X, Edit2, KeyRound, Power, Shield, AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useUsuarios } from '../context/UsuariosContext'; // Importamos el contexto de DB
 
+// Modal de Confirmación Estilizado
+const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo = 'danger' }) => {
+  if (!isOpen) return null;
+  const esEliminar = tipo === 'danger';
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+        <div className={`flex justify-center pt-10 pb-4`}>
+          <div className={`h-20 w-20 rounded-3xl flex items-center justify-center ${esEliminar ? 'bg-red-50' : 'bg-amber-50'}`}>
+            <AlertTriangle size={40} className={esEliminar ? 'text-red-500' : 'text-amber-500'} />
+          </div>
+        </div>
+        <div className="px-10 pb-8 text-center space-y-2">
+          <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight italic">{titulo}</h3>
+          <p className="text-[11px] font-bold text-slate-400 leading-relaxed uppercase tracking-wider">{descripcion}</p>
+        </div>
+        <div className="flex border-t border-slate-100">
+          <button onClick={onCancel} className="flex-1 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:bg-slate-50 transition-colors border-r border-slate-100">
+            Cancelar
+          </button>
+          <button 
+            onClick={onConfirm} 
+            className={`flex-1 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-white transition-colors ${
+              esEliminar ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-500 hover:bg-amber-600'
+            }`}
+          >
+            {esEliminar ? 'Confirmar' : 'Aceptar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Usuarios = () => {
   const navigate = useNavigate();
   const { usuario } = useAuth();
-  const { usuarios, roles, loading, agregarUsuario, actualizarUsuario, eliminarUsuario } = useUsuarios();
+  const { usuarios, roles, agregarUsuario, actualizarUsuario, eliminarUsuario } = useUsuarios();
   
   // 1. ESTADOS PRINCIPALES
   const [showModal, setShowModal] = useState(false);
   const [editandoId, setEditandoId] = useState(null); 
   const [isSaving, setIsSaving] = useState(false);
-  const [toast, setToast] = useState({ show: false, mensaje: "" });
+  const [toast, setToast] = useState({ show: false, mensaje: "", tipo: 'success' });
+
+  const [confirm, setConfirm] = useState({
+    isOpen: false,
+    titulo: '',
+    descripcion: '',
+    tipo: 'danger',
+    onConfirm: null,
+  });
+
+  const cerrarConfirm = () => {
+    setConfirm({ isOpen: false, titulo: '', descripcion: '', tipo: 'danger', onConfirm: null });
+  };
 
   // --- CONTROL DE SEGURIDAD NIVEL 0 ---
   // Si el usuario no es admin, bloqueamos el renderizado inmediatamente
@@ -34,9 +81,9 @@ const Usuarios = () => {
         { id: 'cajero', nombre: 'Cajero' }
       ];
 
-  const [nuevoUsuario, setNuevoUsuario] = useState({ 
+  const nuevoUsuario = { 
     nombre: '', email: '', password: '', rol: 'vendedor', isActive: true
-  });
+  };
 
   const [formUsuario, setFormUsuario] = useState({ ...nuevoUsuario });
 
@@ -63,9 +110,9 @@ const Usuarios = () => {
     );
   }
 
-  const mostrarToast = (mensaje) => {
-    setToast({ show: true, mensaje });
-    setTimeout(() => setToast({ show: false, mensaje: "" }), 3000);
+  const mostrarToast = (mensaje, tipo = 'success') => {
+    setToast({ show: true, mensaje, tipo });
+    setTimeout(() => setToast({ show: false, mensaje: "", tipo: 'success' }), 3000);
   };
 
   const prepararEdicion = (user) => {
@@ -85,11 +132,41 @@ const Usuarios = () => {
     try {
       await actualizarUsuario({ ...user, isActive: !user.isActive });
       mostrarToast(`Usuario ${!user.isActive ? 'activado' : 'suspendido'}`);
-    } catch (err) {
-      mostrarToast("Error al cambiar estado");
+    } catch {
+      mostrarToast("Error al cambiar estado", "error");
     }
   };
 
+  const handleEliminarClick = (user) => {
+    const SUPER_USER_EMAIL = 'techtwosolution2@gmail.com';
+    
+    if (user.id === usuario?.id) {
+      mostrarToast("No puedes eliminarte a ti mismo", "error");
+      return;
+    }
+
+    if (user.rol === 'admin' && usuario?.email !== SUPER_USER_EMAIL) {
+      mostrarToast("Solo el Super Usuario puede eliminar otros Admins", "error");
+      return;
+    }
+
+    setConfirm({
+      isOpen: true,
+      titulo: '¿Desactivar Usuario?',
+      descripcion: `"${user.nombre}" no podrá entrar al sistema, pero su historial se conservará en la base de datos.`,
+      tipo: 'danger',
+      onConfirm: async () => {
+        const exito = await eliminarUsuario(user.id);
+        if (exito) {
+          mostrarToast("Usuario desactivado correctamente");
+        } else {
+          mostrarToast("No se pudo desactivar el usuario", "error");
+        }
+        cerrarConfirm();
+      }
+    }
+    );
+  }; 
   const guardarUsuario = async (e) => {
     e.preventDefault();
     setIsSaving(true);
@@ -120,11 +197,11 @@ const Usuarios = () => {
   return (
     <div className="space-y-6 relative animate-in fade-in duration-500">
       {toast.show && (
-        <div className="fixed top-10 right-10 bg-slate-900 text-white px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 z-[100] border border-slate-700 animate-in slide-in-from-right-5">
-          <div className="h-8 w-8 bg-emerald-500 rounded-full flex items-center justify-center">
+        <div className={`fixed top-10 right-10 text-white px-8 py-5 rounded-[2rem] shadow-2xl flex items-center gap-4 z-[210] border animate-in slide-in-from-right-5 ${toast.tipo === 'success' ? 'bg-slate-900 border-slate-700' : 'bg-red-600 border-red-500'}`}>
+          <div className={`h-8 w-8 rounded-full flex items-center justify-center ${toast.tipo === 'success' ? 'bg-emerald-500' : 'bg-white/20'}`}>
             <CheckCircle size={18} className="text-white" />
           </div>
-          <span className="font-black text-xs uppercase tracking-widest">{toast.mensaje}</span>
+          <span className="font-black text-[10px] uppercase tracking-[0.2em]">{toast.mensaje}</span>
         </div>
       )}
 
@@ -206,7 +283,7 @@ const Usuarios = () => {
                          <Edit2 size={18} />
                       </button>
                       {user.id !== 1 && user.id !== usuario.id && (
-                        <button onClick={() => { if(window.confirm("¿Eliminar usuario?")) eliminarUsuario(user.id) }} className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-red-50 hover:text-red-500 transition-all">
+                        <button onClick={() => handleEliminarClick(user)} className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-red-50 hover:text-red-500 transition-all">
                           <Trash2 size={18} />
                         </button>
                       )}
@@ -294,6 +371,15 @@ const Usuarios = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={confirm.isOpen}
+        titulo={confirm.titulo}
+        descripcion={confirm.descripcion}
+        tipo={confirm.tipo}
+        onConfirm={confirm.onConfirm}
+        onCancel={cerrarConfirm}
+      />
     </div>
   );
 };

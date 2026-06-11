@@ -56,8 +56,15 @@ export class UsersService implements OnModuleInit {
     });
   }
 
-  async remove(id: number): Promise<void> {
-    await this.usersRepository.delete(id);
+  async remove(id: number): Promise<User> {
+    const user = await this.usersRepository.findOneBy({ id });
+
+    if (!user) {
+      throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+    }
+
+    user.isActive = false;
+    return this.usersRepository.save(user);
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {

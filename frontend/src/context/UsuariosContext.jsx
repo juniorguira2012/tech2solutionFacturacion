@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
@@ -101,27 +102,26 @@ export const UsuariosProvider = ({ children }) => {
     }
   };
 
-  // 4. Eliminar usuario en la DB
+  // 4. Desactivar usuario sin borrarlo de la DB
   const eliminarUsuario = async (id) => {
     const targetUser = usuarios.find(u => u.id === id);
     const SUPER_USER_EMAIL = 'techtwosolution2@gmail.com';
 
-    if (id === usuario?.id) return alert("No puedes eliminarte a ti mismo.");
+    if (id === usuario?.id) return false;
 
     // Validación de Super Usuario para eliminar otros Admins
     if (targetUser?.rol === 'admin' && usuario?.email !== SUPER_USER_EMAIL) {
-      return alert(`Acceso denegado. Solo el super usuario (${SUPER_USER_EMAIL}) tiene permisos para eliminar a otros administradores.`);
+      return false;
     }
-
-    if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a ${targetUser?.nombre}?`)) return;
 
     try {
       const res = await fetch(`${API_URL}/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
-      if (!res.ok) throw new Error('No se pudo eliminar el usuario');
-      setUsuarios(prev => prev.filter(u => u.id !== id));
+      if (!res.ok) throw new Error('No se pudo desactivar el usuario');
+      const data = await res.json();
+      setUsuarios(prev => prev.map(u => u.id === data.id ? data : u));
       return true;
     } catch (err) {
       console.error(err);

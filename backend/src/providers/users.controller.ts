@@ -41,11 +41,11 @@ export class UsersController {
     const requestor = await this.usersService.findOne(Number(requestorId));
     if (!requestor) throw new UnauthorizedException('Solicitante no válido');
 
-    // Regla de Oro: Solo el super usuario puede eliminar a otros administradores
+    // Regla de Oro: Solo el super usuario puede desactivar a otros administradores
     const SUPER_USER_EMAIL = 'techtwosolution2@gmail.com';
     
     if (targetUser.rol === 'admin' && requestor.email !== SUPER_USER_EMAIL) {
-      throw new UnauthorizedException(`Solo el super usuario ${SUPER_USER_EMAIL} puede eliminar administradores`);
+      throw new UnauthorizedException(`Solo el super usuario ${SUPER_USER_EMAIL} puede desactivar administradores`);
     }
 
     return this.usersService.remove(id);

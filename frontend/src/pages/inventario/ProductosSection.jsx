@@ -73,6 +73,7 @@ const ProductosSection = ({ mostrarToast }) => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [vista, setVista] = useState(() => localStorage.getItem('posfactura_inventario_vista') || 'grid');
   const [filtroProducto, setFiltroProducto] = useState('todos');
   const [searchTerm, setSearchTerm] = useState('');
@@ -212,6 +213,7 @@ const ProductosSection = ({ mostrarToast }) => {
   // ─── Guardar / Editar ───────────────────────────────────────────────────────
 const handleSave = async (e) => {
   e.preventDefault();
+  setIsSaving(true);
 
   // Validar si el código ya existe para evitar duplicados
   if (formData.codigo?.trim()) {
@@ -222,6 +224,7 @@ const handleSave = async (e) => {
     );
 
     if (productoExistente) {
+      setIsSaving(false);
       mostrarToast?.(`El código "${formData.codigo}" ya está en uso por: ${productoExistente.nombre}`, 'warning');
       return;
     }
@@ -264,6 +267,8 @@ const handleSave = async (e) => {
     // Ahora capturamos el mensaje real del servidor (ValidationPipe)
     mostrarToast?.(error.message || 'Error al guardar producto', 'error');
     console.error("Error en handleSave:", error);
+  } finally {
+    setIsSaving(false);
   }
 };
 
@@ -725,8 +730,19 @@ const handleEliminar = (prod) => {
                 </div>
               </div>
 
-              <button type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:bg-brand transition-all">
-                {isEditing ? 'Confirmar Cambios' : 'Registrar en Inventario'}
+              <button 
+                type="submit" 
+                disabled={isSaving}
+                className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl hover:bg-brand transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Procesando...</span>
+                  </>
+                ) : (
+                  isEditing ? 'Confirmar Cambios' : 'Registrar en Inventario'
+                )}
               </button>
             </form>
           </div>

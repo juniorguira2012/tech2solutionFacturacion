@@ -1,29 +1,96 @@
 import React, { useState, useMemo } from 'react';
-import { UserPlus, Search, Edit3, Trash2, MapPin, Phone, Mail, X, FileText, Globe, Lock } from 'lucide-react';
+import { UserPlus, Search, Edit3, Trash2, MapPin, Phone, Mail, X, FileText, Globe, Lock, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useClientes } from '../context/ClienteContext';
 import { useAuth } from '../context/AuthContext'; // Importamos Auth para los permisos
 
+// Modal de Confirmación Estilizado
+const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo = 'danger' }) => {
+  if (!isOpen) return null;
+  const esEliminar = tipo === 'danger';
+
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className={`flex justify-center pt-8 pb-4`}>
+          <div className={`h-16 w-16 rounded-2xl flex items-center justify-center ${esEliminar ? 'bg-red-50' : 'bg-amber-50'}`}>
+            <AlertTriangle size={32} className={esEliminar ? 'text-red-500' : 'text-amber-500'} />
+          </div>
+        </div>
+        <div className="px-8 pb-6 text-center space-y-2">
+          <h3 className="text-base font-black text-slate-800 uppercase tracking-wide">{titulo}</h3>
+          <p className="text-[11px] font-medium text-slate-400 leading-relaxed">{descripcion}</p>
+        </div>
+        <div className="flex border-t border-slate-100">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-colors border-r border-slate-100"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest text-white transition-colors ${
+              esEliminar ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-500 hover:bg-amber-600'
+            }`}
+          >
+            {esEliminar ? 'Eliminar' : 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Clientes = () => {
-  const { clientes, agregarCliente, actualizarCliente, eliminarCliente } = useClientes();
+  const { clientes, loading, agregarCliente, actualizarCliente, eliminarCliente } = useClientes();
   const { usuario } = useAuth();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const [toast, setToast] = useState({ show: false, mensaje: '', tipo: 'success' });
+  const mostrarToast = (mensaje, tipo = 'success') => {
+    setToast({ show: true, mensaje, tipo });
+    setTimeout(() => setToast({ show: false, mensaje: '', tipo: 'success' }), 3000);
+  };
+
+  const [confirm, setConfirm] = useState({
+    isOpen: false,
+    titulo: '',
+    descripcion: '',
+    tipo: 'danger',
+    onConfirm: null,
+  });
+
+  const cerrarConfirm = () => {
+    setConfirm({ isOpen: false, titulo: '', descripcion: '', tipo: 'danger', onConfirm: null });
+  };
   
   const [formData, setFormData] = useState({
     nombre: '', rnc: '', telefono: '', direccion: '', zona: '', email: '', categoria: 'Bronce'
   });
 
   // --- 1. LÓGICA DE PERMISOS PARA CLIENTES ---
-  const permisoClientes = useMemo(() => {    const savedRoles = localStorage.getItem('posfactura_roles_config');
-    if (usuario?.rol === 'admin') return 'full';
-    if (savedRoles && usuario) {
-      const config = JSON.parse(savedRoles);
-      return config[usuario.rol]?.modules?.clientes || 'none';
-    }
-    return 'none';
-  }, [usuario]);
+  // Obtenemos el permiso directamente del usuario logueado
+  const permisoClientes = usuario?.rol === 'admin' ? 'full' : (usuario?.permisos?.modules?.clientes || 'none');
+
+  const clientesFiltrados = useMemo(() => {
+    const busqueda = searchTerm.trim().toLowerCase();
+
+    return clientes
+      .filter(c => c.isActive !== false)
+      .filter(c => {
+        if (!busqueda) return true;
+
+        return (
+          (c.nombre || '').toLowerCase().includes(busqueda) ||
+          (c.rnc || '').toLowerCase().includes(busqueda) ||
+          (c.email || '').toLowerCase().includes(busqueda) ||
+          (c.zona || '').toLowerCase().includes(busqueda)
+        );
+      });
+  }, [clientes, searchTerm]);
 
   // Bloqueo total si el permiso es 'none'
   if (permisoClientes === 'none') {
@@ -64,6 +131,30 @@ const Clientes = () => {
     document.body.removeChild(link);
   };
 
+  const handleEliminarCliente = (cliente) => { // Renombrado para evitar confusión
+    if (cliente.id === 1) {
+      mostrarToast("No puedes eliminar al Consumidor Final", "error");
+      return;
+    }
+
+    setConfirm({
+      isOpen: true,
+      titulo: '¿Eliminar Cliente?',
+      descripcion: `¿Estás seguro de que deseas eliminar a "${cliente.nombre}"? Esta acción no se puede deshacer.`,
+      tipo: 'danger',
+      onConfirm: async () => {
+        try {
+          const exito = await eliminarCliente(cliente.id); // Esta función ahora lanza errores
+          if (exito) mostrarToast("Cliente eliminado", "success");
+        } catch (error) {
+          console.error("Error al eliminar:", error);
+          mostrarToast(error.message || "Error al eliminar cliente", "error");
+        }
+        cerrarConfirm();
+      }
+    });
+  };
+
   const getBadgeColor = (cat) => {
     switch (cat) {
       case 'Diamante': return 'bg-cyan-100 text-cyan-700 border-cyan-200';
@@ -73,16 +164,22 @@ const Clientes = () => {
     }
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (permisoClientes !== 'full') return;
-    if (isEditing) {
-      actualizarCliente(formData);
-    } else {
-      const nextId = Math.max(0, ...clientes.map(c => Number(c.id) || 0)) + 1;
-      agregarCliente({ ...formData, id: nextId });
+    try {
+      if (isEditing) {
+        await actualizarCliente(formData);
+        mostrarToast("Ficha actualizada");
+      } else {
+        await agregarCliente(formData);
+        mostrarToast("Cliente registrado");
+      }
+      cerrarModal();
+    } catch (error) {
+      console.error("Error al guardar cliente:", error);
+      mostrarToast(error.message || "No se pudo guardar el cliente", "error");
     }
-    cerrarModal();
   };
 
   const abrirEditar = (cliente) => {
@@ -97,13 +194,6 @@ const Clientes = () => {
     setIsEditing(false);
     setFormData({ nombre: '', rnc: '', telefono: '', direccion: '', zona: '', email: '', categoria: 'Bronce' });
   };
-
-  const clientesFiltrados = clientes.filter(c => 
-    c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (c.rnc && c.rnc.includes(searchTerm)) ||
-    (c.email && c.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (c.zona && c.zona.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -164,7 +254,23 @@ const Clientes = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
-            {clientesFiltrados.map(cliente => (
+            {loading && (
+              <tr>
+                <td colSpan={permisoClientes === 'full' ? 5 : 4} className="px-6 py-12 text-center">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Cargando clientes...</span>
+                </td>
+              </tr>
+            )}
+
+            {!loading && clientesFiltrados.length === 0 && (
+              <tr>
+                <td colSpan={permisoClientes === 'full' ? 5 : 4} className="px-6 py-12 text-center">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">No hay clientes para mostrar</span>
+                </td>
+              </tr>
+            )}
+
+            {!loading && clientesFiltrados.map(cliente => (
               <tr key={cliente.id} className="hover:bg-slate-50/50 transition-colors group">
                 <td className="px-6 py-4">
                   <div className="flex flex-col">
@@ -207,7 +313,7 @@ const Clientes = () => {
                         <Edit3 size={18}/>
                       </button>
                       <button 
-                        onClick={() => { if(window.confirm('¿Eliminar cliente?')) eliminarCliente(cliente.id) }} 
+                        onClick={() => handleEliminarCliente(cliente)} // Llamada a la función corregida
                         className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-all shadow-sm"
                       >
                         <Trash2 size={18}/>
@@ -291,6 +397,25 @@ const Clientes = () => {
               </button>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación elegante */}
+      <ConfirmModal
+        isOpen={confirm.isOpen}
+        titulo={confirm.titulo}
+        descripcion={confirm.descripcion}
+        tipo={confirm.tipo}
+        onConfirm={confirm.onConfirm}
+        onCancel={cerrarConfirm}
+      />
+
+      {/* TOAST NOTIFICATION */}
+      {toast.show && (
+        <div className={`fixed bottom-5 right-5 z-[200] p-4 rounded-xl shadow-2xl animate-in slide-in-from-right duration-300 ${
+          toast.tipo === 'success' ? 'bg-slate-900 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <p className="text-[10px] font-black uppercase tracking-widest">{toast.mensaje}</p>
         </div>
       )}
     </div>
