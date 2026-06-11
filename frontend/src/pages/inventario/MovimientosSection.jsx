@@ -260,34 +260,62 @@ const MovimientosSection = ({ mostrarToast }) => {
     });
   }, [movimientos, busquedaKardex, filtroTipo, fechaInicio, fechaFin]);
 
-  const exportarKardexCSV = () => {
+const exportarKardexCSV = () => {
     if (movimientosFiltrados.length === 0) {
       mostrarToast?.("No hay movimientos para exportar", "warning");
       return;
     }
 
     const headers = ["Fecha", "Producto", "Código", "Usuario", "Tipo", "Cantidad", "Stock Final", "Nota"];
+    
     const rows = movimientosFiltrados.map(m => {
       const usuarioObj = usuarios.find(u => Number(u.id) === Number(m.usuarioId));
       const nombreUsuario = usuarioObj ? usuarioObj.nombre : (m.usuarioId || 'Sistema');
 
+      // Helper para escapar comillas dobles y envolver de forma segura cada campo
+      const mapearCampo = (valor) => {
+        const texto = String(valor ?? '').replace(/"/g, '""'); // Dobla comillas internas
+        return `"${texto}"`; // Encapitula el texto
+      };
+
       return [
-        `"${new Date(m.createdAt).toLocaleString()}"`,
-        `"${(m.producto?.nombre || '---').replace(/"/g, '""')}"`,
-        `"${(m.producto?.codigo || '---').replace(/"/g, '""')}"`,
-        `"${nombreUsuario}"`,
-        `"${m.tipo}"`,
-        `"${m.cantidad}"`,
-        `"${m.nuevoStock ?? '---'}"`,
-        `"${(m.nota || '').replace(/"/g, '""')}"`
-      ];
+        mapearCampo(new Date(m.createdAt).toLocaleString()),
+        mapearCampo(m.producto?.nombre || '---'),
+        mapearCampo(m.producto?.codigo || '---'),
+        mapearCampo(nombreUsuario),
+        mapearCampo(m.tipo),
+        mapearCampo(m.cantidad),
+        mapearCampo(m.nuevoStock ?? '---'),
+        mapearCampo(m.nota || '')
+      ].join(",");
     });
 
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + rows.map(r => r.join(",")).join("\n");
-    const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `Kardex_Inventario_${new Date().toISOString().split('T')[0]}.csv`);
-    link.click();
+    // 1. Forzamos a Excel a usar la coma como separador explícito
+    const csvContent = "sep=,\n" + headers.join(",") + "\n" + rows.join("\n");
+
+    try {
+      // 2. Creamos el Blob agregando el BOM (\uFEFF) para mantener los acentos intactos
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      // 3. Generamos el link de descarga virtual temporal
+      const link = document.createElement("a");
+      link.href = url;
+      
+      const fechaFormateada = new Date().toISOString().split('T')[0];
+      link.setAttribute("download", `Kardex_Inventario_${fechaFormateada}.csv`);
+      
+      // 4. Disparamos la descarga y limpiamos la memoria del navegador
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      mostrarToast?.("Kardex exportado con éxito", "success");
+    } catch (error) {
+      console.error("Error al exportar Kardex:", error);
+      mostrarToast?.("No se pudo generar el archivo del Kardex", "error");
+    }
   };
 
   const esFlujoMovimientoMasivo = tipoMovimiento === 'multilinea' || tipoMovimiento === 'recibir' || tipoMovimiento === 'despachar';
