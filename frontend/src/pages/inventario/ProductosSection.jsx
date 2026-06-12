@@ -254,6 +254,14 @@ const handleSave = async (e) => {
   e.preventDefault();
   setIsSaving(true);
 
+  // Validar que la unidad de medida seleccionada exista en el catálogo cargado y esté activa
+  const unidadExiste = unidadesMedida.some(u => u.nombre === formData.unidadMedida && u.activo);
+  if (!unidadExiste) {
+    setIsSaving(false);
+    mostrarToast?.(`La unidad "${formData.unidadMedida}" no es válida. Selecciona una del catálogo.`, 'error');
+    return;
+  }
+
   // Validar si el código ya existe para evitar duplicados
   if (formData.codigo?.trim()) {
     const codigoNormalizado = formData.codigo.trim().toLowerCase();

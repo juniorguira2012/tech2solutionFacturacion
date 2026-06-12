@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Warehouse, Plus, Boxes, MapPin, X, LayoutGrid, List, Edit2, Trash2, AlertTriangle, Package } from 'lucide-react';
-
+import React, { useState, useEffect, useMemo } from 'react';
+import { Warehouse, Plus, Boxes, MapPin, X, LayoutGrid, List, Edit2, Trash2, AlertTriangle, Package, DollarSign } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 
 // Modal de Confirmación Estilizado para acciones críticas
@@ -48,6 +47,83 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
   );
 };
 
+// Nuevo Modal para el desglose de valor por categoría
+const CategoryBreakdownModal = ({ isOpen, onClose, almacen, productos, categorias }) => {
+  if (!isOpen || !almacen) return null;
+
+  const breakdown = useMemo(() => {
+    const categoryMap = {};
+    
+    productos.filter(p => p.isActive !== false).forEach(p => {
+      // Buscamos el stock específico registrado para este almacén
+      const stockRel = p.warehouseStocks?.find(ws => ws.almacen === almacen.nombre);
+      
+      // Determinamos la cantidad: si hay registro específico lo usamos, 
+      // de lo contrario usamos el stock global solo si coincide el almacén principal.
+      const cantidadEnAlmacen = stockRel 
+        ? Number(stockRel.cantidad) 
+        : (p.almacen === almacen.nombre ? Number(p.stock) : 0);
+
+      if (cantidadEnAlmacen > 0) {
+        const categoriaNombre = p.categoria || 'Sin Categoría';
+        const valorProducto = Number(p.precio) * cantidadEnAlmacen;
+        categoryMap[categoriaNombre] = (categoryMap[categoriaNombre] || 0) + valorProducto;
+      }
+    });
+
+    // Convertir a array y ordenar por valor descendente
+    return Object.entries(categoryMap)
+      .map(([nombre, valor]) => ({ nombre, valor }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [almacen, productos]);
+
+  const totalValorAlmacen = breakdown.reduce((acc, item) => acc + item.valor, 0);
+
+  return (
+    <div className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter italic">
+            Valor por Categoría
+          </h2>
+          <button onClick={onClose} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 shadow-sm transition-all">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-8 space-y-4">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Desglose para: <span className="text-slate-800">{almacen.nombre}</span>
+          </p>
+
+          {breakdown.length > 0 ? (
+            <div className="space-y-2">
+              {breakdown.map((item, index) => (
+                <div key={index} className="flex justify-between items-center p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                  <span className="text-xs font-bold text-slate-700 uppercase">{item.nombre}</span>
+                  <span className="text-sm font-black text-emerald-600">
+                    RD$ {item.valor.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between items-center pt-4 border-t border-dashed border-slate-100">
+                <span className="text-sm font-black text-slate-800 uppercase">Total Almacén</span>
+                <span className="text-xl font-black text-emerald-700">
+                    RD$ {totalValorAlmacen.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-xl">
+              <p className="text-[9px] font-bold text-slate-300 uppercase">No hay productos con valor en este almacén</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AlmacenSection = ({ mostrarToast }) => {
   const [isAlmacenModalOpen, setIsAlmacenModalOpen] = useState(false);
   const [isUbicacionModalOpen, setIsUbicacionModalOpen] = useState(false);
@@ -80,15 +156,30 @@ const AlmacenSection = ({ mostrarToast }) => {
     setConfirm({ isOpen: false, titulo: '', descripcion: '', tipo: 'danger', onConfirm: null });
   };
 
+  // Estado para el modal de desglose por categoría
+  const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
+  const [selectedAlmacenForBreakdown, setSelectedAlmacenForBreakdown] = useState(null);
+
+  // Nuevo estado para controlar qué almacenes muestran su lista completa de productos
+  const [expandedAlmacenes, setExpandedAlmacenes] = useState({});
+
   const { 
     almacenesDetallados: almacenes, 
     productos,
     agregarAlmacen, 
     actualizarAlmacen, 
-    eliminarAlmacen 
+    eliminarAlmacen,
+    categorias // Necesitamos las categorías para el desglose
   } = useInventario();
   const [almacenFormData, setAlmacenFormData] = useState({ nombre: '', descripcion: '' });
   const [ubicacionFormData, setUbicacionFormData] = useState({ nombre: '', codigo: '', tipo: 'Pasillo' });
+
+  const toggleExpandAlmacen = (almacenId) => {
+    setExpandedAlmacenes(prev => ({
+      ...prev,
+      [almacenId]: !prev[almacenId]
+    }));
+  };
 
   useEffect(() => {
     localStorage.setItem('posfactura_almacen_vista', vistaAlmacen);
@@ -220,6 +311,15 @@ const AlmacenSection = ({ mostrarToast }) => {
         onConfirm={confirm.onConfirm}
         onCancel={cerrarConfirm}
       />
+      
+      {/* Modal de desglose por categoría */}
+      <CategoryBreakdownModal
+        isOpen={showCategoryBreakdown}
+        onClose={() => setShowCategoryBreakdown(false)}
+        almacen={selectedAlmacenForBreakdown}
+        productos={productos}
+        categorias={categorias}
+      />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
         <div className="flex items-center gap-3">
@@ -262,7 +362,25 @@ const AlmacenSection = ({ mostrarToast }) => {
       </div>
 
       <div className={vistaAlmacen === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-3'}>
-        {almacenes.map(almacen => (
+        {almacenes.map(almacen => {
+          // Filtramos productos que tienen presencia física real en este almacén específico
+          const productosAsignados = productos
+            .filter(p => p.isActive !== false)
+            .map(p => {
+              const stockRel = p.warehouseStocks?.find(ws => ws.almacen === almacen.nombre);
+              const stockLocal = stockRel 
+                ? Number(stockRel.cantidad) 
+                : (p.almacen === almacen.nombre ? Number(p.stock) : 0);
+
+              // Solo incluimos el producto si tiene unidades en este almacén
+              return stockLocal > 0 ? { ...p, stockLocal } : null;
+            })
+            .filter(Boolean);
+
+          const valorInventario = productosAsignados.reduce((acc, p) => acc + (Number(p.precio) * p.stockLocal), 0);
+          const estaExpandido = expandedAlmacenes[almacen.id];
+
+          return (
           <div key={almacen.id} className={`bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group ${vistaAlmacen === 'list' ? 'lg:flex lg:items-stretch' : ''}`}>
             <div className={`p-5 border-b border-slate-50 bg-slate-50/30 flex justify-between items-start gap-4 ${vistaAlmacen === 'list' ? 'lg:w-80 lg:border-b-0 lg:border-r' : ''}`}>
               <div className="flex items-center gap-3 min-w-0">
@@ -341,16 +459,31 @@ const AlmacenSection = ({ mostrarToast }) => {
                 )}
               </div>
 
-              {/* Nueva Sección: Productos Asignados */}
-              <div className="space-y-2 pt-4 border-t border-slate-50">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 italic">
-                  Productos en Stock ({productos.filter(p => (p.almacen || 'Principal') === almacen.nombre).length})
-                </p>
-                {productos.filter(p => (p.almacen || 'Principal') === almacen.nombre).length > 0 ? (
+              <div className="space-y-4 pt-4 border-t border-slate-50">
+                <div className="flex justify-between items-center mb-1">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">
+                    Productos en Stock ({productosAsignados.length})
+                  </p>
+                  {valorInventario > 0 && (
+                    <button 
+                      onClick={() => {
+                        setSelectedAlmacenForBreakdown(almacen);
+                        setShowCategoryBreakdown(true);
+                      }}
+                      className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-lg border border-emerald-100/50 shadow-sm hover:bg-emerald-100 transition-colors cursor-pointer group/value"
+                      title="Ver desglose por categoría"
+                    >
+                      <DollarSign size={10} strokeWidth={3} />
+                      <span className="text-[9px] font-black tracking-tight">
+                        RD$ {valorInventario.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                {productosAsignados.length > 0 ? (
                   <div className="grid grid-cols-1 gap-1.5">
-                    {productos
-                      .filter(p => (p.almacen || 'Principal') === almacen.nombre)
-                      .slice(0, 5) // Mostramos solo los primeros 5 para no saturar la tarjeta
+                    {(estaExpandido ? productosAsignados : productosAsignados.slice(0, 5))
                       .map((prod) => (
                         <div key={prod.id} className="flex items-center justify-between p-2 bg-indigo-50/30 rounded-lg border border-indigo-50/50">
                           <div className="flex items-center gap-2 min-w-0">
@@ -358,14 +491,17 @@ const AlmacenSection = ({ mostrarToast }) => {
                             <span className="text-[9px] font-bold text-slate-700 uppercase truncate">{prod.nombre}</span>
                           </div>
                           <span className="text-[9px] font-black text-indigo-600 bg-white px-1.5 py-0.5 rounded border border-indigo-50 shrink-0">
-                            {prod.stock} {prod.unidadMedida}
+                            {prod.stockLocal} {prod.unidadMedida}
                           </span>
                         </div>
                       ))}
-                    {productos.filter(p => (p.almacen || 'Principal') === almacen.nombre).length > 5 && (
-                      <p className="text-[8px] text-center text-slate-400 font-bold uppercase py-1 italic tracking-widest">
-                        + {productos.filter(p => (p.almacen || 'Principal') === almacen.nombre).length - 5} productos adicionales
-                      </p>
+                    {productosAsignados.length > 5 && (
+                      <button 
+                        onClick={() => toggleExpandAlmacen(almacen.id)}
+                        className="w-full text-[8px] text-center text-slate-400 font-black uppercase py-2 italic tracking-widest hover:text-brand transition-colors border-t border-slate-50 mt-1 cursor-pointer"
+                      >
+                        {estaExpandido ? 'Ver menos' : `+ ${productosAsignados.length - 5} productos adicionales`}
+                      </button>
                     )}
                   </div>
                 ) : (
@@ -376,7 +512,8 @@ const AlmacenSection = ({ mostrarToast }) => {
               </div>
             </div>
           </div>
-        ))}
+        );
+        })}
       </div>
 
       {/* Modal Crear Almacén */}

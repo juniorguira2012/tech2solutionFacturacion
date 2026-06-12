@@ -109,7 +109,7 @@ export const InventarioProvider = ({ children }) => {
       });
   }, [usuario, refreshIndex, API_URL, verEliminados, getAuthHeaders]);
 
-  // Efecto para cargar catálogos (Proveedores y Almacenes)
+  // Efecto para cargar catálogos globales (Proveedores, Almacenes y Unidades)
   useEffect(() => {
     if (!usuario) return;
 
@@ -130,7 +130,18 @@ export const InventarioProvider = ({ children }) => {
         setAlmacenesDetallados(Array.isArray(data) ? data : []);
       })
       .catch(err => console.error("Error almacenes:", err));
-  }, [usuario, refreshIndex, API_BASE_URL]);
+
+    // Cargar unidades de medida directamente desde la DB para que estén disponibles globalmente
+    fetch(`${API_BASE_URL}/units-of-measure`, { headers })
+      .then(res => {
+        if (!res.ok) throw new Error('Error al obtener unidades');
+        return res.json();
+      })
+      .then(data => {
+        setUnidadesMedida(Array.isArray(data) ? data : []);
+      })
+      .catch(err => console.error("Error unidades:", err));
+  }, [usuario, refreshIndex, API_BASE_URL, getAuthHeaders]);
 
   // --- GESTIÓN DE UNIDADES DE MEDIDA (DB) ---
   const cargarUnidadesMedida = useCallback(async () => {
@@ -333,6 +344,7 @@ const registrarMovimientosMasivos = async (payload) => {
       }
 
       setProductos(prev => [...prev, data]);
+      setRefreshIndex(prev => prev + 1); // Dispara la recarga global de catálogos y productos
       return true;
     } catch (err) {
       console.error("Error al agregar producto:", err);
@@ -502,6 +514,7 @@ const registrarMovimientosMasivos = async (payload) => {
       }
       
       setProductos(prev => prev.map(p => p.id === data.id ? data : p));
+      setRefreshIndex(prev => prev + 1); // Dispara la recarga global de catálogos y productos
       return true;
     } catch (err) {
       console.error("Error al actualizar:", err);

@@ -86,6 +86,25 @@ export class MovementsService {
   }
 
   /**
+   * Sincroniza el stock global con el desglose por almacén si es la primera vez 
+   * que se realiza un movimiento para este producto.
+   */
+  private async ensureDetailedStockInitialized(manager: EntityManager, producto: Product) {
+    const count = await manager.count(ProductWarehouseStock, {
+      where: { productoId: producto.id },
+    });
+
+    if (count === 0 && Number(producto.stock) > 0 && producto.almacen) {
+      const entry = manager.create(ProductWarehouseStock, {
+        productoId: producto.id,
+        almacen: producto.almacen,
+        cantidad: producto.stock,
+      });
+      await manager.save(ProductWarehouseStock, entry);
+    }
+  }
+
+  /**
    * PROCESAR TRANSFERENCIA ENTRE ALMACENES (Atómico)
    */
   async transferBulk(transferData: { 
@@ -111,6 +130,9 @@ export class MovementsService {
       if (!producto) {
         throw new NotFoundException(`Producto ID ${productoId} no encontrado`);
       }
+
+      // Asegurar que el stock inicial esté en la tabla de desglose antes de validar
+      await this.ensureDetailedStockInitialized(queryRunner.manager, producto);
 
       const cantidadNumerica = Number(cantidad);
 
@@ -185,6 +207,9 @@ export class MovementsService {
       if (!producto) {
         throw new NotFoundException(`Producto con ID ${productoId} no encontrado`);
       }
+
+      // Asegurar que el stock inicial esté en la tabla de desglose antes de validar
+      await this.ensureDetailedStockInitialized(queryRunner.manager, producto);
 
       const tipoNormalizado = tipo.toUpperCase();
       const cantidadNumerica = Number(cantidad);
@@ -337,6 +362,9 @@ export class MovementsService {
         if (!producto) {
           throw new NotFoundException(`Producto ID ${productoId} no encontrado en la base de datos`);
         }
+
+        // Asegurar que el stock inicial esté en la tabla de desglose
+        await this.ensureDetailedStockInitialized(queryRunner.manager, producto);
 
         let nuevoStock = producto.stock;
         let batchInfo = '';
