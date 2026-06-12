@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "@nestjs/mapped-types": "*",
-    "bcryptjs": "^3.0.3"
+    "bcryptjs": "^3.0.3",
+    "npm": "^11.17.0"
   }
 }

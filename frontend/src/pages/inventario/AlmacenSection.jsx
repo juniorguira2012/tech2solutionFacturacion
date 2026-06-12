@@ -1,7 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { Warehouse, Plus, Boxes, MapPin, X, LayoutGrid, List, Edit2, Trash2 } from 'lucide-react';
+import { Warehouse, Plus, Boxes, MapPin, X, LayoutGrid, List, Edit2, Trash2, AlertTriangle } from 'lucide-react';
 
 import { useInventario } from '../../context/InventarioContext';
+
+// Modal de Confirmación Estilizado para acciones críticas
+const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo = 'danger' }) => {
+  if (!isOpen) return null;
+
+  const esEliminar = tipo === 'danger';
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+        
+        {/* Icono de advertencia */}
+        <div className={`flex justify-center pt-8 pb-4`}>
+          <div className={`h-16 w-16 rounded-2xl flex items-center justify-center ${esEliminar ? 'bg-red-50' : 'bg-amber-50'}`}>
+            <AlertTriangle size={32} className={esEliminar ? 'text-red-500' : 'text-amber-500'} />
+          </div>
+        </div>
+
+        {/* Contenido de texto */}
+        <div className="px-8 pb-6 text-center space-y-2">
+          <h3 className="text-base font-black text-slate-800 uppercase tracking-wide">{titulo}</h3>
+          <p className="text-[11px] font-medium text-slate-400 leading-relaxed">{descripcion}</p>
+        </div>
+
+        {/* Botones de Acción */}
+        <div className="flex border-t border-slate-100">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-4 text-[11px] font-black uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-colors border-r border-slate-100"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest text-white transition-colors ${
+              esEliminar ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-500 hover:bg-amber-600'
+            }`}
+          >
+            {esEliminar ? 'Eliminar' : 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AlmacenSection = ({ mostrarToast }) => {
   const [isAlmacenModalOpen, setIsAlmacenModalOpen] = useState(false);
@@ -17,6 +62,23 @@ const AlmacenSection = ({ mostrarToast }) => {
 
   const [isEditingUbicacion, setIsEditingUbicacion] = useState(false);
   const [editandoUbicacionIdx, setEditandoUbicacionIdx] = useState(null);
+
+  // Estado para controlar el modal de confirmación centralizado
+  const [confirm, setConfirm] = useState({
+    isOpen: false,
+    titulo: '',
+    descripcion: '',
+    tipo: 'danger',
+    onConfirm: null,
+  });
+
+  const mostrarConfirm = ({ titulo, descripcion, tipo = 'danger', onConfirm }) => {
+    setConfirm({ isOpen: true, titulo, descripcion, tipo, onConfirm });
+  };
+
+  const cerrarConfirm = () => {
+    setConfirm({ isOpen: false, titulo: '', descripcion: '', tipo: 'danger', onConfirm: null });
+  };
 
   const { 
     almacenesDetallados: almacenes, 
@@ -59,19 +121,26 @@ const AlmacenSection = ({ mostrarToast }) => {
     setIsAlmacenModalOpen(true);
   };
 
-  const handleEliminarAlmacen = async (almacen) => {
-    if (!window.confirm(`¿Seguro que deseas eliminar el almacén "${almacen.nombre}"?`)) return;
-
-    try {
-      await eliminarAlmacen(almacen.id);
-      if (selectedAlmacen?.id === almacen.id) {
-        setSelectedAlmacen(null);
-        setIsUbicacionModalOpen(false);
+  const handleEliminarAlmacen = (almacen) => {
+    mostrarConfirm({
+      titulo: '¿Eliminar Almacén?',
+      descripcion: `¿Estás seguro de que deseas eliminar permanentemente el almacén "${almacen.nombre}"? Esta acción no se puede deshacer.`,
+      tipo: 'danger',
+      onConfirm: async () => {
+        try {
+          await eliminarAlmacen(almacen.id);
+          if (selectedAlmacen?.id === almacen.id) {
+            setSelectedAlmacen(null);
+            setIsUbicacionModalOpen(false);
+          }
+          mostrarToast("Almacén eliminado");
+        } catch (error) {
+          mostrarToast(error.message || "Error al eliminar", "error");
+        } finally {
+          cerrarConfirm();
+        }
       }
-      mostrarToast("Almacén eliminado");
-    } catch (error) {
-      mostrarToast(error.message || "Error al eliminar", "error");
-    }
+    });
   };
 
   const handleGuardarAlmacen = async (e) => {
@@ -98,15 +167,24 @@ const AlmacenSection = ({ mostrarToast }) => {
     setIsUbicacionModalOpen(true);
   };
 
-  const handleEliminarUbicacion = async (almacen, idx) => {
-    if (!window.confirm(`¿Seguro que deseas eliminar la ubicación "${almacen.ubicaciones[idx].nombre}"?`)) return;
-    try {
-      const nuevasUbicaciones = almacen.ubicaciones.filter((_, i) => i !== idx);
-      await actualizarAlmacen({ id: almacen.id, ubicaciones: nuevasUbicaciones });
-      mostrarToast("Ubicación eliminada");
-    } catch (error) {
-      mostrarToast("Error al eliminar ubicación", "error");
-    }
+  const handleEliminarUbicacion = (almacen, idx) => {
+    const ubicacion = almacen.ubicaciones[idx];
+    mostrarConfirm({
+      titulo: '¿Eliminar Ubicación?',
+      descripcion: `¿Seguro que deseas eliminar la ubicación "${ubicacion.nombre}"?`,
+      tipo: 'danger',
+      onConfirm: async () => {
+        try {
+          const nuevasUbicaciones = almacen.ubicaciones.filter((_, i) => i !== idx);
+          await actualizarAlmacen({ id: almacen.id, ubicaciones: nuevasUbicaciones });
+          mostrarToast("Ubicación eliminada");
+        } catch (error) {
+          mostrarToast("Error al eliminar ubicación", "error");
+        } finally {
+          cerrarConfirm();
+        }
+      }
+    });
   };
 
   const handleGuardarUbicacion = async (e) => {
@@ -132,6 +210,16 @@ const AlmacenSection = ({ mostrarToast }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Modal de confirmación centralizado */}
+      <ConfirmModal
+        isOpen={confirm.isOpen}
+        titulo={confirm.titulo}
+        descripcion={confirm.descripcion}
+        tipo={confirm.tipo}
+        onConfirm={confirm.onConfirm}
+        onCancel={cerrarConfirm}
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-100">

@@ -211,7 +211,7 @@ const ProductosSection = ({ mostrarToast }) => {
       };
 
       return [
-        mapearCampo(p.codigo),
+        mapearCampo(p.codigo), 
         mapearCampo(p.nombre),
         mapearCampo(p.categoria),
         mapearCampo(p.precio),

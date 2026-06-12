@@ -169,23 +169,36 @@ export const Layout = ({ children }) => {
             )}
           </div>
         </nav>
-        
-        <div className="p-4 mt-auto mb-4 border-t border-white/5 pt-6">
+        {/* Bloque Inferior: Configuración + Créditos */}
+          <div className="p-4 mt-auto border-t border-white/5 pt-6 space-y-3">
           {puedeVer('configuracion') && (
             <NavLink
               to="/configuracion"
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-4 rounded-2xl transition-all duration-200 font-black text-xs uppercase tracking-widest ${
-                  isActive ? 'bg-white text-brand shadow-xl' : 'hover:bg-white/10 text-white/50'
+                `flex items-center justify-between px-5 py-4 rounded-2xl transition-all duration-300 font-black text-[10px] uppercase tracking-[0.15em] ${
+                  isActive 
+                    ? 'bg-white text-slate-900 shadow-xl shadow-slate-950/20 scale-[1.02]' 
+                    : 'hover:bg-white/5 text-white/40 hover:text-white'
                 }`
               }
             >
-              <Settings size={20} /> Configuración
+              {/* Contenedor Izquierdo: Icono + Texto */}
+              <div className="flex items-center gap-3.5">
+                <Settings size={16} className="opacity-80" /> 
+                <span>Configuración</span>
+              </div>
             </NavLink>
           )}
+
+          {/* Bloque de Créditos y Versión del Sistema */}
+          <div className="flex items-center justify-between px-5 pt-2 text-slate-400 font-bold tracking-wider text-[9px] uppercase">
+            <span className="opacity-80">Tec2Solution © 2026</span>
+            <span className="bg-white/10 border border-white/5 px-2.5 py-0.5 rounded-full text-slate-200 font-mono text-[10px]">
+              {`v${import.meta.env.VITE_APP_VERSION || '1.0.0'}`}
+            </span>
+          </div>
         </div>
       </aside>
-
       {/* Contenedor de Contenido (Header + Main) */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         
