@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Warehouse, Plus, Boxes, MapPin, X, LayoutGrid, List, Edit2, Trash2, AlertTriangle } from 'lucide-react';
+import { Warehouse, Plus, Boxes, MapPin, X, LayoutGrid, List, Edit2, Trash2, AlertTriangle, Package } from 'lucide-react';
 
 import { useInventario } from '../../context/InventarioContext';
 
@@ -82,6 +82,7 @@ const AlmacenSection = ({ mostrarToast }) => {
 
   const { 
     almacenesDetallados: almacenes, 
+    productos,
     agregarAlmacen, 
     actualizarAlmacen, 
     eliminarAlmacen 
@@ -304,7 +305,7 @@ const AlmacenSection = ({ mostrarToast }) => {
               </div>
             </div>
             
-            <div className="p-5 flex-1">
+            <div className="p-5 flex-1 space-y-6">
               <div className="space-y-2">
                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 italic">Ubicaciones Registradas ({almacen.ubicaciones?.length || 0})</p>
                 {almacen.ubicaciones?.length > 0 ? (
@@ -336,6 +337,40 @@ const AlmacenSection = ({ mostrarToast }) => {
                 ) : (
                   <div className="py-4 text-center border-2 border-dashed border-slate-100 rounded-xl">
                     <p className="text-[9px] font-bold text-slate-300 uppercase">Sin ubicaciones</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Nueva Sección: Productos Asignados */}
+              <div className="space-y-2 pt-4 border-t border-slate-50">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 italic">
+                  Productos en Stock ({productos.filter(p => (p.almacen || 'Principal') === almacen.nombre).length})
+                </p>
+                {productos.filter(p => (p.almacen || 'Principal') === almacen.nombre).length > 0 ? (
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {productos
+                      .filter(p => (p.almacen || 'Principal') === almacen.nombre)
+                      .slice(0, 5) // Mostramos solo los primeros 5 para no saturar la tarjeta
+                      .map((prod) => (
+                        <div key={prod.id} className="flex items-center justify-between p-2 bg-indigo-50/30 rounded-lg border border-indigo-50/50">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Package size={12} className="text-indigo-400 shrink-0" />
+                            <span className="text-[9px] font-bold text-slate-700 uppercase truncate">{prod.nombre}</span>
+                          </div>
+                          <span className="text-[9px] font-black text-indigo-600 bg-white px-1.5 py-0.5 rounded border border-indigo-50 shrink-0">
+                            {prod.stock} {prod.unidadMedida}
+                          </span>
+                        </div>
+                      ))}
+                    {productos.filter(p => (p.almacen || 'Principal') === almacen.nombre).length > 5 && (
+                      <p className="text-[8px] text-center text-slate-400 font-bold uppercase py-1 italic tracking-widest">
+                        + {productos.filter(p => (p.almacen || 'Principal') === almacen.nombre).length - 5} productos adicionales
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-4 text-center border-2 border-dashed border-slate-100 rounded-xl">
+                    <p className="text-[9px] font-bold text-slate-300 uppercase">Sin mercancía asignada</p>
                   </div>
                 )}
               </div>
