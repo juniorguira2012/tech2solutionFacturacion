@@ -134,7 +134,10 @@ export const InventarioProvider = ({ children }) => {
     // Cargar unidades de medida directamente desde la DB para que estén disponibles globalmente
     fetch(`${API_BASE_URL}/units-of-measure`, { headers })
       .then(res => {
-        if (!res.ok) throw new Error('Error al obtener unidades');
+        if (!res.ok) {
+          console.error(`Status: ${res.status} al cargar catálogos de unidades`);
+          throw new Error(`Error al obtener unidades (${res.status})`);
+        }
         return res.json();
       })
       .then(data => {
@@ -148,11 +151,15 @@ export const InventarioProvider = ({ children }) => {
     if (!usuario) return;
     try {
       const res = await fetch(`${API_BASE_URL}/units-of-measure`, { headers: getAuthHeaders() });
-      if (!res.ok) throw new Error('Error al cargar unidades');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const msg = errorData.message || `Status: ${res.status}`;
+        throw new Error(`Error al cargar unidades: ${msg}`);
+      }
       const data = await res.json();
       setUnidadesMedida(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Error cargando unidades:", err);
+      console.error("🔴 Error detallado en cargarUnidadesMedida:", err.message);
     }
   }, [API_BASE_URL, getAuthHeaders, usuario]);
 
