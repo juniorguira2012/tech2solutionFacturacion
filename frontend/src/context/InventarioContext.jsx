@@ -12,6 +12,7 @@ export const InventarioProvider = ({ children }) => {
   const [conteos, setConteos] = useState([]);
   const [lotes, setLotes] = useState([]);
   const [prestamos, setPrestamos] = useState([]);
+  const [tecnicos, setTecnicos] = useState([]);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [verEliminados, setVerEliminados] = useState(false);
 
@@ -144,6 +145,16 @@ export const InventarioProvider = ({ children }) => {
         setUnidadesMedida(Array.isArray(data) ? data : []);
       })
       .catch(err => console.error("Error unidades:", err));
+
+    fetch(`${API_BASE_URL}/movements/technicians`, { headers })
+      .then(res => {
+        if (!res.ok) throw new Error('Error al obtener técnicos');
+        return res.json();
+      })
+      .then(data => {
+        setTecnicos(Array.isArray(data) ? data : []);
+      })
+      .catch(err => console.error("Error técnicos:", err));
   }, [usuario, refreshIndex, API_BASE_URL, getAuthHeaders]);
 
   // --- GESTIÓN DE UNIDADES DE MEDIDA (DB) ---
@@ -251,6 +262,65 @@ export const InventarioProvider = ({ children }) => {
     } catch (err) {
       console.error("Error al registrar movimiento:", err);
       throw err; // Re-lanzamos para que la UI pueda capturar el error
+    }
+  };
+
+  const crearTecnico = async (payload) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/movements/technicians`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Error al crear técnico');
+
+      setTecnicos(prev => {
+        const existe = prev.some(t => Number(t.id) === Number(data.id));
+        return existe ? prev.map(t => Number(t.id) === Number(data.id) ? data : t) : [...prev, data];
+      });
+      return data;
+    } catch (err) {
+      console.error("Error al crear técnico:", err);
+      throw err;
+    }
+  };
+
+  const actualizarTecnico = async (id, payload) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/movements/technicians/${id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Error al actualizar técnico');
+
+      setTecnicos(prev => prev.map(t => Number(t.id) === Number(id) ? data : t));
+      return data;
+    } catch (err) {
+      console.error("Error al actualizar técnico:", err);
+      throw err;
+    }
+  };
+
+  const eliminarTecnico = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/movements/technicians/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Error al eliminar técnico');
+
+      setTecnicos(prev => prev.filter(t => Number(t.id) !== Number(id)));
+      return data;
+    } catch (err) {
+      console.error("Error al eliminar técnico:", err);
+      throw err;
     }
   };
 
@@ -782,6 +852,7 @@ const registrarMovimientosMasivos = async (payload) => {
 return (
   <InventarioContext.Provider value={{ 
     productos, 
+    tecnicos,
     prestamos,
     movimientos, 
     loading, 
@@ -823,6 +894,9 @@ return (
     actualizarProducto,
     descontarStock,
     registrarMovimiento,         
+    crearTecnico,
+    actualizarTecnico,
+    eliminarTecnico,
     registrarTransferencia,      
     registrarMovimientosMasivos,
     cargarMovimientos,

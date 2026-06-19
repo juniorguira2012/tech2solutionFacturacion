@@ -1,11 +1,12 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager } from 'typeorm';
+import { Repository, DataSource, EntityManager, Not } from 'typeorm';
 import { Movement } from './entities/movement.entity';
 import { Product } from '../products/entities/product.entity';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { ProductWarehouseStock } from '../products/entities/product-warehouse-stock.entity';
 import { InventoryBatch } from './entities/inventory-batch.entity';
+import { Technician } from './entities/technician.entity';
 
 @Injectable()
 export class MovementsService {
@@ -14,8 +15,98 @@ export class MovementsService {
     private movementRepository: Repository<Movement>,
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
+    @InjectRepository(Technician)
+    private technicianRepository: Repository<Technician>,
     private dataSource: DataSource,
   ) {}
+
+  async findTechnicians() {
+    return this.technicianRepository.find({
+      where: { isActive: true },
+      order: { nombre: 'ASC' },
+    });
+  }
+
+  async createTechnician(payload: { nombre: string; telefono?: string; email?: string }) {
+    const nombre = payload.nombre?.trim();
+    if (!nombre) {
+      throw new BadRequestException('El nombre del técnico es obligatorio');
+    }
+
+    const existente = await this.technicianRepository.findOne({ where: { nombre } });
+    if (existente) {
+      if (!existente.isActive) {
+        existente.isActive = true;
+        existente.telefono = payload.telefono?.trim() || existente.telefono;
+        existente.email = payload.email?.trim() || existente.email;
+        return this.technicianRepository.save(existente);
+      }
+      return existente;
+    }
+
+    const technician = this.technicianRepository.create({
+      nombre,
+      telefono: payload.telefono?.trim() || undefined,
+      email: payload.email?.trim() || undefined,
+    });
+
+    return this.technicianRepository.save(technician);
+  }
+
+  async updateTechnician(id: number, payload: { nombre?: string; telefono?: string; email?: string; isActive?: boolean }) {
+    const technician = await this.technicianRepository.findOne({ where: { id } });
+    if (!technician) {
+      throw new NotFoundException(`Técnico ID ${id} no encontrado`);
+    }
+
+    const nombre = payload.nombre?.trim();
+    if (nombre) {
+      const duplicado = await this.technicianRepository.findOne({
+        where: { nombre, id: Not(id) },
+      });
+      if (duplicado) {
+        throw new BadRequestException('Ya existe otro técnico con ese nombre');
+      }
+      technician.nombre = nombre;
+    }
+
+    if (payload.telefono !== undefined) technician.telefono = payload.telefono?.trim() || undefined;
+    if (payload.email !== undefined) technician.email = payload.email?.trim() || undefined;
+    if (payload.isActive !== undefined) technician.isActive = Boolean(payload.isActive);
+
+    return this.technicianRepository.save(technician);
+  }
+
+  async deleteTechnician(id: number) {
+    const technician = await this.technicianRepository.findOne({ where: { id } });
+    if (!technician) {
+      throw new NotFoundException(`Técnico ID ${id} no encontrado`);
+    }
+
+    technician.isActive = false;
+    return this.technicianRepository.save(technician);
+  }
+
+  private async resolveTechnician(
+    manager: EntityManager,
+    technicianId?: number,
+    technicianName?: string,
+  ) {
+    if (technicianId) {
+      const technician = await manager.findOne(Technician, { where: { id: Number(technicianId) } });
+      if (!technician) throw new NotFoundException(`Técnico ID ${technicianId} no encontrado`);
+      return technician;
+    }
+
+    const nombre = technicianName?.trim();
+    if (!nombre) return null;
+
+    const existente = await manager.findOne(Technician, { where: { nombre } });
+    if (existente) return existente;
+
+    const nuevo = manager.create(Technician, { nombre });
+    return manager.save(Technician, nuevo);
+  }
 
   /**
    * Helper para actualizar el stock por almacén de forma atómica usando QueryBuilder puro
@@ -199,7 +290,19 @@ export class MovementsService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-    const { productoId, tipo, cantidad, nota, usuarioId, almacenOrigen, almacenDestino, referencia, lote } = createMovementDto as any;
+    const {
+      productoId,
+      tipo,
+      cantidad,
+      nota,
+      usuarioId,
+      almacenOrigen,
+      almacenDestino,
+      referencia,
+      lote,
+      technicianId,
+      technicianName,
+    } = createMovementDto as any;
 
     try {
       let batchGenerated = '';
@@ -214,6 +317,7 @@ export class MovementsService {
       const tipoNormalizado = tipo.toUpperCase();
       const cantidadNumerica = Number(cantidad);
       let nuevoStock = producto.stock;
+      const technician = await this.resolveTechnician(queryRunner.manager, technicianId, technicianName);
       
       // Determinamos cuál es el almacén objetivo de la operación comercial
       const targetAlmacen = (almacenDestino || almacenOrigen || producto.almacen || 'Principal').trim();
@@ -296,6 +400,8 @@ export class MovementsService {
         cantidad: cantidadNumerica,
         nuevoStock: Number(nuevoStock),
         nota: batchGenerated ? `${nota || ''} | Lote: ${batchGenerated}` : nota,
+        technician: technician || undefined,
+        technicianId: technician?.id,
         usuarioId: usuarioId ? String(usuarioId) : undefined,
         almacenOrigen: almacenOrigen || targetAlmacen,
         almacenDestino: almacenDestino || targetAlmacen,
@@ -304,6 +410,7 @@ export class MovementsService {
       });
 
       const savedMovement = await queryRunner.manager.save(Movement, movement);
+      if (technician) savedMovement.technician = technician;
 
       await queryRunner.commitTransaction();
       return savedMovement;
@@ -426,7 +533,7 @@ export class MovementsService {
 
   async findAll() {
     return await this.movementRepository.find({
-      relations: ['producto'], 
+      relations: ['producto', 'technician'], 
       order: { createdAt: 'DESC' },
     });
   }
@@ -434,7 +541,7 @@ export class MovementsService {
   async findByProductId(productoId: number) {
     return await this.movementRepository.find({
       where: { productoId },
-      relations: ['producto'],
+      relations: ['producto', 'technician'],
       order: { createdAt: 'DESC' },
     });
   }

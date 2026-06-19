@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import {
   Package, Tags, ArrowLeftRight, CheckCircle,
   ClipboardList, Bell, Layers3, AlertTriangle, RefreshCw,
-  Warehouse, Ruler, Braces, Plug, Truck, HandHelping
+  Warehouse, Ruler, Braces, Plug, Truck, HandHelping, Wrench
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import AlmacenSection from './inventario/AlmacenSection';
@@ -17,6 +17,7 @@ import IntegracionesSection from './inventario/IntegracionesSection';
 import ProveedoresSection from './inventario/ProveedoresSection';
 import LotesSection from './inventario/LotesSection';
 import ComodatoSection from './inventario/ComodatoSection';
+import TecnicosSection from './inventario/TecnicosSection';
 
 const Inventario = () => {
   const { productos, categorias, setCategorias } = useInventario();
@@ -39,6 +40,7 @@ const Inventario = () => {
   // Capturar el redireccionamiento desde el Home para Stock Crítico
   useEffect(() => {
     if (location.state?.filter === 'low_stock') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSeccionActiva('alerta');
     }
     if (location.state?.tab) {
@@ -54,6 +56,7 @@ const Inventario = () => {
     { id: 'movimiento', label: 'Movimiento de inventario', icon: ArrowLeftRight },
     { id: 'proveedores', label: 'Proveedores', icon: Truck },
     { id: 'almacen', label: 'Almacén', icon: Warehouse },
+    { id: 'tecnicos', label: 'Técnicos', icon: Wrench },
     { id: 'conteo', label: 'Conteo Físico', icon: ClipboardList },
     { id: 'alerta', label: 'Alerta', icon: Bell },
     { id: 'lotes', label: 'Lotes Unidades', icon: Layers3 },
@@ -98,6 +101,8 @@ const Inventario = () => {
             <ProveedoresSection mostrarToast={mostrarToast} />
           ) : seccionActiva === 'almacen' ? (
             <AlmacenSection mostrarToast={mostrarToast} />
+          ) : seccionActiva === 'tecnicos' ? (
+            <TecnicosSection mostrarToast={mostrarToast} />
           ) : seccionActiva === 'conteo' ? (
             <ConteoFisicoSection mostrarToast={mostrarToast} />
         ) : seccionActiva === 'alerta' ? (

@@ -266,7 +266,7 @@ const exportarKardexCSV = () => {
       return;
     }
 
-    const headers = ["Fecha", "Producto", "Código", "Usuario", "Tipo", "Cantidad", "Stock Final", "Nota"];
+    const headers = ["Fecha", "Producto", "Código", "Técnico", "Usuario", "Tipo", "Cantidad", "Stock Final", "Nota"];
     
     const rows = movimientosFiltrados.map(m => {
       const usuarioObj = usuarios.find(u => Number(u.id) === Number(m.usuarioId));
@@ -282,6 +282,7 @@ const exportarKardexCSV = () => {
         mapearCampo(new Date(m.createdAt).toLocaleString()),
         mapearCampo(m.producto?.nombre || '---'),
         mapearCampo(m.producto?.codigo || '---'),
+        mapearCampo(m.technician?.nombre || ''),
         mapearCampo(nombreUsuario),
         mapearCampo(m.tipo),
         mapearCampo(m.cantidad),
@@ -417,6 +418,7 @@ const exportarKardexCSV = () => {
                 <th className="px-6 py-4">Producto</th>
                 <th className="px-6 py-4">Origen</th>
                 <th className="px-6 py-4">Destino</th>
+                <th className="px-6 py-4">Técnico</th>
                 <th className="px-6 py-4">Usuario</th>
                 <th className="px-6 py-4">Tipo</th>
                 <th className="px-6 py-4 text-center">Cant.</th>
@@ -430,6 +432,7 @@ const exportarKardexCSV = () => {
                   <td className="px-6 py-3 font-black text-slate-800 uppercase">{mov.producto?.nombre}</td>
                   <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">{mov.almacenOrigen || 'N/A'}</td>
                   <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">{mov.almacenDestino || 'N/A'}</td>
+                  <td className="px-6 py-3 text-[10px] font-black text-brand uppercase">{mov.technician?.nombre || 'N/A'}</td>
                   <td className="px-6 py-3 font-bold text-slate-400 uppercase italic">
                     {usuarios.find(u => Number(u.id) === Number(mov.usuarioId))?.nombre || mov.usuarioId || 'Sistema'}
                   </td>
@@ -720,8 +723,6 @@ const exportarKardexCSV = () => {
                   setAjusteProductoId={formProps.setAjusteProductoId}
                   almacenDestino={formProps.ajusteAlmacen}       // Enlazado con ajusteAlmacen del hook
                   setAlmacenDestino={formProps.setAjusteAlmacen}  // Enlazado con setAjusteAlmacen del hook
-                  almacenDestino={formProps.ajusteAlmacen}
-                  setAlmacenDestino={formProps.setAjusteAlmacen}
                   ajusteCantidad={formProps.ajusteCantidad}
                   setAjusteCantidad={formProps.setAjusteCantidad}
                   ajusteCosto={formProps.ajusteCosto}

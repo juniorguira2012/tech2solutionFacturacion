@@ -19,6 +19,14 @@ export class CreateMovementDto {
   usuarioId?: string;
 
   @IsOptional()
+  @IsNumber()
+  technicianId?: number;
+
+  @IsOptional()
+  @IsString()
+  technicianName?: string;
+
+  @IsOptional()
   @IsString()
   almacenOrigen?: string;
 

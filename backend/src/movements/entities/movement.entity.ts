@@ -7,6 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
+import { Technician } from './technician.entity';
 
 @Entity('movements')
 export class Movement {
@@ -30,7 +31,23 @@ export class Movement {
   nota: string;
 
   @Column({ nullable: true })
+  nuevoStock?: number;
+
+  @Column({ nullable: true, type: 'decimal', precision: 10, scale: 2 })
+  costoUnitario?: number;
+
+  @Column({ nullable: true })
+  referencia?: string;
+
+  @Column({ nullable: true })
   usuarioId: string;
+
+  @Column({ nullable: true })
+  technicianId?: number;
+
+  @ManyToOne(() => Technician, { nullable: true })
+  @JoinColumn({ name: 'technicianId' })
+  technician?: Technician;
 
   @Column({ nullable: true })
   almacenOrigen: string;
