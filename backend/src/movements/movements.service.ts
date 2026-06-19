@@ -483,9 +483,15 @@ export class MovementsService {
           batchInfo = await this.generateAndSaveBatch(queryRunner.manager, idNum, cantidadNumerica, almacenNormalizado, lote);
         } 
         else if (tiposDecremento.includes(tipoNormalizado)) {
-          if (producto.stock < cantidadNumerica) {
+          const stockEnAlmacen = await queryRunner.manager.findOne(ProductWarehouseStock, {
+            where: { productoId: producto.id, almacen: almacenNormalizado }
+          });
+
+          const cantidadDisponibleAlmacen = stockEnAlmacen ? Number(stockEnAlmacen.cantidad) : 0;
+
+          if (cantidadDisponibleAlmacen < cantidadNumerica) {
             throw new BadRequestException(
-              `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock}, Solicitado: ${cantidadNumerica}`
+              `Stock insuficiente en el almacén '${almacenNormalizado}' para ${producto.nombre}. Disponible: ${cantidadDisponibleAlmacen}, Solicitado: ${cantidadNumerica}`
             );
           }
           nuevoStock -= cantidadNumerica;

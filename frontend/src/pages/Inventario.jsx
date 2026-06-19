@@ -96,7 +96,7 @@ const Inventario = () => {
           ) : seccionActiva === 'categoria' ? (
             <CategoriasSection categorias={categorias} setCategorias={setCategorias} mostrarToast={mostrarToast} />
           ) : seccionActiva === 'movimiento' ? (
-            <MovimientosSection />
+            <MovimientosSection mostrarToast={mostrarToast} />
           ) : seccionActiva === 'proveedores' ? (
             <ProveedoresSection mostrarToast={mostrarToast} />
           ) : seccionActiva === 'almacen' ? (

@@ -88,6 +88,12 @@ const MovimientosSection = ({ mostrarToast }) => {
   }, [cargarMovimientos]);
 
   // Gestión del carrito masivo (Recibir / Despachar)
+  const obtenerStockEnAlmacen = (producto, almacen) => {
+    const stockAlmacen = producto.warehouseStocks?.find(s => s.almacen === almacen);
+    if (stockAlmacen) return Number(stockAlmacen.cantidad) || 0;
+    return producto.almacen === almacen ? Number(producto.stock) || 0 : 0;
+  };
+
   const agregarAlCarritoMovimiento = (producto) => {
     const existe = itemsEnCarritoMovimiento.find(item => item.id === producto.id);
     if (existe) {
@@ -100,11 +106,19 @@ const MovimientosSection = ({ mostrarToast }) => {
       return;
     }
 
+    const almacenInicial = producto.almacen || almacenesNombres[0] || 'Principal';
+    const stockDisponibleAlmacen = obtenerStockEnAlmacen(producto, almacenInicial);
+
+    if (tipoMovimiento === 'despachar' && stockDisponibleAlmacen <= 0) {
+      mostrarToast?.(`No hay stock en ${almacenInicial} para ${producto.nombre}`, "error");
+      return;
+    }
+
     setItemsEnCarritoMovimiento([...itemsEnCarritoMovimiento, { 
       ...producto, 
-      almacen: producto.almacen || almacenesNombres[0] || 'Principal',
+      almacen: almacenInicial,
       lote: '',
-      cantidadMovimiento: tipoMovimiento === 'despachar' ? Math.min(1, producto.stock) : 1,
+      cantidadMovimiento: tipoMovimiento === 'despachar' ? Math.min(1, stockDisponibleAlmacen) : 1,
     }]);
     setBusquedaCarrito('');
     setResultadosBusquedaCarrito([]);
@@ -145,7 +159,7 @@ const MovimientosSection = ({ mostrarToast }) => {
     setFacturaEncontrada(null);
     
     // Reseteamos el estado interno del formulario simple a través del hook si es necesario
-    formProps.setMovimientoData({ productoId: '', cantidad: 1, almacenDestino: 'Principal', nota: '' });
+    formProps.setMovimientoData({ productoId: '', cantidad: 1, almacenDestino: almacenesNombres[0] || 'Principal', nota: '' });
     //Limpieza de los campos de ajuste para que el modal aparezca en blanco
     formProps.setAjusteProductoId('');
     formProps.setAjusteAlmacen('');
@@ -177,9 +191,9 @@ const MovimientosSection = ({ mostrarToast }) => {
 
       if (tipo === 'DESPACHAR') {
         for (const item of itemsEnCarritoMovimiento) {
-          const productoOriginal = productos.find(p => p.id === item.id);
-          if (productoOriginal && item.cantidadMovimiento > productoOriginal.stock) {
-            throw new Error(`Stock insuficiente para ${item.nombre}. Disponible: ${productoOriginal.stock}`);
+          const stockDisponible = obtenerStockEnAlmacen(item, item.almacen || 'Principal');
+          if (Number(item.cantidadMovimiento) > stockDisponible) {
+            throw new Error(`Stock insuficiente en ${item.almacen} para ${item.nombre}. Disponible: ${stockDisponible}`);
           }
         }
       }
@@ -563,7 +577,9 @@ const exportarKardexCSV = () => {
                             <tr key={item.id} className="text-sm">
                               <td className="px-4 py-2 font-bold text-slate-700">
                                 <p className="text-[10px] uppercase font-black leading-tight">{item.nombre}</p>
-                                <p className="text-[8px] text-slate-400 font-bold">STOCK: {item.stock}</p>
+                                <p className="text-[8px] text-slate-400 font-bold">
+                                  STOCK ALMACÉN: {tipoMovimiento === 'despachar' ? obtenerStockEnAlmacen(item, item.almacen || 'Principal') : item.stock}
+                                </p>
                               </td>
                               <td className="px-4 py-2">
                                 <select
@@ -572,6 +588,10 @@ const exportarKardexCSV = () => {
                                   onChange={(e) => {
                                     const nuevaLista = [...itemsEnCarritoMovimiento];
                                     nuevaLista[idx].almacen = e.target.value;
+                                    if (tipoMovimiento === 'despachar') {
+                                      const disponible = obtenerStockEnAlmacen(nuevaLista[idx], e.target.value);
+                                      nuevaLista[idx].cantidadMovimiento = Math.min(Number(nuevaLista[idx].cantidadMovimiento) || 1, Math.max(disponible, 0));
+                                    }
                                     setItemsEnCarritoMovimiento(nuevaLista);
                                   }}
                                 >
@@ -583,7 +603,7 @@ const exportarKardexCSV = () => {
                               <td className="px-4 py-2">
                                 <input 
                                   type="number" min="1"
-                                  max={tipoMovimiento === 'despachar' ? item.stock : undefined}
+                                  max={tipoMovimiento === 'despachar' ? obtenerStockEnAlmacen(item, item.almacen || 'Principal') : undefined}
                                   className="w-full p-1.5 border rounded-lg font-black text-center text-[10px]"
                                   value={item.cantidadMovimiento}
                                   onChange={(e) => {
@@ -647,6 +667,7 @@ const exportarKardexCSV = () => {
                     <FormMovimientoSimple 
                       tipoMovimiento={tipoMovimiento}
                       productos={productos}
+                      almacenesDisponibles={almacenesNombres}
                       onSubmit={formProps.ejecutarMovimiento}
                       movimientoData={formProps.movimientoData}
                       setMovimientoData={formProps.setMovimientoData}
@@ -706,6 +727,7 @@ const exportarKardexCSV = () => {
                 <FormMovimientoSimple 
                   tipoMovimiento={tipoMovimiento}
                   productos={productos}
+                  almacenesDisponibles={almacenesNombres}
                   onSubmit={formProps.ejecutarMovimiento}
                   movimientoData={formProps.movimientoData}
                   setMovimientoData={formProps.setMovimientoData}
