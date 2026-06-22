@@ -13,6 +13,7 @@ export const InventarioProvider = ({ children }) => {
   const [lotes, setLotes] = useState([]);
   const [prestamos, setPrestamos] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
+  const [seriales, setSeriales] = useState([]);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [verEliminados, setVerEliminados] = useState(false);
 
@@ -243,6 +244,110 @@ export const InventarioProvider = ({ children }) => {
     }
   }, [API_BASE_URL]);
 
+  // Cargar Seriales
+  const cargarSeriales = useCallback(async () => {
+    if (!usuario) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/product-serials`, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Error al cargar los seriales de productos');
+      const data = await res.json();
+      setSeriales(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error cargando seriales:", err);
+      setSeriales([]); // Aseguramos que sea un array vacío en caso de error
+    }
+  }, [API_BASE_URL, getAuthHeaders, usuario]);
+
+  const actualizarEstadoSerial = async (serialId, nuevoEstado) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/product-serials/${serialId}/status`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ status: nuevoEstado }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al actualizar el estado del serial');
+      }
+
+      const serialActualizado = await res.json();
+
+      setSeriales(prev => prev.map(s => (s.id === serialId ? serialActualizado : s)));
+      return true;
+    } catch (err) {
+      console.error('Error en actualizarEstadoSerial:', err);
+      throw err;
+    }
+  };
+
+  const obtenerHistorialSerial = async (serialNumber) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/movements/by-serial/${serialNumber}`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Error al obtener el historial del serial');
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Error en obtenerHistorialSerial:', err);
+      throw err;
+    }
+  };
+
+  const asignarSerialesTecnico = async (datosFormulario) => {
+  try {
+    const baseApi = import.meta.env.VITE_API_URL;
+    const URL_COMPLETA = `${baseApi}/movements/assign-to-technician`;
+
+    // 🛠️ FORMATEAR Y LIMPIAR EL PAYLOAD SEGÚN LAS REGLAS DE NESTJS
+    const payload = {
+      // 1. Asegurar que el ID del técnico sea un número entero
+      technicianId: Number(datosFormulario.technicianId),
+      
+      // 2. Convertir los seriales en un arreglo de strings limpios, quitando vacíos
+      serials: Array.isArray(datosFormulario.serials)
+        ? datosFormulario.serials.map(s => String(s).trim()).filter(Boolean)
+        : [],
+        
+      // 3. Asegurar que usuarioId sea un número entero y no vaya vacío
+      usuarioId: datosFormulario.usuarioId ? Number(datosFormulario.usuarioId) : null
+    };
+
+    // Validaciones preventivas en el Frontend
+    if (!payload.technicianId || isNaN(payload.technicianId)) {
+      throw new Error('Debe seleccionar un técnico válido.');
+    }
+    if (payload.serials.length === 0) {
+      throw new Error('Debe ingresar al menos un número de serie válido.');
+    }
+    if (!payload.usuarioId || isNaN(payload.usuarioId)) {
+      throw new Error('El ID de usuario es obligatorio y debe ser un número.');
+    }
+
+    console.log("Enviando Payload correcto a NestJS:", payload);
+
+    const res = await fetch(URL_COMPLETA, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', // Crucial para que NestJS procese el JSON
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      // Si NestJS devuelve un error de validación, lo capturamos aquí
+      throw new Error(data.message || 'Error en la asignación');
+    }
+
+      return data;
+    } catch (error) {
+      console.error("Error en asignarSerialesTecnico:", error.message);
+      throw error;
+    }
+  };
   // 2. Registrar Movimiento (Sustituye actualizarProducto en la sección de movimientos)
   const registrarMovimiento = async (datosMovimiento) => {
     try {
@@ -395,7 +500,8 @@ const registrarMovimientosMasivos = async (payload) => {
         vendidos, 
         proveedor, 
         warehouseStocks, 
-        proveedorId, 
+        proveedorId,
+        serialsInput, // Campo extra que debemos quitar
         ...datosParaEnviar 
       } = nuevoProducto;
 
@@ -406,7 +512,8 @@ const registrarMovimientosMasivos = async (payload) => {
           ...datosParaEnviar,
           precio: Number(datosParaEnviar.precio) || 0,
           stock: Number(datosParaEnviar.stock) || 0,
-          proveedorId: proveedorId ? Number(proveedorId) : null
+          proveedorId: proveedorId ? Number(proveedorId) : null,
+          // El campo 'serials' ya está dentro de 'datosParaEnviar' si es necesario
         })
       });
       
@@ -854,7 +961,12 @@ return (
     productos, 
     tecnicos,
     prestamos,
+    seriales,
+    cargarSeriales,
+    obtenerHistorialSerial,
+    actualizarEstadoSerial,
     movimientos, 
+    asignarSerialesTecnico,
     loading, 
     errorConexion, 
     categorias, 

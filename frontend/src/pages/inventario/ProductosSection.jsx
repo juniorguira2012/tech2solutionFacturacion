@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   Package, Search, Edit3, Trash2, Plus, X,
   FileText, Warehouse, Settings,
-  MinusCircle, LayoutGrid, List,
+  MinusCircle, LayoutGrid, List, Tag,
   Image, AlertTriangle, CheckCircle, MapPin
 } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
@@ -125,6 +125,8 @@ const ProductosSection = ({ mostrarToast }) => {
   const [formData, setFormData] = useState({
     nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
     modelo: '', serie: '',
+    isSerialized: false, // <-- Añadimos el estado para el checkbox
+    serialsInput: '', // <-- Añadimos el estado para el textarea de seriales
     almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '',
     movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
   });
@@ -149,6 +151,8 @@ const ProductosSection = ({ mostrarToast }) => {
       almacen: prod.almacen || 'Principal',
       pasillo: prod.pasillo || '',
       fila: prod.fila || '',
+      isSerialized: prod.isSerialized || false,
+      serialsInput: prod.seriales?.map(s => s.serialNumber).join('\n') || '',
       unidadMedida: prod.unidadMedida || 'Unidad',
       movimientoInventario: prod.movimientoInventario || 'Entrada',
       descripcion: prod.descripcion || '',
@@ -293,7 +297,14 @@ const handleSave = async (e) => {
     // Forzamos que el ID sea número si existe
     id: isEditing ? Number(formData.id) : undefined, 
     precio: parseFloat(formData.precio) || 0,
-    stock: parseInt(formData.stock) || 0,
+    // Si es serializado, el stock es la cantidad de seriales. Si no, es el valor del input.
+    stock: formData.isSerialized 
+      ? formData.serialsInput.split('\n').filter(Boolean).length 
+      : (parseInt(formData.stock) || 0),
+    // Añadimos el array de seriales si el producto es serializado
+    serials: formData.isSerialized 
+      ? formData.serialsInput.split('\n').map(s => s.trim()).filter(Boolean) 
+      : undefined,
   };
 
   try {
@@ -360,6 +371,8 @@ const handleEliminar = (prod) => {
     setFormData({
       nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
       modelo: '', serie: '',
+      isSerialized: false,
+      serialsInput: '',
       almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '',
       movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
     });
@@ -477,6 +490,26 @@ const handleEliminar = (prod) => {
                       </div>
                     </div>
                   </div>
+                  {/* --- INICIO: Mostrar Seriales Disponibles --- */}
+                  {prod.isSerialized && (() => {
+                    const serialesDisponibles = prod.seriales?.filter(s => s.status === 'disponible') || [];
+                    return (
+                      <div className="pt-2 mt-2 border-t border-slate-100">
+                        <p className="text-[8px] font-black text-slate-400 uppercase">Seriales Disponibles ({serialesDisponibles.length})</p>
+                        {serialesDisponibles.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {serialesDisponibles.slice(0, 3).map(s => (
+                              <span key={s.id} className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-[9px] font-mono font-bold">{s.serialNumber}</span>
+                            ))}
+                            {serialesDisponibles.length > 3 && (
+                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">+{serialesDisponibles.length - 3} más</span>
+                            )}
+                          </div>
+                        ) : <p className="text-[9px] text-slate-400 italic mt-1">No hay seriales disponibles.</p>}
+                      </div>
+                    );
+                  })()}
+                  {/* --- FIN: Mostrar Seriales Disponibles --- */}
                   <div className="px-1 py-1 text-right flex items-center justify-end gap-1 border-t border-slate-50 mt-2">
                     {prod.isActive === false ? (
                       <button 
@@ -512,7 +545,24 @@ const handleEliminar = (prod) => {
             <tbody className="divide-y text-sm">
               {productosFiltrados.map(prod => (
                 <tr key={prod.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-3 font-black text-slate-700 uppercase text-xs">{prod.nombre}</td>
+                  <td className="px-6 py-3">
+                    <p className="font-black text-slate-700 uppercase text-xs">{prod.nombre}</p>
+                    {/* --- INICIO: Mostrar Seriales en Tooltip --- */}
+                    {prod.isSerialized && (() => {
+                      const serialesDisponibles = prod.seriales?.filter(s => s.status === 'disponible') || [];
+                      const serialesTooltip = serialesDisponibles.map(s => s.serialNumber).join('\n');
+                      return (
+                        <div 
+                          className="flex items-center gap-1.5 text-brand mt-1 cursor-help"
+                          title={serialesDisponibles.length > 0 ? `Seriales Disponibles:\n${serialesTooltip}` : 'Producto serializado sin stock disponible'}
+                        >
+                          <Tag size={12} />
+                          <span className="text-[9px] font-black uppercase italic">{serialesDisponibles.length} seriales disponibles</span>
+                        </div>
+                      );
+                    })()}
+                    {/* --- FIN: Mostrar Seriales en Tooltip --- */}
+                  </td>
                   <td className="px-6 py-3">
                     <div 
                       className="flex flex-col cursor-help"
@@ -628,14 +678,36 @@ const handleEliminar = (prod) => {
                   <input type="number" step="0.01" required className="w-full px-5 py-3 rounded-2xl border-indigo-100 border outline-none font-black text-sm" value={formData.precio} onChange={(e) => setFormData({...formData, precio: e.target.value})}/>
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-indigo-400 uppercase ml-1">Stock *</label>
-                  <input type="number" required className="w-full px-5 py-3 rounded-2xl border-indigo-100 border outline-none font-black text-sm" value={formData.stock} onChange={(e) => setFormData({...formData, stock: e.target.value})}/>
+                  <label className="text-[10px] font-black text-indigo-400 uppercase ml-1">
+                    {formData.isSerialized ? 'Cantidad de Seriales' : 'Stock Inicial *'}
+                  </label>
+                  <input 
+                    type="number" 
+                    required 
+                    className="w-full px-5 py-3 rounded-2xl border-indigo-100 border outline-none font-black text-sm disabled:bg-slate-100" 
+                    value={formData.isSerialized ? formData.serialsInput.split('\n').filter(Boolean).length : formData.stock} 
+                    onChange={(e) => setFormData({...formData, stock: e.target.value})}
+                    disabled={formData.isSerialized} // El stock se calcula automáticamente si es serializado
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Unidad</label>
                   <select className="w-full px-5 py-3 rounded-2xl border outline-none font-bold text-sm" value={formData.unidadMedida} onChange={(e) => setFormData({...formData, unidadMedida: e.target.value})}>
                     {unidadesMedida.filter(u => u.activo).map(u => <option key={u.id} value={u.nombre}>{u.nombre}</option>)}
                   </select>
+                </div>
+                <div className="flex items-center justify-center bg-slate-50 border border-slate-100 rounded-2xl">
+                   <label className="flex items-center gap-3 cursor-pointer p-3">
+                    <input 
+                      type="checkbox" 
+                      className="h-5 w-5 rounded text-brand focus:ring-brand"
+                      checked={formData.isSerialized}
+                      onChange={(e) => setFormData({...formData, isSerialized: e.target.checked})}
+                    />
+                    <span className="text-[10px] font-black text-slate-600 uppercase">
+                      Producto Serializado
+                    </span>
+                  </label>
                 </div>
               </div>
 
@@ -681,6 +753,21 @@ const handleEliminar = (prod) => {
                   />
                 </div>
               </div>
+
+              {/* Textarea para Seriales (condicional) */}
+              {formData.isSerialized && (
+                <div className="space-y-2 pt-4 border-t animate-in fade-in duration-300">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
+                    Lista de Seriales (uno por línea)
+                  </label>
+                  <textarea
+                    placeholder="SN-001&#10;SN-002&#10;SN-003"
+                    className="w-full p-4 rounded-2xl border font-mono text-xs h-32 resize-y"
+                    value={formData.serialsInput}
+                    onChange={(e) => setFormData({...formData, serialsInput: e.target.value})}
+                  />
+                </div>
+              )}
 
               <div className="space-y-4 pt-4 border-t">
                 <h3 className="text-sm font-black text-slate-600 uppercase flex items-center gap-2">

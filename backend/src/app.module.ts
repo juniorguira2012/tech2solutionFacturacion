@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import * as path from 'path';
+import { Logger } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
@@ -15,56 +16,53 @@ import { ClientsModule } from './providers/clients.module';
 import { RolesModule } from './providers/roles.module';
 import { ComodatosModule } from './comodatos/comodatos.module';
 import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module';
-import { InventoryBatch } from './movements/entities/inventory-batch.entity';
-
-// Evaluamos los 3 posibles archivos según el entorno
-let envFileName = '.env'; // Por defecto desarrollo local
-if (process.env.NODE_ENV === 'production') {
-  envFileName = '.env.production';
-} else if (process.env.NODE_ENV === 'test') {
-  envFileName = '.env.test';
-}
-
-// Subimos dos niveles para llegar a la raíz del proyecto desde backend/src/
-const envPath = path.resolve(__dirname, '..', '..', envFileName);
-
-// Debug: Esto te ayudará a ver en la consola si el backend encuentra el archivo .env
-console.log(`Cargando configuración desde: ${envPath}`);
+import { ProductSerialsModule } from './products/product-serials.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      envFilePath: envPath,
+      // NestJS buscará en orden y usará el primer archivo que encuentre.
+      // Esto elimina la necesidad de la lógica manual con 'fs'.
+      envFilePath: [
+        path.resolve(__dirname, `../../.env.${process.env.NODE_ENV}`),
+        path.resolve(__dirname, '../../.env'),
+      ],
       isGlobal: true,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService): TypeOrmModuleOptions => ({
-        type: 'postgres',
-        entities: [InventoryBatch,],
-        host: configService.get<string>('DATABASE_HOST', 'localhost'),
-        port: parseInt(configService.get<string>('DATABASE_PORT', '5432'), 10),
-        username: configService.get<string>('DATABASE_USER', 'postgres'),
-        password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
-        database: configService.get<string>('DATABASE_NAME', 'tech_two_solution_db'),
-        autoLoadEntities: true,
-        synchronize: configService.get<string>('DATABASE_SYNCHRONIZE') === 'true' || 
-                     configService.get<string>('NODE_ENV') !== 'production',
-        logging: configService.get<string>('NODE_ENV') !== 'production',
-      }),
+      useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
+        const logger = new Logger('TypeOrmModule');
+        const synchronize = configService.get<boolean>('DATABASE_SYNCHRONIZE', false);
+        if (synchronize) {
+          logger.warn('DATABASE_SYNCHRONIZE está habilitado. No usar en producción.');
+        }
+        return {
+          type: 'postgres',
+          host: configService.get<string>('DATABASE_HOST', 'localhost'),
+          port: configService.get<number>('DATABASE_PORT', 5432),
+          username: configService.get<string>('DATABASE_USER', 'postgres'),
+          password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
+          database: configService.get<string>('DATABASE_NAME', 'tech_two_solution_db'),
+          autoLoadEntities: true,
+          synchronize,
+          logging: configService.get<string>('NODE_ENV') !== 'production',
+        };
+      },
     }),
     ProductsModule,
     InventoryCountsModule,
     MovementsModule,
     SalesModule,
-    ProvidersModule,  
+    ProvidersModule,
     WarehousesModule,
     UsersModule,
     ClientsModule,
     RolesModule,
     ComodatosModule,
     UnitsOfMeasureModule,
+    ProductSerialsModule,
   ],
 })
 export class AppModule {}

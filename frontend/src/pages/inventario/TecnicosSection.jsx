@@ -10,6 +10,7 @@ const TecnicosSection = ({ mostrarToast }) => {
     tecnicos,
     registrarMovimiento,
     crearTecnico,
+    asignarSerialesTecnico,
     actualizarTecnico,
     eliminarTecnico,
     cargarMovimientos,
@@ -42,6 +43,7 @@ const TecnicosSection = ({ mostrarToast }) => {
     productoId: '',
     cantidad: 1,
     almacen: '',
+    serialsInput: '',
     tecnicoId: '',
     tecnicoManual: '',
     referencia: '',
@@ -92,6 +94,7 @@ const TecnicosSection = ({ mostrarToast }) => {
     setForm({
       productoId: '',
       cantidad: 1,
+      serialsInput: '',
       almacen: '',
       tecnicoId: '',
       tecnicoManual: '',
@@ -185,12 +188,42 @@ const TecnicosSection = ({ mostrarToast }) => {
       return;
     }
 
-    const cantidad = Number(form.cantidad);
-    if (!Number.isFinite(cantidad) || cantidad <= 0) {
-      mostrarToast?.('La cantidad debe ser mayor a 0', 'error');
-      return;
+    setGuardando(true);
+
+    // --- LÓGICA PARA PRODUCTOS SERIALIZADOS ---
+    if (productoSeleccionado.isSerialized) {
+      const serials = form.serialsInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      if (serials.length === 0) {
+        mostrarToast?.('Debes ingresar al menos un número de serie.', 'warning');
+        setGuardando(false);
+        return;
+      }
+
+      const tecnicoId = form.tecnicoId ? Number(form.tecnicoId) : undefined;
+      if (!tecnicoId) {
+        mostrarToast?.('Debes seleccionar un técnico del catálogo para asignar seriales.', 'error');
+        setGuardando(false);
+        return;
+      }
+
+      try {
+        await asignarSerialesTecnico({
+          technicianId: tecnicoId,
+          serials: serials,
+          usuarioId: Number(usuario?.id),
+        });
+        mostrarToast?.(`${serials.length} serial(es) asignado(s) a ${obtenerNombreTecnico()}`, 'success');
+        recargarInventario();
+        resetForm();
+      } catch (error) {
+        mostrarToast?.(error.message || 'No se pudo asignar los seriales', 'error');
+      } finally {
+        setGuardando(false);
+      }
+      return; // Finaliza el flujo para serializados
     }
 
+    // --- LÓGICA PARA PRODUCTOS POR CANTIDAD (EXISTENTE) ---
     const nombreTecnico = obtenerNombreTecnico();
     if (!nombreTecnico) {
       mostrarToast?.('Selecciona o escribe el técnico responsable', 'error');
@@ -202,7 +235,12 @@ const TecnicosSection = ({ mostrarToast }) => {
       return;
     }
 
-    setGuardando(true);
+    const cantidad = Number(form.cantidad);
+    if (!Number.isFinite(cantidad) || cantidad <= 0) {
+      mostrarToast?.('La cantidad debe ser mayor a 0', 'error');
+      setGuardando(false);
+      return;
+    }
     try {
       const nota = [
         `Entrega a técnico: ${nombreTecnico}`,
@@ -373,15 +411,27 @@ const TecnicosSection = ({ mostrarToast }) => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Cantidad</label>
-              <input
-                type="number"
-                min="1"
-                required
-                value={form.cantidad}
-                onChange={(e) => setForm(prev => ({ ...prev, cantidad: e.target.value }))}
-                className="w-full h-12 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-black text-xs bg-white"
-              />
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
+                {productoSeleccionado?.isSerialized ? 'Seriales (uno por línea)' : 'Cantidad'}
+              </label>
+              {productoSeleccionado?.isSerialized ? (
+                <textarea
+                  required
+                  value={form.serialsInput}
+                  onChange={(e) => setForm(prev => ({ ...prev, serialsInput: e.target.value }))}
+                  placeholder="SN-001&#10;SN-002&#10;SN-003"
+                  className="w-full p-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-mono text-xs bg-white h-24 resize-y"
+                />
+              ) : (
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={form.cantidad}
+                  onChange={(e) => setForm(prev => ({ ...prev, cantidad: e.target.value }))}
+                  className="w-full h-12 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-black text-xs bg-white"
+                />
+              )}
             </div>
 
             <div className="space-y-1">

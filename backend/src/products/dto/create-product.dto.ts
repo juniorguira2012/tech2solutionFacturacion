@@ -41,6 +41,12 @@ export class CreateProductDto {
   @Min(0)
   stock: number;
 
+  // 👇 AGREGA ESTE CAMPO AQUÍ PARA QUE EL BACKEND LO ACEPTE
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isSerialized?: boolean;
+
   @IsOptional()
   @IsString()
   imagen?: string;
@@ -89,10 +95,15 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsNumber()
-  @IsPositive() // Asegura que el ID sea un número positivo
+  @IsPositive() 
   proveedorId?: number;
 
   @IsEmail()
   @IsOptional()
   correo?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  serials?: string[];
 }

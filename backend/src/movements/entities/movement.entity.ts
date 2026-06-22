@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { Technician } from './technician.entity';
+import { User } from '../../providers/user.entity';
 
 @Entity('movements')
 export class Movement {
@@ -40,7 +41,11 @@ export class Movement {
   referencia?: string;
 
   @Column({ nullable: true })
-  usuarioId: string;
+  usuarioId: number;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'usuarioId' })
+  usuario?: User;
 
   @Column({ nullable: true })
   technicianId?: number;

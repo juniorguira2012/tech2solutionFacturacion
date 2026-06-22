@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, ParseIntPipe, NotFoundException } from '@nestjs/common';
 import { MovementsService } from './movements.service';
 import { CreateMovementDto } from './dto/create-movement.dto';
+import { CreateBulkMovementDto } from './dto/create-bulk-movement.dto';
+import { AssignSerialsToTechnicianDto } from './dto/assign-serials.dto';
 
 @Controller('movements')
 export class MovementsController {
@@ -17,8 +19,13 @@ export class MovementsController {
   }
 
   @Post('bulk-receive')
-  createBulk(@Body() bulkData: { tipo: string; nota: string; items: any[]; usuarioId?: number; referencia?: string }) {
+  createBulk(@Body() bulkData: CreateBulkMovementDto) {
     return this.movementsService.createBulk(bulkData);
+  }
+
+  @Post('assign-to-technician')
+  assignToTechnician(@Body() assignData: AssignSerialsToTechnicianDto) {
+    return this.movementsService.assignSerialsToTechnician(assignData);
   }
 
   @Get('technicians')
@@ -55,5 +62,13 @@ export class MovementsController {
   @Get('product/:id')
   findByProduct(@Param('id', ParseIntPipe) id: number) {
     return this.movementsService.findByProductId(id);
+  }
+
+  @Get('by-serial/:serialNumber')
+  async findBySerialNumber(@Param('serialNumber') serialNumber: string) {
+    if (!serialNumber) {
+      throw new NotFoundException('Número de serial no proporcionado.');
+    }
+    return this.movementsService.findBySerialNumber(serialNumber);
   }
 }

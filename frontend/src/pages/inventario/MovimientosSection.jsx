@@ -1,6 +1,6 @@
 // components/inventario/MovimientosSection.jsx
 import React, { useState, useMemo, useEffect } from 'react';
-import { ArrowLeftRight, List, Download, Truck, RefreshCw, Trash2, Search, X } from 'lucide-react';
+import { ArrowLeftRight, List, Download, Truck, RefreshCw, Trash2, Search, X, UserCheck } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 import { useVentas } from '../../context/VentasContext';
 import { useAuth } from '../../context/AuthContext';
@@ -13,7 +13,7 @@ import { FormMovimientoSimple } from './FormMovimientoSimple';
 import { FormAjuste } from '../../components/FormAjuste';
 
 const MovimientosSection = ({ mostrarToast }) => {
-  const { productos, movimientos, proveedores, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, cargarMovimientos, recargarInventario, almacenesDetallados } = useInventario();
+  const { productos, movimientos, proveedores, tecnicos, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, asignarSerialesTecnico, cargarMovimientos, recargarInventario, almacenesDetallados } = useInventario();
   const { historialVentas } = useVentas();
   const { usuario } = useAuth();
   const { usuarios } = useUsuarios();
@@ -36,6 +36,11 @@ const MovimientosSection = ({ mostrarToast }) => {
     setItemsEnCarritoMovimiento([]);
     setBusquedaCarrito('');
     setResultadosBusquedaCarrito([]);
+    // Limpieza para el nuevo modal de asignación
+    setAsignacionTecnicoId('');
+    setAsignacionSerialesInput('');
+    setAsignacionIsLoading(false);
+
     setProveedorSeleccionado('');
   };
 
@@ -55,6 +60,11 @@ const MovimientosSection = ({ mostrarToast }) => {
   const [busquedaFactura, setBusquedaFactura] = useState('');
   const [facturaEncontrada, setFacturaEncontrada] = useState(null);
   const [itemsDevolucion, setItemsDevolucion] = useState([]);
+
+  // Estados para el nuevo modal de asignación a técnico
+  const [asignacionTecnicoId, setAsignacionTecnicoId] = useState('');
+  const [asignacionSerialesInput, setAsignacionSerialesInput] = useState('');
+  const [asignacionIsLoading, setAsignacionIsLoading] = useState(false);
 
   // Lógica de búsqueda para el carrito de movimientos masivos
   useEffect(() => {
@@ -118,6 +128,8 @@ const MovimientosSection = ({ mostrarToast }) => {
       ...producto, 
       almacen: almacenInicial,
       lote: '',
+      serials: producto.isSerialized ? [] : undefined, // Array para guardar los seriales
+      serialsInput: producto.isSerialized ? '' : undefined, // String para el textarea
       cantidadMovimiento: tipoMovimiento === 'despachar' ? Math.min(1, stockDisponibleAlmacen) : 1,
     }]);
     setBusquedaCarrito('');
@@ -157,6 +169,7 @@ const MovimientosSection = ({ mostrarToast }) => {
     setItemsDevolucion([]);
     setBusquedaFactura('');
     setFacturaEncontrada(null);
+    setAsignacionTecnicoId(''); setAsignacionSerialesInput('');
     
     // Reseteamos el estado interno del formulario simple a través del hook si es necesario
     formProps.setMovimientoData({ productoId: '', cantidad: 1, almacenDestino: almacenesNombres[0] || 'Principal', nota: '' });
@@ -201,12 +214,20 @@ const MovimientosSection = ({ mostrarToast }) => {
       const payload = {
         tipo: tipo, 
         nota: `${prefijoNota} ${proveedorSeleccionado ? `(Prov: ${proveedorSeleccionado})` : ''} - ${new Date().toLocaleDateString()}`,
-        items: itemsEnCarritoMovimiento.map(item => ({
-          productoId: item.id,
-          cantidad: Number(item.cantidadMovimiento),
-          almacen: item.almacen || 'Principal',
-          lote: item.lote
-        })),
+        items: itemsEnCarritoMovimiento.map(item => {
+          const baseItem = {
+            productoId: item.id,
+            almacen: item.almacen || 'Principal',
+          };
+          if (item.isSerialized) {
+            return { ...baseItem, serials: item.serials };
+          }
+          return { 
+            ...baseItem, 
+            cantidad: Number(item.cantidadMovimiento),
+            lote: item.lote 
+          };
+        }),
         referencia: facturaEncontrada?.id || undefined,
         usuarioId: Number(usuario?.id)
       };
@@ -283,8 +304,7 @@ const exportarKardexCSV = () => {
     const headers = ["Fecha", "Producto", "Código", "Técnico", "Usuario", "Tipo", "Cantidad", "Stock Final", "Nota"];
     
     const rows = movimientosFiltrados.map(m => {
-      const usuarioObj = usuarios.find(u => Number(u.id) === Number(m.usuarioId));
-      const nombreUsuario = usuarioObj ? usuarioObj.nombre : (m.usuarioId || 'Sistema');
+      const nombreUsuario = m.usuario?.nombre || m.usuarioId || 'Sistema';
 
       // Helper para escapar comillas dobles y envolver de forma segura cada campo
       const mapearCampo = (valor) => {
@@ -332,6 +352,56 @@ const exportarKardexCSV = () => {
       mostrarToast?.("No se pudo generar el archivo del Kardex", "error");
     }
   };
+      // Agrega esta función dentro de tu componente MovimientosSection para procesar el formulario
+    // Modifica esta función dentro de tu componente MovimientosSection
+  const procesarAsignacionTecnico = async () => {
+    if (!asignacionTecnicoId) {
+      mostrarToast?.("Seleccione un técnico", "warning");
+      return;
+    }
+    if (!asignacionSerialesInput.trim()) {
+      mostrarToast?.("Ingrese al menos un serial", "warning");
+      return;
+    }
+
+    // 1. Convertimos el texto del textarea en un Array de seriales limpios
+    const listaSeriales = asignacionSerialesInput
+      .split(/[\n,]+/)                  // Divide por saltos de línea o comas
+      .map(s => s.trim().toUpperCase()) // Limpia espacios y fuerza mayúsculas
+      .filter(s => s.length > 0);       // Elimina líneas vacías
+
+    if (listaSeriales.length === 0) {
+      mostrarToast?.("No se encontraron seriales válidos", "warning");
+      return;
+    }
+
+    // 🚨 CONTROL DE SEGURIDAD PARA EL USUARIO ACTIVO
+    // Si 'usuario.id' no existe, intentamos con 'usuario._id' o asignamos un valor fallback temporal para desarrollo (ej. 1)
+    const idDelUsuarioActivo = usuario?.id || usuario?._id || 1; 
+
+    setAsignacionIsLoading(true);
+    try {
+      // 2. Llamamos a la función de tu InventarioContext pasando los tipos de datos correctos
+      const exito = await asignarSerialesTecnico({
+        technicianId: Number(asignacionTecnicoId),
+        serials: listaSeriales, // Array de strings listo
+        usuarioId: Number(idDelUsuarioActivo), // Asegura un entero válido de verdad
+        nota: `Asignación masiva de ${listaSeriales.length} equipos.`
+      });
+
+      if (exito) {
+        mostrarToast?.(`${listaSeriales.length} seriales asignados al técnico con éxito`, "success");
+        cerrarModal();
+        recargarInventario();
+      }
+    } catch (error) {
+      console.error(error);
+      // Aquí capturamos los errores de validación formateados que envíe el backend
+      mostrarToast?.(error.message || "Error al asignar seriales al técnico", "error");
+    } finally {
+      setAsignacionIsLoading(false);
+    }
+  };
 
   const esFlujoMovimientoMasivo = tipoMovimiento === 'multilinea' || tipoMovimiento === 'recibir' || tipoMovimiento === 'despachar';
 
@@ -370,6 +440,9 @@ const exportarKardexCSV = () => {
           </button>
           <button onClick={() => abrirModal('descartar')} className="flex items-center gap-2 bg-rose-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-rose-600 transition-all active:scale-95">
             <Trash2 size={14} /> Descartar
+          </button>
+          <button onClick={() => abrirModal('asignar_tecnico')} className="flex items-center gap-2 bg-cyan-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-cyan-600 transition-all active:scale-95">
+            <UserCheck size={14} /> Asignar a Técnico
           </button>
         </div>
       </div>
@@ -448,7 +521,7 @@ const exportarKardexCSV = () => {
                   <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">{mov.almacenDestino || 'N/A'}</td>
                   <td className="px-6 py-3 text-[10px] font-black text-brand uppercase">{mov.technician?.nombre || 'N/A'}</td>
                   <td className="px-6 py-3 font-bold text-slate-400 uppercase italic">
-                    {usuarios.find(u => Number(u.id) === Number(mov.usuarioId))?.nombre || mov.usuarioId || 'Sistema'}
+                    {mov.usuario?.nombre || mov.usuarioId || 'Sistema'}
                   </td>
                   <td className="px-6 py-3">
                     <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${
@@ -487,6 +560,7 @@ const exportarKardexCSV = () => {
                    tipoMovimiento === 'recibir' ? 'Recibir Inventario' : 
                    tipoMovimiento === 'despachar' ? 'Despachar Inventario' : 
                    tipoMovimiento === 'devolucion' ? 'Devolución de Stock' : `${tipoMovimiento}`}
+                  {tipoMovimiento === 'asignar_tecnico' && 'Asignar Seriales a Técnico'}
                 </h2>
               </div>
               <button onClick={cerrarModal} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400">
@@ -565,7 +639,9 @@ const exportarKardexCSV = () => {
                           <tr>
                             <th className="px-4 py-2.5">Producto</th>
                             <th className="px-4 py-2.5 w-28">Almacén</th>
-                            <th className="px-4 py-2.5 w-24">Cantidad</th>
+                            <th className="px-4 py-2.5 w-24">
+                              {itemsEnCarritoMovimiento.some(i => i.isSerialized) ? 'Seriales / Cant.' : 'Cantidad'}
+                            </th>
                             {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
                               <th className="px-4 py-2.5 w-32">Lote</th>
                             )}
@@ -601,17 +677,39 @@ const exportarKardexCSV = () => {
                                 </select>
                               </td>
                               <td className="px-4 py-2">
-                                <input 
-                                  type="number" min="1"
-                                  max={tipoMovimiento === 'despachar' ? obtenerStockEnAlmacen(item, item.almacen || 'Principal') : undefined}
-                                  className="w-full p-1.5 border rounded-lg font-black text-center text-[10px]"
-                                  value={item.cantidadMovimiento}
-                                  onChange={(e) => {
-                                    const nuevaLista = [...itemsEnCarritoMovimiento];
-                                    nuevaLista[idx].cantidadMovimiento = parseInt(e.target.value) || 0;
-                                    setItemsEnCarritoMovimiento(nuevaLista);
-                                  }}
-                                />
+                                {item.isSerialized ? (
+                                  <div className="relative">
+                                    <textarea
+                                      placeholder="Un serial por línea..."
+                                      className="w-full p-1.5 border rounded-lg font-mono text-[9px] h-16 resize-y"
+                                      value={item.serialsInput}
+                                      onChange={(e) => {
+                                        const nuevaLista = [...itemsEnCarritoMovimiento];
+                                        const input = e.target.value;
+                                        const serialsArray = input.split('\n').map(s => s.trim()).filter(Boolean);
+                                        nuevaLista[idx].serialsInput = input;
+                                        nuevaLista[idx].serials = serialsArray;
+                                        nuevaLista[idx].cantidadMovimiento = serialsArray.length;
+                                        setItemsEnCarritoMovimiento(nuevaLista);
+                                      }}
+                                    />
+                                    <span className="absolute bottom-1 right-1.5 text-[8px] font-bold bg-slate-200 text-slate-500 px-1 rounded">
+                                      {item.serials?.length || 0}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <input 
+                                    type="number" min="1"
+                                    max={tipoMovimiento === 'despachar' ? obtenerStockEnAlmacen(item, item.almacen || 'Principal') : undefined}
+                                    className="w-full p-1.5 border rounded-lg font-black text-center text-[10px]"
+                                    value={item.cantidadMovimiento}
+                                    onChange={(e) => {
+                                      const nuevaLista = [...itemsEnCarritoMovimiento];
+                                      nuevaLista[idx].cantidadMovimiento = parseInt(e.target.value) || 0;
+                                      setItemsEnCarritoMovimiento(nuevaLista);
+                                    }}
+                                  />
+                                )}
                               </td>
                               {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
                                 <td className="px-4 py-2">
@@ -753,6 +851,43 @@ const exportarKardexCSV = () => {
                   setAjusteNota={formProps.setAjusteNota}
                 />
               )}
+
+              {/* 6. NUEVO: FORMULARIO DE ASIGNACIÓN A TÉCNICO */}
+              {tipoMovimiento === 'asignar_tecnico' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase">Seleccionar Técnico</label>
+                  <select
+                    value={asignacionTecnicoId}
+                    onChange={(e) => setAsignacionTecnicoId(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white"
+                  >
+                    <option value="">Seleccione un técnico...</option>
+                    {tecnicos.map(t => (
+                      <option key={t.id} value={t.id}>{t.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase">Números de Serie (Uno por línea o separados por coma)</label>
+                  <textarea
+                    value={asignacionSerialesInput}
+                    onChange={(e) => setAsignacionSerialesInput(e.target.value)}
+                    placeholder="Ej: SN12345&#10;SN67890"
+                    className="w-full h-32 p-3 border border-slate-200 rounded-xl outline-none focus:border-brand font-mono text-xs uppercase"
+                  />
+                </div>
+
+                <button
+                  onClick={procesarAsignacionTecnico}
+                  disabled={asignacionIsLoading}
+                  className="w-full h-11 bg-cyan-500 text-white font-black text-xs uppercase rounded-xl shadow-md hover:bg-cyan-600 transition-all flex items-center justify-center gap-2"
+                >
+                  {asignacionIsLoading ? 'Procesando...' : 'Asignar Equipos'}
+                </button>
+              </div>
+            )}
             </div>
           </div>
         </div>

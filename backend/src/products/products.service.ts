@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Provider } from '../providers/provider.entity';
+import { ProductSerial, SerialStatus } from './entities/product-serial.entity';
 
 @Injectable()
 export class ProductsService {
@@ -13,18 +14,55 @@ export class ProductsService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Provider)
     private readonly providerRepository: Repository<Provider>,
+    private readonly dataSource: DataSource,
   ) {}
 
   // Crear un producto
   async create(createProductDto: CreateProductDto) {
-    if (createProductDto.proveedorId) {
-      const provider = await this.providerRepository.findOneBy({ id: createProductDto.proveedorId });
-      if (!provider) {
-        throw new NotFoundException(`Proveedor con ID ${createProductDto.proveedorId} no encontrado.`);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const { serials, ...productData } = createProductDto;
+
+      if (productData.proveedorId) {
+        const provider = await queryRunner.manager.findOneBy(Provider, { id: productData.proveedorId });
+        if (!provider) {
+          throw new NotFoundException(`Proveedor con ID ${productData.proveedorId} no encontrado.`);
+        }
       }
+
+      const nuevoProducto = queryRunner.manager.create(Product, productData);
+
+      if (nuevoProducto.isSerialized && serials && serials.length > 0) {
+        // Validar duplicados antes de crear
+        const uniqueSerials = [...new Set(serials)];
+        if (uniqueSerials.length !== serials.length) {
+          throw new BadRequestException('La lista contiene números de serie duplicados.');
+        }
+
+        nuevoProducto.seriales = uniqueSerials.map(serialNumber => { 
+          const serialLimpio = serialNumber.trim();
+          return queryRunner.manager.create(ProductSerial, {
+            serialNumber: serialLimpio,
+            status: SerialStatus.DISPONIBLE,
+            almacen: nuevoProducto.almacen || 'Principal',
+          });
+        });
+        // El stock se calcula en el frontend, pero lo re-aseguramos aquí
+        nuevoProducto.stock = nuevoProducto.seriales.length;
+      }
+
+      const productoGuardado = await queryRunner.manager.save(Product, nuevoProducto);
+      await queryRunner.commitTransaction();
+      return productoGuardado;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-    const nuevoProducto = this.productRepository.create(createProductDto); // `proveedorId` en DTO es suficiente
-    return await this.productRepository.save(nuevoProducto);
   }
 
   // Obtener todos los productos (Lo que usará tu tabla de Inventario)

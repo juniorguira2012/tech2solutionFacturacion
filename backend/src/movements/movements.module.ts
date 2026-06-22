@@ -7,11 +7,12 @@ import { Product } from '../products/entities/product.entity';
 import { ProductWarehouseStock } from '../products/entities/product-warehouse-stock.entity';
 import { InventoryBatch } from './entities/inventory-batch.entity';
 import { Technician } from './entities/technician.entity';
-
+import { ProductSerial } from '../products/entities/product-serial.entity';
+import { User } from '../providers/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Movement, Product, ProductWarehouseStock, InventoryBatch, Technician]),
+    TypeOrmModule.forFeature([Movement, Product, ProductWarehouseStock, InventoryBatch, Technician, ProductSerial, User]),
   ],
   controllers: [MovementsController],
   providers: [MovementsService],

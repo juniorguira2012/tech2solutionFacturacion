@@ -1,10 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager, Not } from 'typeorm';
+import { Repository, DataSource, EntityManager, Not, In } from 'typeorm';
 import { Movement } from './entities/movement.entity';
+import { CreateBulkMovementDto } from './dto/create-bulk-movement.dto';
+import { AssignSerialsToTechnicianDto } from './dto/assign-serials.dto';
 import { Product } from '../products/entities/product.entity';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { ProductWarehouseStock } from '../products/entities/product-warehouse-stock.entity';
+import { ProductSerial, SerialStatus } from '../products/entities/product-serial.entity';
 import { InventoryBatch } from './entities/inventory-batch.entity';
 import { Technician } from './entities/technician.entity';
 
@@ -108,9 +111,6 @@ export class MovementsService {
     return manager.save(Technician, nuevo);
   }
 
-  /**
-   * Helper para actualizar el stock por almacén de forma atómica usando QueryBuilder puro
-   */
   private async updateWarehouseStock(
     manager: EntityManager,
     productoId: number,
@@ -150,9 +150,6 @@ export class MovementsService {
     }
   }
 
-  /**
-   * Registra automáticamente un lote en la base de datos para entradas de inventario
-   */
   private async generateAndSaveBatch(
     manager: EntityManager,
     productoId: number,
@@ -162,7 +159,7 @@ export class MovementsService {
   ) {
     const batchNumber = providedBatchNumber || `LOTE-${new Date().getTime()}-${Math.floor(Math.random() * 1000)}`;
     const expiryDate = new Date();
-    expiryDate.setFullYear(expiryDate.getFullYear() + 1); // +1 año por defecto
+    expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
     const batchEntry = manager.create(InventoryBatch, {
       productoId: productoId,
@@ -176,10 +173,6 @@ export class MovementsService {
     return batchNumber;
   }
 
-  /**
-   * Sincroniza el stock global con el desglose por almacén si es la primera vez 
-   * que se realiza un movimiento para este producto.
-   */
   private async ensureDetailedStockInitialized(manager: EntityManager, producto: Product) {
     const count = await manager.count(ProductWarehouseStock, {
       where: { productoId: producto.id },
@@ -195,9 +188,6 @@ export class MovementsService {
     }
   }
 
-  /**
-   * PROCESAR TRANSFERENCIA ENTRE ALMACENES (Atómico)
-   */
   async transferBulk(transferData: { 
     productoId: number; 
     almacenOrigen: string; 
@@ -222,12 +212,10 @@ export class MovementsService {
         throw new NotFoundException(`Producto ID ${productoId} no encontrado`);
       }
 
-      // Asegurar que el stock inicial esté en la tabla de desglose antes de validar
       await this.ensureDetailedStockInitialized(queryRunner.manager, producto);
 
       const cantidadNumerica = Number(cantidad);
 
-      // CORRECCIÓN: Validar stock directamente en el almacén de origen, no en el global
       const stockOrigen = await queryRunner.manager.findOne(ProductWarehouseStock, {
         where: { productoId: producto.id, almacen: almacenOrigen.trim() }
       });
@@ -239,33 +227,33 @@ export class MovementsService {
         );
       }
 
-      // Actualizar stocks específicos por almacén
       await this.updateWarehouseStock(queryRunner.manager, productoId, almacenOrigen, -cantidadNumerica);
       await this.updateWarehouseStock(queryRunner.manager, productoId, almacenDestino, cantidadNumerica);
 
-      // BLINDAJE: Pasamos el objeto 'producto' completo en lugar del id numérico plano
       const logSalida = queryRunner.manager.create(Movement, {
         producto: producto, 
+        productoId: producto.id,
         tipo: 'SALIDA',
         cantidad: cantidadNumerica,
-        nuevoStock: producto.stock,
+        nuevoStock: Number(producto.stock),
         nota: `TRANSFERENCIA (ORIGEN: ${almacenOrigen} -> DESTINO: ${almacenDestino}) | ${nota}`,
         almacenOrigen: almacenOrigen,
         almacenDestino: almacenDestino,
         usuarioId: usuarioId ? String(usuarioId) : undefined
-      });
+      } as any);
       await queryRunner.manager.save(Movement, logSalida);
 
       const logEntrada = queryRunner.manager.create(Movement, {
         producto: producto,
+        productoId: producto.id,
         tipo: 'ENTRADA',
         cantidad: cantidadNumerica,
-        nuevoStock: producto.stock,
+        nuevoStock: Number(producto.stock),
         nota: `TRANSFERENCIA (RECIBIDO DESDE: ${almacenOrigen}) | ${nota}`,
         almacenOrigen: almacenOrigen,
         almacenDestino: almacenDestino,
         usuarioId: usuarioId ? String(usuarioId) : undefined
-      });
+      } as any);
       await queryRunner.manager.save(Movement, logEntrada);
 
       await queryRunner.commitTransaction();
@@ -279,12 +267,6 @@ export class MovementsService {
     }
   }
 
-  /**
-   * Crear un movimiento individual
-   */
- /**
-   * Crear un movimiento individual (Corregido y blindado por almacén)
-   */
   async create(createMovementDto: CreateMovementDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -306,20 +288,18 @@ export class MovementsService {
 
     try {
       let batchGenerated = '';
-      const producto = await queryRunner.manager.findOne(Product, { where: { id: productoId } });
+      const producto = await queryRunner.manager.findOne(Product, { where: { id: Number(productoId) } });
       if (!producto) {
         throw new NotFoundException(`Producto con ID ${productoId} no encontrado`);
       }
 
-      // Asegurar que el stock inicial esté en la tabla de desglose antes de validar
       await this.ensureDetailedStockInitialized(queryRunner.manager, producto);
 
       const tipoNormalizado = tipo.toUpperCase();
       const cantidadNumerica = Number(cantidad);
-      let nuevoStock = producto.stock;
+      let nuevoStock = Number(producto.stock);
       const technician = await this.resolveTechnician(queryRunner.manager, technicianId, technicianName);
       
-      // Determinamos cuál es el almacén objetivo de la operación comercial
       const targetAlmacen = (almacenDestino || almacenOrigen || producto.almacen || 'Principal').trim();
 
       if (tipoNormalizado === 'TRANSFERIR') {
@@ -327,7 +307,6 @@ export class MovementsService {
           throw new BadRequestException('Para una transferencia se requiere un almacén de origen y uno de destino.');
         }
         
-        // CORRECCIÓN EXTRA: Validar stock en origen también en transferencias individuales
         const stockOrigen = await queryRunner.manager.findOne(ProductWarehouseStock, {
           where: { productoId: producto.id, almacen: almacenOrigen.trim() }
         });
@@ -338,8 +317,8 @@ export class MovementsService {
           );
         }
 
-        await this.updateWarehouseStock(queryRunner.manager, productoId, almacenOrigen, -cantidadNumerica);
-        await this.updateWarehouseStock(queryRunner.manager, productoId, almacenDestino, cantidadNumerica);
+        await this.updateWarehouseStock(queryRunner.manager, producto.id, almacenOrigen, -cantidadNumerica);
+        await this.updateWarehouseStock(queryRunner.manager, producto.id, almacenDestino, cantidadNumerica);
         
       } else {
         const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION_FACTURA'];
@@ -347,12 +326,10 @@ export class MovementsService {
 
         if (tiposIncremento.includes(tipoNormalizado)) {
           nuevoStock += cantidadNumerica;
-          await this.updateWarehouseStock(queryRunner.manager, productoId, targetAlmacen, cantidadNumerica);
-          // CREACIÓN AUTOMÁTICA DE LOTE
-          batchGenerated = await this.generateAndSaveBatch(queryRunner.manager, productoId, cantidadNumerica, targetAlmacen, lote);
+          await this.updateWarehouseStock(queryRunner.manager, producto.id, targetAlmacen, cantidadNumerica);
+          batchGenerated = await this.generateAndSaveBatch(queryRunner.manager, producto.id, cantidadNumerica, targetAlmacen, lote);
 
         } else if (tiposDecremento.includes(tipoNormalizado)) {
-          // 🚨 BLINDAJE CRÍTICO: Buscar y validar stock real en el almacén específico, no el global
           const stockEnAlmacen = await queryRunner.manager.findOne(ProductWarehouseStock, {
             where: { productoId: producto.id, almacen: targetAlmacen }
           });
@@ -366,14 +343,14 @@ export class MovementsService {
           }
 
           nuevoStock -= cantidadNumerica; 
-          await this.updateWarehouseStock(queryRunner.manager, productoId, targetAlmacen, -cantidadNumerica);
+          await this.updateWarehouseStock(queryRunner.manager, producto.id, targetAlmacen, -cantidadNumerica);
 
         } else if (tipoNormalizado === 'AJUSTE' || tipoNormalizado === 'AJUSTAR') {
           if (cantidadNumerica < 0) throw new BadRequestException('El stock no puede ser negativo tras un ajuste');
           
-          await this.updateWarehouseStock(queryRunner.manager, productoId, targetAlmacen, cantidadNumerica, true);
+          await this.updateWarehouseStock(queryRunner.manager, producto.id, targetAlmacen, cantidadNumerica, true);
           
-          const allStocks = await queryRunner.manager.find(ProductWarehouseStock, { where: { productoId: Number(productoId) } });
+          const allStocks = await queryRunner.manager.find(ProductWarehouseStock, { where: { productoId: producto.id } });
           nuevoStock = allStocks.reduce((sum, s) => sum + Number(s.cantidad), 0);
 
           if (createMovementDto.costoUnitario !== undefined && createMovementDto.costoUnitario !== null) {
@@ -387,15 +364,14 @@ export class MovementsService {
         producto.stock = nuevoStock;
       }
 
-      // Usamos update en lugar de save para evitar problemas con relaciones eager (Proveedores)
       await queryRunner.manager.update(Product, producto.id, { 
         stock: nuevoStock,
         precio: producto.precio 
       });
 
-      // Se inyecta la instancia 'producto' completa para eliminar el error de Postgres
       const movement = queryRunner.manager.create(Movement, {
         producto: producto, 
+        productoId: producto.id,
         tipo: tipoNormalizado,
         cantidad: cantidadNumerica,
         nuevoStock: Number(nuevoStock),
@@ -407,7 +383,7 @@ export class MovementsService {
         almacenDestino: almacenDestino || targetAlmacen,
         costoUnitario: createMovementDto.costoUnitario ? Number(createMovementDto.costoUnitario) : undefined,
         referencia: referencia || undefined,
-      });
+      } as any);
 
       const savedMovement = await queryRunner.manager.save(Movement, movement);
       if (technician) savedMovement.technician = technician;
@@ -426,7 +402,7 @@ export class MovementsService {
   /**
    * PROCESAR RECIBO / DESPACHO MASIVO (Atómico)
    */
-  async createBulk(bulkData: { tipo: string; nota: string; items: any[]; usuarioId?: any; referencia?: string }) {
+  async createBulk(bulkData: CreateBulkMovementDto) {
     const { tipo, nota, items, usuarioId, referencia } = bulkData;
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -449,7 +425,7 @@ export class MovementsService {
       }
 
       for (const [index, item] of items.entries()) {
-        const { productoId, cantidad, almacen, lote } = item;
+        const { productoId, cantidad, almacen, lote, serials } = item;
         const idNum = Number(productoId);
         const numeroLinea = index + 1;
         
@@ -457,67 +433,119 @@ export class MovementsService {
           throw new BadRequestException(`Línea ${numeroLinea}: producto inválido`);
         }
         
-        const cantidadNumerica = Number(cantidad);
-        if (isNaN(cantidadNumerica) || cantidadNumerica <= 0) {
-          throw new BadRequestException(`Línea ${numeroLinea}: la cantidad debe ser mayor a 0`);
-        }
-
         const almacenNormalizado = String(almacen || 'Principal').trim() || 'Principal';
 
-        const producto = await queryRunner.manager.findOne(Product, { where: { id: idNum } });
+        const producto = await queryRunner.manager.findOne(Product, { where: { id: idNum } }) as any;
         
         if (!producto) {
           throw new NotFoundException(`Producto ID ${productoId} no encontrado en la base de datos`);
         }
 
-        // Asegurar que el stock inicial esté en la tabla de desglose
         await this.ensureDetailedStockInitialized(queryRunner.manager, producto);
 
-        let nuevoStock = producto.stock;
+        let nuevoStock = Number(producto.stock);
         let batchInfo = '';
 
-        if (tiposIncremento.includes(tipoNormalizado)) {
-          nuevoStock += cantidadNumerica;
-          await this.updateWarehouseStock(queryRunner.manager, Number(productoId), almacenNormalizado, cantidadNumerica);
-          // CREACIÓN AUTOMÁTICA DE LOTE
-          batchInfo = await this.generateAndSaveBatch(queryRunner.manager, idNum, cantidadNumerica, almacenNormalizado, lote);
-        } 
-        else if (tiposDecremento.includes(tipoNormalizado)) {
-          const stockEnAlmacen = await queryRunner.manager.findOne(ProductWarehouseStock, {
-            where: { productoId: producto.id, almacen: almacenNormalizado }
-          });
-
-          const cantidadDisponibleAlmacen = stockEnAlmacen ? Number(stockEnAlmacen.cantidad) : 0;
-
-          if (cantidadDisponibleAlmacen < cantidadNumerica) {
-            throw new BadRequestException(
-              `Stock insuficiente en el almacén '${almacenNormalizado}' para ${producto.nombre}. Disponible: ${cantidadDisponibleAlmacen}, Solicitado: ${cantidadNumerica}`
-            );
+        // --- INICIO DE LA LÓGICA DE SERIALIZACIÓN ---
+        if (producto.isSerialized) {
+          if (!Array.isArray(serials) || serials.length === 0) {
+            throw new BadRequestException(`Línea ${numeroLinea} (${producto.nombre}): Debe proporcionar una lista de seriales para este producto.`);
           }
-          nuevoStock -= cantidadNumerica;
-          await this.updateWarehouseStock(queryRunner.manager, Number(productoId), almacenNormalizado, -cantidadNumerica);
+
+          const totalSeriales = serials.length;
+
+          if (tiposIncremento.includes(tipoNormalizado)) {
+            for (const serialNumber of serials) {
+              const serialLimpio = serialNumber.trim();
+              if (!serialLimpio) continue;
+
+              // --- Validación de duplicados ---
+              const serialExistente = await queryRunner.manager.findOne(ProductSerial, {
+                where: {
+                  productoId: producto.id,
+                  serialNumber: serialLimpio,
+                },
+              });
+
+              if (serialExistente) {
+                throw new BadRequestException(`El serial "${serialLimpio}" ya ha sido registrado para el producto "${producto.nombre}".`);
+              }
+
+              const nuevoSerial = queryRunner.manager.create(ProductSerial, {
+                productoId: producto.id,
+                serialNumber: serialLimpio,
+                almacen: almacenNormalizado,
+                status: SerialStatus.DISPONIBLE,
+              });
+              await queryRunner.manager.save(ProductSerial, nuevoSerial);
+            }
+            
+            await this.updateWarehouseStock(queryRunner.manager, producto.id, almacenNormalizado, totalSeriales);
+            nuevoStock = await queryRunner.manager.count(ProductSerial, { where: { productoId: producto.id, status: SerialStatus.DISPONIBLE } });
+          } else { 
+            // Despacho / Salida de serializados
+            for (const serialNumber of serials) {
+               const serialADespachar = await queryRunner.manager.findOne(ProductSerial, { 
+                 where: { productoId: producto.id, serialNumber: serialNumber.trim(), status: SerialStatus.DISPONIBLE }
+               });
+               if (!serialADespachar) {
+                 throw new BadRequestException(`Serial "${serialNumber}" no encontrado o no disponible en el inventario.`);
+               }
+               serialADespachar.status = SerialStatus.VENDIDO; 
+               await queryRunner.manager.save(ProductSerial, serialADespachar);
+            }
+            
+            await this.updateWarehouseStock(queryRunner.manager, producto.id, almacenNormalizado, -totalSeriales);
+            nuevoStock = await queryRunner.manager.count(ProductSerial, { where: { productoId: producto.id, status: SerialStatus.DISPONIBLE } });
+          }
+        } else { 
+          // Lógica original para productos no serializados
+          const cantidadNumerica = Number(cantidad);
+          if (isNaN(cantidadNumerica) || cantidadNumerica <= 0) {
+            throw new BadRequestException(`Línea ${numeroLinea}: la cantidad debe ser mayor a 0`);
+          }
+          if (tiposIncremento.includes(tipoNormalizado)) {
+            nuevoStock += cantidadNumerica;
+            await this.updateWarehouseStock(queryRunner.manager, producto.id, almacenNormalizado, cantidadNumerica);
+            batchInfo = await this.generateAndSaveBatch(queryRunner.manager, idNum, cantidadNumerica, almacenNormalizado, lote);
+          } else if (tiposDecremento.includes(tipoNormalizado)) {
+            const stockEnAlmacen = await queryRunner.manager.findOne(ProductWarehouseStock, {
+              where: { productoId: producto.id, almacen: almacenNormalizado }
+            });
+
+            const cantidadDisponibleAlmacen = stockEnAlmacen ? Number(stockEnAlmacen.cantidad) : 0;
+
+            if (cantidadDisponibleAlmacen < cantidadNumerica) {
+              throw new BadRequestException(
+                `Stock insuficiente en el almacén '${almacenNormalizado}' para ${producto.nombre}. Disponible: ${cantidadDisponibleAlmacen}, Solicitado: ${cantidadNumerica}`
+              );
+            }
+            nuevoStock -= cantidadNumerica;
+            await this.updateWarehouseStock(queryRunner.manager, producto.id, almacenNormalizado, -cantidadNumerica);
+          }
         }
+        // --- FIN DE LA LÓGICA DE SERIALIZACIÓN ---
 
-        // Actualización atómica del stock global
         await queryRunner.manager.update(Product, producto.id, { stock: nuevoStock });
-        producto.stock = nuevoStock; // Sincronizamos para el log del movimiento
+        producto.stock = nuevoStock;
 
-        // BLINDAJE CRÍTICAL: Se pasa la entidad completa 'producto' en vez de sólo el número 'productoId'
+        // Corregido el posible undefined usando un fallback seguro
+        const cantidadMovimiento = producto.isSerialized ? (serials?.length || 0) : Number(cantidad);
         const nuevoMovimiento = queryRunner.manager.create(Movement, {
           producto: producto, 
+          productoId: producto.id,
           tipo: tipoNormalizado,
-          cantidad: cantidadNumerica,
-          nuevoStock: producto.stock,
+          cantidad: cantidadMovimiento,
+          nuevoStock: Number(producto.stock),
           nota: `${nota || ''}${batchInfo ? ` | Lote: ${batchInfo}` : ''} | Almacén: ${almacenNormalizado}`,
           costoUnitario: producto.precio ? Number(producto.precio) : undefined,
           almacenOrigen: almacenNormalizado,
           almacenDestino: almacenNormalizado,
           referencia: referencia ? String(referencia) : undefined,
           usuarioId: finalUsuarioId,
-        });
+        } as any);
 
         const guardado = await queryRunner.manager.save(Movement, nuevoMovimiento);
-        
         movimientosCreados.push(guardado);
       }
 
@@ -528,7 +556,7 @@ export class MovementsService {
       await queryRunner.commitTransaction();
       return { success: true, count: movimientosCreados.length, data: movimientosCreados };
 
-    } catch (err) {
+    } catch (err: any) {
       await queryRunner.rollbackTransaction();
       console.error("Error crítico en Bulk Movement:", err);
       throw new BadRequestException(`No se pudo procesar el movimiento: ${err.message}`);
@@ -537,9 +565,90 @@ export class MovementsService {
     }
   }
 
+  async assignSerialsToTechnician(dto: AssignSerialsToTechnicianDto) {
+    const { technicianId, serials, usuarioId } = dto;
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const technician = await queryRunner.manager.findOne(Technician, { where: { id: technicianId } });
+      if (!technician) {
+        throw new NotFoundException(`Técnico con ID ${technicianId} no encontrado.`);
+      }
+
+      const uniqueSerials = [...new Set(serials.map(s => s.trim()).filter(Boolean))];
+      if (uniqueSerials.length === 0) {
+        throw new BadRequestException('Debe proporcionar al menos un número de serie válido.');
+      }
+
+      const productSerials = await queryRunner.manager.find(ProductSerial, {
+        where: { serialNumber: In(uniqueSerials) },
+        relations: ['producto'],
+      });
+
+      if (productSerials.length !== uniqueSerials.length) {
+        const foundSerials = productSerials.map(ps => ps.serialNumber);
+        const notFound = uniqueSerials.filter(s => !foundSerials.includes(s));
+        throw new NotFoundException(`Los siguientes seriales no se encontraron: ${notFound.join(', ')}`);
+      }
+
+      const movementsToCreate: any[] = []; // 👈 Cambiado a any[] temporalmente para evadir la restricción estricta de TypeORM
+      const productsToUpdate = new Map<number, number>();
+
+      for (const serial of productSerials) {
+        if (serial.status !== SerialStatus.DISPONIBLE) {
+          throw new BadRequestException(`El serial ${serial.serialNumber} no está disponible (estado actual: ${serial.status}).`);
+        }
+        
+        // 1. Cambiar estado del serial a asignado
+        serial.status = SerialStatus.ASIGNADO_TECNICO;
+        await queryRunner.manager.save(ProductSerial, serial);
+
+        const productId = serial.productoId;
+        if (!productsToUpdate.has(productId)) {
+          const stock = await queryRunner.manager.count(ProductSerial, {
+            where: { productoId: productId, status: SerialStatus.DISPONIBLE },
+          });
+          productsToUpdate.set(productId, stock);
+        }
+
+        // 2. Construir el objeto del movimiento usando casting seguro
+        movementsToCreate.push({
+          productoId: productId,
+          tipo: 'ASIGNACION_TECNICO',
+          cantidad: 1,
+          nota: `Asignado al técnico: ${technician.nombre} | Serial: ${serial.serialNumber}`,
+          serials: [serial.serialNumber], // 👈 Ahora pasará sin chistar por el cambio de tipo de la lista
+          technicianId: technician.id,
+          usuarioId: usuarioId ? String(usuarioId) : undefined,
+          nuevoStock: productsToUpdate.get(productId),
+          almacenOrigen: serial.almacen,
+          almacenDestino: 'Móvil (Técnico)',
+        });
+      }
+
+      // 3. Actualizar los stocks globales de los productos afectados
+      for (const [productId, newStock] of productsToUpdate.entries()) {
+        await queryRunner.manager.update(Product, productId, { stock: newStock });
+      }
+
+      // 4. Guardar los logs de movimientos de forma masiva
+      await queryRunner.manager.save(Movement, movementsToCreate);
+      await queryRunner.commitTransaction();
+
+      return { message: `${uniqueSerials.length} serial(es) asignado(s) a ${technician.nombre} con éxito.` };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async findAll() {
     return await this.movementRepository.find({
-      relations: ['producto', 'technician'], 
+      relations: ['producto', 'technician', 'usuario'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -547,8 +656,18 @@ export class MovementsService {
   async findByProductId(productoId: number) {
     return await this.movementRepository.find({
       where: { productoId },
-      relations: ['producto', 'technician'],
+      relations: ['producto', 'technician', 'usuario'],
       order: { createdAt: 'DESC' },
     });
+  }
+
+  async findBySerialNumber(serialNumber: string) {
+    return this.movementRepository
+      .createQueryBuilder('movement')
+      .leftJoinAndSelect('movement.producto', 'producto')
+      .leftJoinAndSelect('movement.usuario', 'usuario')
+      .where(`movement.serials @> :serial`, { serial: `["${serialNumber}"]` })
+      .orderBy('movement.createdAt', 'DESC')
+      .getMany();
   }
 }
