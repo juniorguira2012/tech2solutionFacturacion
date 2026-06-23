@@ -1,6 +1,6 @@
 // components/inventario/MovimientosSection.jsx
 import React, { useState, useMemo, useEffect } from 'react';
-import { ArrowLeftRight, List, Download, Truck, RefreshCw, Trash2, Search, X, UserCheck } from 'lucide-react';
+import { ArrowLeftRight, List, Download, Truck, RefreshCw, Trash2, Search, X, UserCheck, Check } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 import { useVentas } from '../../context/VentasContext';
 import { useAuth } from '../../context/AuthContext';
@@ -13,7 +13,7 @@ import { FormMovimientoSimple } from './FormMovimientoSimple';
 import { FormAjuste } from '../../components/FormAjuste';
 
 const MovimientosSection = ({ mostrarToast }) => {
-  const { productos, movimientos, proveedores, tecnicos, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, asignarSerialesTecnico, cargarMovimientos, recargarInventario, almacenesDetallados } = useInventario();
+  const { productos, movimientos, proveedores, tecnicos, seriales, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, asignarSerialesTecnico, cargarMovimientos, recargarInventario, almacenesDetallados } = useInventario();
   const { historialVentas } = useVentas();
   const { usuario } = useAuth();
   const { usuarios } = useUsuarios();
@@ -40,7 +40,10 @@ const MovimientosSection = ({ mostrarToast }) => {
     setAsignacionTecnicoId('');
     setAsignacionSerialesInput('');
     setAsignacionIsLoading(false);
-
+    // Limpieza de la nueva UI de asignación de seriales
+    setSerialesSeleccionados([]);
+    setBusquedaSerial('');
+    setSerialesDisponibles(seriales.filter(s => s.status === 'disponible'));
     setProveedorSeleccionado('');
   };
 
@@ -65,6 +68,10 @@ const MovimientosSection = ({ mostrarToast }) => {
   const [asignacionTecnicoId, setAsignacionTecnicoId] = useState('');
   const [asignacionSerialesInput, setAsignacionSerialesInput] = useState('');
   const [asignacionIsLoading, setAsignacionIsLoading] = useState(false);
+  // Nuevos estados para la selección interactiva de seriales
+  const [serialesDisponibles, setSerialesDisponibles] = useState([]);
+  const [serialesSeleccionados, setSerialesSeleccionados] = useState([]);
+  const [busquedaSerial, setBusquedaSerial] = useState('');
 
   // Lógica de búsqueda para el carrito de movimientos masivos
   useEffect(() => {
@@ -170,6 +177,11 @@ const MovimientosSection = ({ mostrarToast }) => {
     setBusquedaFactura('');
     setFacturaEncontrada(null);
     setAsignacionTecnicoId(''); setAsignacionSerialesInput('');
+
+    // Limpieza de la nueva UI de asignación de seriales
+    setSerialesSeleccionados([]);
+    setBusquedaSerial('');
+    setSerialesDisponibles(seriales.filter(s => s.status === 'disponible'));
     
     // Reseteamos el estado interno del formulario simple a través del hook si es necesario
     formProps.setMovimientoData({ productoId: '', cantidad: 1, almacenDestino: almacenesNombres[0] || 'Principal', nota: '' });
@@ -359,21 +371,13 @@ const exportarKardexCSV = () => {
       mostrarToast?.("Seleccione un técnico", "warning");
       return;
     }
-    if (!asignacionSerialesInput.trim()) {
+    if (serialesSeleccionados.length === 0) {
       mostrarToast?.("Ingrese al menos un serial", "warning");
       return;
     }
 
-    // 1. Convertimos el texto del textarea en un Array de seriales limpios
-    const listaSeriales = asignacionSerialesInput
-      .split(/[\n,]+/)                  // Divide por saltos de línea o comas
-      .map(s => s.trim().toUpperCase()) // Limpia espacios y fuerza mayúsculas
-      .filter(s => s.length > 0);       // Elimina líneas vacías
-
-    if (listaSeriales.length === 0) {
-      mostrarToast?.("No se encontraron seriales válidos", "warning");
-      return;
-    }
+    // 1. Obtenemos los números de serie de los objetos seleccionados
+    const listaSeriales = serialesSeleccionados.map(s => s.serialNumber);
 
     // 🚨 CONTROL DE SEGURIDAD PARA EL USUARIO ACTIVO
     // Si 'usuario.id' no existe, intentamos con 'usuario._id' o asignamos un valor fallback temporal para desarrollo (ej. 1)
@@ -404,6 +408,26 @@ const exportarKardexCSV = () => {
   };
 
   const esFlujoMovimientoMasivo = tipoMovimiento === 'multilinea' || tipoMovimiento === 'recibir' || tipoMovimiento === 'despachar';
+
+  // Lógica para la nueva UI de selección de seriales
+  const handleSelectSerial = (serial) => {
+    setSerialesSeleccionados(prev => [...prev, serial]);
+    setSerialesDisponibles(prev => prev.filter(s => s.id !== serial.id));
+  };
+
+  const handleDeselectSerial = (serial) => {
+    setSerialesDisponibles(prev => [...prev, serial]);
+    setSerialesSeleccionados(prev => prev.filter(s => s.id !== serial.id));
+  };
+
+  const serialesDisponiblesFiltrados = useMemo(() => {
+    if (!busquedaSerial) return serialesDisponibles;
+    const query = busquedaSerial.toLowerCase();
+    return serialesDisponibles.filter(s => 
+      s.serialNumber.toLowerCase().includes(query) ||
+      s.producto?.nombre.toLowerCase().includes(query)
+    );
+  }, [busquedaSerial, serialesDisponibles]);
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
@@ -441,9 +465,9 @@ const exportarKardexCSV = () => {
           <button onClick={() => abrirModal('descartar')} className="flex items-center gap-2 bg-rose-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-rose-600 transition-all active:scale-95">
             <Trash2 size={14} /> Descartar
           </button>
-          <button onClick={() => abrirModal('asignar_tecnico')} className="flex items-center gap-2 bg-cyan-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-cyan-600 transition-all active:scale-95">
+          {/* <button onClick={() => abrirModal('asignar_tecnico')} className="flex items-center gap-2 bg-cyan-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-cyan-600 transition-all active:scale-95">
             <UserCheck size={14} /> Asignar a Técnico
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -560,7 +584,6 @@ const exportarKardexCSV = () => {
                    tipoMovimiento === 'recibir' ? 'Recibir Inventario' : 
                    tipoMovimiento === 'despachar' ? 'Despachar Inventario' : 
                    tipoMovimiento === 'devolucion' ? 'Devolución de Stock' : `${tipoMovimiento}`}
-                  {tipoMovimiento === 'asignar_tecnico' && 'Asignar Seriales a Técnico'}
                 </h2>
               </div>
               <button onClick={cerrarModal} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400">
@@ -852,42 +875,6 @@ const exportarKardexCSV = () => {
                 />
               )}
 
-              {/* 6. NUEVO: FORMULARIO DE ASIGNACIÓN A TÉCNICO */}
-              {tipoMovimiento === 'asignar_tecnico' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase">Seleccionar Técnico</label>
-                  <select
-                    value={asignacionTecnicoId}
-                    onChange={(e) => setAsignacionTecnicoId(e.target.value)}
-                    className="w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white"
-                  >
-                    <option value="">Seleccione un técnico...</option>
-                    {tecnicos.map(t => (
-                      <option key={t.id} value={t.id}>{t.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase">Números de Serie (Uno por línea o separados por coma)</label>
-                  <textarea
-                    value={asignacionSerialesInput}
-                    onChange={(e) => setAsignacionSerialesInput(e.target.value)}
-                    placeholder="Ej: SN12345&#10;SN67890"
-                    className="w-full h-32 p-3 border border-slate-200 rounded-xl outline-none focus:border-brand font-mono text-xs uppercase"
-                  />
-                </div>
-
-                <button
-                  onClick={procesarAsignacionTecnico}
-                  disabled={asignacionIsLoading}
-                  className="w-full h-11 bg-cyan-500 text-white font-black text-xs uppercase rounded-xl shadow-md hover:bg-cyan-600 transition-all flex items-center justify-center gap-2"
-                >
-                  {asignacionIsLoading ? 'Procesando...' : 'Asignar Equipos'}
-                </button>
-              </div>
-            )}
             </div>
           </div>
         </div>

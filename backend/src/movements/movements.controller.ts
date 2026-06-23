@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, ParseIntPipe, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, ParseIntPipe, NotFoundException, Req } from '@nestjs/common'; // 🚨 Se agregó 'Req' aquí
 import { MovementsService } from './movements.service';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { CreateBulkMovementDto } from './dto/create-bulk-movement.dto';
@@ -27,6 +27,21 @@ export class MovementsController {
   assignToTechnician(@Body() assignData: AssignSerialsToTechnicianDto) {
     return this.movementsService.assignSerialsToTechnician(assignData);
   }
+
+  // 🚀 RUTA REPARADA PARA COINCIDIR CON LA FIRMA DEL SERVICIO
+  @Post('return-from-technician')
+    returnFromTechnician(
+      @Body() payload: { serialNumber: string; nota?: string; usuarioId?: string },
+    ) {
+      // 🌟 CORRECCIÓN: Si no viene un usuarioId del front, usamos '1' por defecto
+      // para evitar el error "user is not defined"
+      const userId = payload.usuarioId || '1'; 
+
+      return this.movementsService.returnSerialFromTechnician(
+        { serialNumber: payload.serialNumber, nota: payload.nota },
+        String(userId)
+      );
+    }
 
   @Get('technicians')
   findTechnicians() {

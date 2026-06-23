@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle, ClipboardList, Edit2, Mail, PackageSearch, Phone, Search, Trash2, UserCheck, UserPlus, Wrench, X } from 'lucide-react';
+import { CheckCircle, ClipboardList, Edit2, Mail, PackageSearch, Phone, Search, Trash2, UserCheck, UserPlus, Wrench, X, RotateCcw, ChevronDown, ChevronUp, Undo2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useInventario } from '../../context/InventarioContext';
 
 const TecnicosSection = ({ mostrarToast }) => {
   const {
-    productos,
+    seriales,
     movimientos,
     tecnicos,
+    devolverSerialTecnico,
     registrarMovimiento,
     crearTecnico,
     asignarSerialesTecnico,
@@ -15,6 +16,7 @@ const TecnicosSection = ({ mostrarToast }) => {
     eliminarTecnico,
     cargarMovimientos,
     recargarInventario,
+    productos,
     almacenesDetallados
   } = useInventario();
   const { usuario } = useAuth();
@@ -58,6 +60,12 @@ const TecnicosSection = ({ mostrarToast }) => {
     telefono: '',
     email: ''
   });
+  // Estados para el nuevo modal de devolución masiva
+  const [devolucionModalOpen, setDevolucionModalOpen] = useState(false);
+  const [devolucionSerialesInput, setDevolucionSerialesInput] = useState('');
+  const [devolucionLoading, setDevolucionLoading] = useState(false);
+
+
 
   const productosFiltrados = useMemo(() => {
     const query = busquedaProducto.trim().toLowerCase();
@@ -101,6 +109,7 @@ const TecnicosSection = ({ mostrarToast }) => {
       referencia: '',
       nota: ''
     });
+    setExpandedTechnician(null);
   };
 
   const obtenerNombreTecnico = () => {
@@ -180,6 +189,61 @@ const TecnicosSection = ({ mostrarToast }) => {
     }
   };
 
+  const [expandedTechnician, setExpandedTechnician] = useState(null);
+
+  const handleDevolverSerial = async (serialNumber) => {
+    const confirmar = window.confirm(`¿Confirmas la devolución del serial ${serialNumber} al inventario?`);
+    if (!confirmar) return;
+
+    try {
+      await devolverSerialTecnico(serialNumber, `Devuelto por técnico`);
+      mostrarToast?.(`Serial ${serialNumber} devuelto al inventario`, 'success');
+      // La recarga se maneja en el context, no es necesario aquí.
+    } catch (error) {
+      mostrarToast?.(error.message || 'No se pudo procesar la devolución', 'error');
+    }
+  };
+
+  const handleDevolucionMasiva = async (e) => {
+    e.preventDefault();
+    const serialesADevolver = devolucionSerialesInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+
+    if (serialesADevolver.length === 0) {
+      mostrarToast?.('Ingresa al menos un número de serie.', 'warning');
+      return;
+    }
+
+    setDevolucionLoading(true);
+    let exitosos = 0;
+    let fallidos = 0;
+    const errores = [];
+
+    for (const serial of serialesADevolver) {
+      try {
+        await devolverSerialTecnico(serial, 'Devolución manual desde módulo de técnicos');
+        exitosos++;
+      } catch (error) {
+        fallidos++;
+        errores.push(`Serial ${serial}: ${error.message}`);
+      }
+    }
+
+    // 🚨 REGLA DE ORO: Sincronizar el Contexto del Inventario y Movimientos
+    if (exitosos > 0) {
+      mostrarToast?.(`${exitosos} serial(es) devuelto(s) al inventario con éxito.`, 'success');
+      if (typeof recargarInventario === 'function') recargarInventario();
+      if (typeof cargarMovimientos === 'function') cargarMovimientos(); 
+    }
+    
+    if (fallidos > 0) {
+      mostrarToast?.(`${fallidos} serial(es) no pudieron ser devueltos. Detalles en consola.`, 'error');
+      console.error("Errores en devolución masiva:", errores);
+    }
+
+    setDevolucionLoading(false);
+    setDevolucionModalOpen(false);
+    setDevolucionSerialesInput('');
+  };
   const entregarProducto = async (e) => {
     e.preventDefault();
 
@@ -306,43 +370,75 @@ const TecnicosSection = ({ mostrarToast }) => {
             <UserPlus size={15} />
             Nuevo técnico
           </button>
+          <button
+            type="button"
+            onClick={() => setDevolucionModalOpen(true)}
+            className="h-11 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+          >
+            <Undo2 size={15} /> Devolver Equipo
+          </button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 p-4">
-          {tecnicosOrdenados.map(tecnico => (
-            <article key={tecnico.id} className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-[10px] font-black text-slate-800 uppercase truncate">{tecnico.nombre}</p>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => abrirEditarTecnico(tecnico)}
-                    className="h-7 w-7 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-brand hover:border-brand/30 flex items-center justify-center transition-colors"
-                    title="Editar técnico"
-                  >
-                    <Edit2 size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => borrarTecnico(tecnico)}
-                    className="h-7 w-7 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 flex items-center justify-center transition-colors"
-                    title="Eliminar técnico"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+          {tecnicosOrdenados.map(tecnico => {
+            const serialesAsignados = seriales.filter(s => 
+              s.status === 'asignado_tecnico' && Number(s.technicianId) === Number(tecnico.id)
+            );
+
+            return (
+            <article key={tecnico.id} className="border border-slate-100 rounded-xl bg-slate-50/50 min-w-0 flex flex-col">
+              <div className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[10px] font-black text-slate-800 uppercase truncate">{tecnico.nombre}</p>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => abrirEditarTecnico(tecnico)}
+                      className="h-7 w-7 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-brand hover:border-brand/30 flex items-center justify-center transition-colors"
+                      title="Editar técnico"
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => borrarTecnico(tecnico)}
+                      className="h-7 w-7 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 flex items-center justify-center transition-colors"
+                      title="Eliminar técnico"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 space-y-1">
+                  <p className="flex items-center gap-2 text-[9px] font-bold text-slate-400 truncate">
+                    <Phone size={12} className="shrink-0" />
+                    {tecnico.telefono || 'Sin teléfono'}
+                  </p>
+                  <p className="flex items-center gap-2 text-[9px] font-bold text-slate-400 truncate">
+                    <Mail size={12} className="shrink-0" />
+                    {tecnico.email || 'Sin email'}
+                  </p>
                 </div>
               </div>
-              <div className="mt-2 space-y-1">
-                <p className="flex items-center gap-2 text-[9px] font-bold text-slate-400 truncate">
-                  <Phone size={12} className="shrink-0" />
-                  {tecnico.telefono || 'Sin teléfono'}
-                </p>
-                <p className="flex items-center gap-2 text-[9px] font-bold text-slate-400 truncate">
-                  <Mail size={12} className="shrink-0" />
-                  {tecnico.email || 'Sin email'}
-                </p>
-              </div>
+              {serialesAsignados.length > 0 && (
+                <div className="mt-auto pt-2 border-t border-slate-200">
+                  <button onClick={() => setExpandedTechnician(expandedTechnician === tecnico.id ? null : tecnico.id)} className="w-full flex justify-between items-center px-3 py-1 text-left">
+                    <span className="text-[9px] font-black text-brand uppercase">Equipos Asignados ({serialesAsignados.length})</span>
+                    {expandedTechnician === tecnico.id ? <ChevronUp size={14} className="text-brand" /> : <ChevronDown size={14} className="text-brand" />}
+                  </button>
+                  {expandedTechnician === tecnico.id && (
+                    <div className="p-2 space-y-1 max-h-32 overflow-y-auto">
+                      {serialesAsignados.map(s => (
+                        <div key={s.id} className="flex items-center justify-between p-1.5 bg-white rounded-md border">
+                          <span className="text-[9px] font-mono font-bold text-slate-600">{s.serialNumber}</span>
+                          <button onClick={() => handleDevolverSerial(s.serialNumber)} className="p-1 text-emerald-500 hover:bg-emerald-50 rounded-md"><RotateCcw size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </article>
-          ))}
+          )})}
           {tecnicosOrdenados.length === 0 && (
             <div className="sm:col-span-2 xl:col-span-4 py-10 text-center border-2 border-dashed border-slate-200 rounded-2xl">
               <UserPlus className="mx-auto text-slate-200" size={34} />
@@ -502,6 +598,47 @@ const TecnicosSection = ({ mostrarToast }) => {
           </button>
         </form>
 
+        {/* Modal de Devolución Masiva */}
+        {devolucionModalOpen && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-lg">
+                    <Undo2 size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-black text-slate-800 uppercase italic tracking-wider">Devolución de Técnico</h2>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Reingresar seriales al stock</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setDevolucionModalOpen(false)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400">
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleDevolucionMasiva} className="p-6 space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Seriales a Devolver (uno por línea)</label>
+                  <textarea
+                    required
+                    value={devolucionSerialesInput}
+                    onChange={(e) => setDevolucionSerialesInput(e.target.value)}
+                    placeholder="SN-DEV-001&#10;SN-DEV-002&#10;SN-DEV-003"
+                    className="w-full p-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-mono text-xs bg-white h-48 resize-y"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={devolucionLoading}
+                  className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <CheckCircle size={16} />
+                  {devolucionLoading ? 'Procesando...' : 'Confirmar Devolución'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
         <aside className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
             <UserCheck size={18} className="text-brand" />

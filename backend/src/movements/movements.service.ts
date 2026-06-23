@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, Not, In } from 'typeorm';
 import { Movement } from './entities/movement.entity';
 import { CreateBulkMovementDto } from './dto/create-bulk-movement.dto';
+import { ReturnSerialDto } from './dto/return-serial.dto';
 import { AssignSerialsToTechnicianDto } from './dto/assign-serials.dto';
 import { Product } from '../products/entities/product.entity';
 import { CreateMovementDto } from './dto/create-movement.dto';
@@ -638,6 +639,65 @@ export class MovementsService {
       await queryRunner.commitTransaction();
 
       return { message: `${uniqueSerials.length} serial(es) asignado(s) a ${technician.nombre} con éxito.` };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async returnSerialFromTechnician(dto: ReturnSerialDto, usuarioId: string) {
+    const { serialNumber, nota } = dto;
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Encontrar el serial y validar su estado
+      const serial = await queryRunner.manager.findOne(ProductSerial, {
+        where: { serialNumber: serialNumber.trim() },
+        relations: ['producto'],
+      });
+
+      if (!serial) {
+        throw new NotFoundException(`El serial '${serialNumber}' no fue encontrado.`);
+      }
+
+      if (serial.status !== SerialStatus.ASIGNADO_TECNICO) {
+        throw new BadRequestException(`El serial '${serialNumber}' no está asignado a un técnico (estado actual: ${serial.status}).`);
+      }
+
+      // 2. Cambiar el estado del serial a 'disponible'
+      serial.status = SerialStatus.DISPONIBLE;
+      await queryRunner.manager.save(ProductSerial, serial);
+
+      // 3. Actualizar el stock del producto asociado
+      const producto = serial.producto;
+      if (producto) {
+        const nuevoStock = await queryRunner.manager.count(ProductSerial, {
+          where: { productoId: producto.id, status: SerialStatus.DISPONIBLE },
+        });
+        await queryRunner.manager.update(Product, producto.id, { stock: nuevoStock });
+
+        // 4. Registrar el movimiento de devolución en el Kardex
+        const movement = queryRunner.manager.create(Movement, {
+          productoId: producto.id,
+          tipo: 'DEVOLUCION_TECNICO',
+          cantidad: 1,
+          nuevoStock: nuevoStock,
+          nota: `Devolución de técnico. ${nota || ''}`.trim(),
+          serials: [serial.serialNumber],
+          usuarioId: usuarioId,
+          almacenOrigen: 'Móvil (Técnico)',
+          almacenDestino: serial.almacen, // Vuelve a su almacén original
+        } as any);
+        await queryRunner.manager.save(Movement, movement);
+      }
+
+      await queryRunner.commitTransaction();
+      return { message: `Serial '${serialNumber}' devuelto al inventario con éxito.` };
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

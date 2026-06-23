@@ -50,7 +50,8 @@ export class ProductsService {
             almacen: nuevoProducto.almacen || 'Principal',
           });
         });
-        // El stock se calcula en el frontend, pero lo re-aseguramos aquí
+        // El stock para productos serializados SIEMPRE se calcula en el backend
+        // para ser la fuente de la verdad, ignorando lo que envíe el frontend.
         nuevoProducto.stock = nuevoProducto.seriales.length;
       }
 
@@ -155,6 +156,7 @@ export class ProductsService {
         }
         
         // Asignamos el nuevo stock basado en los seriales finales
+        // El stock para productos serializados SIEMPRE se calcula en el backend.
         producto.stock = serialesNuevosStr.length;
       }
 

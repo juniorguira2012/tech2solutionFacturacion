@@ -371,6 +371,38 @@ export const InventarioProvider = ({ children }) => {
       throw error;
     }
   };
+
+    const devolverSerialTecnico = async (serialNumber, nota) => {
+      try {
+        const url = `${import.meta.env.VITE_API_URL}/movements/return-from-technician`;
+        
+        // Obtenemos tus cabeceras de autenticación habituales
+        const authHeaders = getAuthHeaders();
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json', // 👈 Vital para que NestJS entienda el @Body()
+          },
+          body: JSON.stringify({ 
+            serialNumber, 
+            nota,
+            usuarioId: '1' // 👈 Le pasamos el ID del usuario logueado (ajusta 'user?.id' según tu estado global)
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'Error al procesar la devolución');
+        }
+
+        setRefreshIndex(prev => prev + 1); 
+        return data;
+      } catch (error) {
+        throw error;
+      }
+    };
   // 2. Registrar Movimiento (Sustituye actualizarProducto en la sección de movimientos)
   const registrarMovimiento = async (datosMovimiento) => {
     try {
@@ -1006,6 +1038,7 @@ return (
     crearPrestamo,
     devolverPrestamo,
     cargarLotes,
+    devolverSerialTecnico,
     cargarUnidadesMedida,
     agregarUnidadMedida,
     actualizarUnidadMedida,
