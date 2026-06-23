@@ -103,6 +103,9 @@ export class ProductsService {
         throw new NotFoundException(`Producto con ID ${id} no encontrado.`);
       }
 
+      // Actualiza los datos del producto principal en la entidad cargada
+      queryRunner.manager.merge(Product, producto, productData);
+
       if (producto.isSerialized) {
         const serialesActuales = producto.seriales || [];
         const serialesNuevos = serials ?? [];
@@ -144,23 +147,23 @@ export class ProductsService {
 
         // Solo intentamos guardar si realmente hay seriales nuevos que añadir.
         if (serialesACrear.length > 0) {
-          await queryRunner.manager.save(ProductSerial, serialesACrear);
+          const nuevosSerialesGuardados = await queryRunner.manager.save(ProductSerial, serialesACrear);
+          // ¡AQUÍ LA CORRECCIÓN!
+          // Añadimos los nuevos seriales guardados al array de la entidad principal
+          // para que la operación final de 'save' no intente desvincularlos.
+          producto.seriales.push(...nuevosSerialesGuardados);
         }
         
         // Asignamos el nuevo stock basado en los seriales finales
-        productData.stock = serialesNuevosStr.length;
+        producto.stock = serialesNuevosStr.length;
       }
 
-      // 3. Actualizar los datos del producto usando UPDATE plano para ignorar el 'cascade: true'
-      await queryRunner.manager.update(Product, id, productData as any);
+      // 3. Guardamos la entidad 'producto' completa.
+      // El método 'save' respeta las relaciones y cascadas, asegurando que todo se sincronice.
+      const productoActualizado = await queryRunner.manager.save(Product, producto);
 
       await queryRunner.commitTransaction();
-
-      // Retornamos el producto actualizado y refrescado
-      return await this.productRepository.findOne({
-        where: { id },
-        relations: ['seriales'],
-      });
+      return productoActualizado;
 
     } catch (error) {
       await queryRunner.rollbackTransaction();
