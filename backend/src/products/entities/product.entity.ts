@@ -21,7 +21,7 @@ export class Product {
   @Column()
   nombre: string;
 
-  @Column({ nullable: true })
+  @Column({ unique: true, nullable: true })
   codigo: string;
 
   @Column({ nullable: true })

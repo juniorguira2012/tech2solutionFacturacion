@@ -281,6 +281,29 @@ export const InventarioProvider = ({ children }) => {
     }
   };
 
+  const actualizarSerial = async (id, nuevoNumero) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/product-serials/${id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ serialNumber: nuevoNumero }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Error al actualizar el serial');
+      }
+
+      // Actualizamos el estado global de productos para reflejar el cambio
+      setRefreshIndex(prev => prev + 1);
+
+      return data; // Devolvemos el serial actualizado
+    } catch (err) {
+      console.error('Error en actualizarSerial:', err);
+      throw err;
+    }
+  };
+
   const obtenerHistorialSerial = async (serialNumber) => {
     try {
       const res = await fetch(`${API_BASE_URL}/movements/by-serial/${serialNumber}`, {
@@ -1004,6 +1027,7 @@ return (
     eliminarProducto,
     restaurarProducto,           // <-- Exponemos la nueva función
     actualizarProducto,
+    actualizarSerial, // <-- Exponemos la nueva función
     descontarStock,
     registrarMovimiento,         
     crearTecnico,

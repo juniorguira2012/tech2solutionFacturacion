@@ -36,7 +36,7 @@ export class ProductsService {
       const nuevoProducto = queryRunner.manager.create(Product, productData);
 
       if (nuevoProducto.isSerialized && serials && serials.length > 0) {
-        // Validar duplicados antes de crear
+        // Validar duplicados dentro de la misma lista antes de crear
         const uniqueSerials = [...new Set(serials)];
         if (uniqueSerials.length !== serials.length) {
           throw new BadRequestException('La lista contiene números de serie duplicados.');
@@ -86,30 +86,89 @@ export class ProductsService {
     return producto;
   }
 
-async update(id: number, updateProductDto: UpdateProductDto) {
-  if (updateProductDto.proveedorId !== undefined && updateProductDto.proveedorId !== null) {
-    const provider = await this.providerRepository.findOneBy({ id: updateProductDto.proveedorId });
-    if (!provider) {
-      throw new NotFoundException(`Proveedor con ID ${updateProductDto.proveedorId} no encontrado.`);
+  async update(id: number, updateProductDto: UpdateProductDto) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const { serials, ...productData } = updateProductDto;
+
+      const producto = await queryRunner.manager.findOne(Product, {
+        where: { id },
+        relations: ['seriales'],
+      });
+
+      if (!producto) {
+        throw new NotFoundException(`Producto con ID ${id} no encontrado.`);
+      }
+
+      if (producto.isSerialized) {
+        const serialesActuales = producto.seriales || [];
+        const serialesNuevos = serials ?? [];
+        const serialesNuevosStr = [...new Set(serialesNuevos.map(s => String(s).trim()).filter(Boolean))];
+
+        if (serials && serialesNuevosStr.length !== serials.length) {
+          throw new BadRequestException('La lista de seriales contiene duplicados.');
+        }
+
+        const serialesActualesStr = serialesActuales.map(s => s.serialNumber);
+
+        // 1. Identificar seriales a eliminar
+        const serialesAEliminar = serialesActuales.filter(
+          s => !serialesNuevosStr.includes(s.serialNumber),
+        );
+
+        for (const serial of serialesAEliminar) {
+          if (serial.status !== SerialStatus.DISPONIBLE) {
+            throw new BadRequestException(`No se puede eliminar el serial '${serial.serialNumber}' porque su estado es '${serial.status}'.`);
+          }
+        }
+        
+        if (serialesAEliminar.length > 0) {
+          await queryRunner.manager.remove(serialesAEliminar);
+        }
+
+        // 2. Identificar y crear nuevos seriales
+        // Filtramos para ignorar los seriales que ya existen en la base de datos para este producto.
+        // Esto evita errores de duplicados y permite añadir nuevos seriales a una lista existente sin problemas.
+        const serialesACrear = serialesNuevosStr
+          .filter(s => !serialesActualesStr.includes(s))
+          .map(serialNumber => queryRunner.manager.create(ProductSerial, {
+            productoId: id,
+            serialNumber,
+            status: SerialStatus.DISPONIBLE,
+            // Usamos el almacén que viene en la actualización, o el que ya tenía el producto.
+            almacen: productData.almacen ?? producto.almacen ?? 'Principal',
+          }));
+
+        // Solo intentamos guardar si realmente hay seriales nuevos que añadir.
+        if (serialesACrear.length > 0) {
+          await queryRunner.manager.save(ProductSerial, serialesACrear);
+        }
+        
+        // Asignamos el nuevo stock basado en los seriales finales
+        productData.stock = serialesNuevosStr.length;
+      }
+
+      // 3. Actualizar los datos del producto usando UPDATE plano para ignorar el 'cascade: true'
+      await queryRunner.manager.update(Product, id, productData as any);
+
+      await queryRunner.commitTransaction();
+
+      // Retornamos el producto actualizado y refrescado
+      return await this.productRepository.findOne({
+        where: { id },
+        relations: ['seriales'],
+      });
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
-
-  const producto = await this.productRepository.preload({
-    id: id,
-    ...updateProductDto, // El DTO sobrescribe los valores, pero el ID manda
-  });
-
-  if (!producto)
-    throw new NotFoundException(`No se pudo actualizar: ID ${id} no existe`);
-
-  try {
-    return await this.productRepository.save(producto);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Error desconocido';
-    console.error("Error en DB:", message);
-    throw new BadRequestException(`Error de persistencia: ${message}`);
-  }
- }
 
   async remove(id: number) {
     // 1. Verificamos que el producto exista primero

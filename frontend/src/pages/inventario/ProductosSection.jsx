@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo = 'danger' }) => {
   if (!isOpen) return null;
 
-  const esEliminar = tipo === 'danger';
+  const esPeligro = tipo === 'danger' || tipo === 'warning';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -20,8 +20,8 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
         
         {/* Icono */}
         <div className={`flex justify-center pt-8 pb-4`}>
-          <div className={`h-16 w-16 rounded-2xl flex items-center justify-center ${esEliminar ? 'bg-red-50' : 'bg-amber-50'}`}>
-            <AlertTriangle size={32} className={esEliminar ? 'text-red-500' : 'text-amber-500'} />
+          <div className={`h-16 w-16 rounded-2xl flex items-center justify-center ${esPeligro ? 'bg-red-50' : 'bg-amber-50'}`}>
+            <AlertTriangle size={32} className={esPeligro ? 'text-red-500' : 'text-amber-500'} />
           </div>
         </div>
 
@@ -42,10 +42,10 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
           <button
             onClick={onConfirm}
             className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest text-white transition-colors ${
-              esEliminar ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-500 hover:bg-amber-600'
+              esPeligro ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-500 hover:bg-amber-600'
             }`}
           >
-            {esEliminar ? 'Eliminar' : 'Confirmar'}
+            {tipo === 'danger' ? 'Eliminar' : 'Confirmar'}
           </button>
         </div>
       </div>
@@ -67,7 +67,8 @@ const ProductosSection = ({ mostrarToast }) => {
     proveedores,
     unidadesMedida,
     verEliminados,
-    setVerEliminados
+    setVerEliminados,
+    actualizarSerial, // <-- Importamos la nueva función del contexto
   } = useInventario();
   const { usuario } = useAuth();
 
@@ -122,11 +123,13 @@ const ProductosSection = ({ mostrarToast }) => {
     setConfirm({ isOpen: false, titulo: '', descripcion: '', tipo: 'danger', onConfirm: null });
   };
 
+  // Estado inicial del formulario, definido en un solo lugar para reutilización
   const [formData, setFormData] = useState({
     nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
     modelo: '', serie: '',
-    isSerialized: false, // <-- Añadimos el estado para el checkbox
-    serialsInput: '', // <-- Añadimos el estado para el textarea de seriales
+    isSerialized: false,
+    serialsInput: '', // Para nuevos seriales
+    serialesExistentes: [], // Para mostrar los que ya están en la DB
     almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '',
     movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
   });
@@ -147,21 +150,40 @@ const ProductosSection = ({ mostrarToast }) => {
       stock: prod.stock,
       codigo: prod.codigo || '',
       modelo: prod.modelo || '',
-      serie: prod.serie || '',
       almacen: prod.almacen || 'Principal',
       pasillo: prod.pasillo || '',
       fila: prod.fila || '',
       isSerialized: prod.isSerialized || false,
-      serialsInput: prod.seriales?.map(s => s.serialNumber).join('\n') || '',
+      serialsInput: '', // El campo de texto siempre inicia vacío para agregar nuevos seriales
       unidadMedida: prod.unidadMedida || 'Unidad',
       movimientoInventario: prod.movimientoInventario || 'Entrada',
       descripcion: prod.descripcion || '',
       imagen: prod.imagen || '',
       proveedorId: prod.proveedor ? prod.proveedor.id : (prod.proveedorId || ''),
-      camposPersonalizados: prod.camposPersonalizados || []
+      camposPersonalizados: prod.camposPersonalizados || [],
+      serialesExistentes: prod.seriales || [], // <-- Cargamos los objetos de seriales completos
     });
     setIsEditing(true);
     setIsModalOpen(true);
+  };
+  
+
+  const handleUpdateSerial = async (serialId, nuevoNumero) => {
+    try {
+      const serialActualizado = await actualizarSerial(serialId, nuevoNumero);
+      if (serialActualizado) {
+        // Actualizamos el estado local del formulario para reflejar el cambio
+        setFormData(prev => ({
+          ...prev,
+          serialesExistentes: prev.serialesExistentes.map(s => 
+            s.id === serialId ? serialActualizado : s
+          )
+        }));
+        mostrarToast('Serial actualizado con éxito', 'success');
+      }
+    } catch (error) {
+      mostrarToast(error.message || 'No se pudo actualizar el serial', 'error');
+    }
   };
 
   useEffect(() => {
@@ -253,7 +275,7 @@ const ProductosSection = ({ mostrarToast }) => {
     }
   };
 
-  // ─── Guardar / Editar ───────────────────────────────────────────────────────
+// ─── Guardar / Editar ───────────────────────────────────────────────────────
 const handleSave = async (e) => {
   e.preventDefault();
   setIsSaving(true);
@@ -281,48 +303,67 @@ const handleSave = async (e) => {
     }
   }
 
-  // 1. Limpieza de metadatos (evita que NestJS/PostgreSQL exploten con Error 500)
-  const { createdAt, updatedAt, countItems, vendidos, ...datosBase } = formData;
+  // 1. Limpieza estricta de metadatos del frontend para evitar errores de NestJS/ValidationPipe
+  const { 
+    createdAt, 
+    updatedAt, 
+    countItems, 
+    vendidos, 
+    serialsInput, // <- Sacamos el string del textarea aquí
+    serialesExistentes, // <- Lo sacamos también para que no vaya en el payload
+    ...datosBase 
+  } = formData;
 
+  // 2. Procesamos los seriales de forma segura
+  let listaSeriales = undefined;
+  if (formData.isSerialized) {
+    const serialesDelInput = (serialsInput || '')
+      .split(/[\n,]+/)
+      .map(s => s.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (isEditing) {
+      // En modo edición, combinamos los seriales existentes con los nuevos, eliminando duplicados.
+      // Usamos los seriales ya cargados en el estado del formulario.
+      const serialesExistentesStr = serialesExistentes.map(s => s.serialNumber);
+      const listaCombinada = [...serialesExistentesStr, ...serialesDelInput];
+      listaSeriales = [...new Set(listaCombinada)];
+    } else {
+      // En modo creación, solo usamos los del input.
+      // Si no hay seriales en el input, la lista será un array vacío.
+      listaSeriales = serialesDelInput.length > 0 ? serialesDelInput : [];
+    }
+  }
+
+  // 3. Estructuramos la data final
   const dataProcesada = {
     ...datosBase,
-    // ─── Ajuste para la base de datos ───
-    // Generamos el string combinando los selectores dinámicos y el detalle manual
     ubicacion: (formData.pasillo || formData.fila) 
       ? `${formData.pasillo || ''}${formData.pasillo && formData.fila ? ' - ' : ''}${formData.fila || ''}`.trim()
       : '',
-
     almacen: formData.almacen || 'Principal',
-
-    // Forzamos que el ID sea número si existe
     id: isEditing ? Number(formData.id) : undefined, 
     precio: parseFloat(formData.precio) || 0,
-    // Si es serializado, el stock es la cantidad de seriales. Si no, es el valor del input.
+    // Si es serializado el stock es el conteo de la lista procesada; si no, el número manual
     stock: formData.isSerialized 
-      ? formData.serialsInput.split('\n').filter(Boolean).length 
+      ? (listaSeriales ? listaSeriales.length : 0) 
       : (parseInt(formData.stock) || 0),
-    // Añadimos el array de seriales si el producto es serializado
-    serials: formData.isSerialized 
-      ? formData.serialsInput.split('\n').map(s => s.trim()).filter(Boolean) 
-      : undefined,
+    // Enviamos el array de strings nativo que tu Backend espera en el DTO
+    serials: listaSeriales
   };
 
   try {
     let guardado;
     if (isEditing) {
-      // Pasamos el ID y la data por separado si tu context lo requiere, 
-      // o solo la data si el service extrae el ID de ahí.
       guardado = await actualizarProducto(dataProcesada);
     } else {
       guardado = await agregarProducto(dataProcesada);
     }
 
-    // Si llegamos aquí sin que lance error, es que fue exitoso
-    mostrarToast?.(isEditing ? 'Producto actualizado' : 'Producto creado', 'success');
+    mostrarToast?.(isEditing ? 'Producto actualizado con éxito' : 'Producto creado con éxito', 'success');
     cerrarModal();
 
   } catch (error) {
-    // Ahora capturamos el mensaje real del servidor (ValidationPipe)
     mostrarToast?.(error.message || 'Error al guardar producto', 'error');
     console.error("Error en handleSave:", error);
   } finally {
@@ -373,6 +414,7 @@ const handleEliminar = (prod) => {
       modelo: '', serie: '',
       isSerialized: false,
       serialsInput: '',
+      serialesExistentes: [],
       almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '',
       movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
     });
@@ -754,18 +796,88 @@ const handleEliminar = (prod) => {
                 </div>
               </div>
 
-              {/* Textarea para Seriales (condicional) */}
+              {/* --- SECCIÓN DE SERIALES (CONDICIONAL) --- */}
               {formData.isSerialized && (
-                <div className="space-y-2 pt-4 border-t animate-in fade-in duration-300">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
-                    Lista de Seriales (uno por línea)
-                  </label>
-                  <textarea
-                    placeholder="SN-001&#10;SN-002&#10;SN-003"
-                    className="w-full p-4 rounded-2xl border font-mono text-xs h-32 resize-y"
-                    value={formData.serialsInput}
-                    onChange={(e) => setFormData({...formData, serialsInput: e.target.value})}
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4 border-t animate-in fade-in duration-300">
+                  {/* Columna de entrada de seriales */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
+                      Ingresar Seriales (uno por línea o separados por coma)
+                    </label>
+                    <textarea
+                      placeholder="SN-001&#10;SN-002,SN-003"
+                      className="w-full p-4 rounded-2xl border font-mono text-xs h-48 resize-y"
+                      value={formData.serialsInput}
+                      onChange={(e) => setFormData({...formData, serialsInput: e.target.value})}
+                    />
+                  </div>
+
+                  {/* Columna de visualización en tabla */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
+                        Seriales Registrados ({isEditing ? formData.serialesExistentes.length : formData.serialsInput.split(/[\n,]+/).filter(Boolean).length})
+                      </label>
+                      {isEditing && <span className="text-[9px] font-bold text-slate-400">Añade nuevos en el campo de la izquierda</span>}
+                    </div>
+                    <div className="h-48 overflow-y-auto border rounded-2xl bg-slate-50/50">
+                      <table className="w-full text-left">
+                        <thead className="sticky top-0 bg-slate-100">
+                          <tr>
+                            <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500">#</th>
+                            <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500">Número de Serie</th>
+                            {isEditing && (
+                              <React.Fragment>
+                                <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500">Estado</th>
+                                <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500">Almacén</th>
+                                <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500 text-right">Acción</th>
+                              </React.Fragment>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {isEditing ? (
+                            formData.serialesExistentes.map((serial, index) => (
+                              <tr key={serial.id} className="text-xs">
+                                <td className="px-4 py-2 text-slate-400 font-sans font-bold">{index + 1}</td>
+                                <td className="px-4 py-2 font-bold text-slate-700 font-mono">{serial.serialNumber}</td>
+                                <td className="px-4 py-2">
+                                  <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                                    serial.status === 'disponible' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                    {serial.status.replace('_', ' ')}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 font-bold text-slate-500 uppercase text-[9px]">{serial.almacen}</td>
+                                <td className="px-4 py-2 text-right">
+                                  {serial.status === 'disponible' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nuevo = window.prompt('Introduce el nuevo número de serie:', serial.serialNumber);
+                                        if (nuevo && nuevo.trim() !== serial.serialNumber) {
+                                          handleUpdateSerial(serial.id, nuevo.trim());
+                                        }
+                                      }}
+                                      className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
+                                      <Edit3 size={14}/>
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            formData.serialsInput.split(/[\n,]+/).filter(Boolean).map((serial, index) => (
+                              <tr key={index} className="text-xs font-mono">
+                                <td className="px-4 py-1.5 text-slate-400 font-sans font-bold">{index + 1}</td>
+                                <td className="px-4 py-1.5 font-bold text-slate-700">{serial.trim().toUpperCase()}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               )}
 
