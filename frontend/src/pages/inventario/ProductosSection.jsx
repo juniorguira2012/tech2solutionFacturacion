@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Package, Search, Edit3, Trash2, Plus,
-  FileText, LayoutGrid, List, Tag,
+  FileText, LayoutGrid, List, Tag, X,
   AlertTriangle, MapPin
 } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
@@ -63,6 +63,7 @@ const ProductosSection = ({ mostrarToast }) => {
     restaurarProducto,
     actualizarProducto,
     categorias, // Mantener categorías aquí
+    seriales, // <-- Traemos todos los seriales para la validación
     almacenesDetallados, // <-- Obtenemos los almacenes del contexto
     proveedores,
     unidadesMedida,
@@ -79,6 +80,10 @@ const ProductosSection = ({ mostrarToast }) => {
   const [filtroProducto, setFiltroProducto] = useState('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [almacenFiltro, setAlmacenFiltro] = useState('todos');
+  // Estados para el nuevo visor de imágenes
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+  const [viewingProduct, setViewingProduct] = useState(null);
+
 
   // Sincroniza el filtro local con el estado del contexto para traer eliminados de la DB
   const handleCambioFiltro = (filtro) => {
@@ -160,6 +165,32 @@ const ProductosSection = ({ mostrarToast }) => {
       mostrarToast(error.message || 'No se pudo actualizar el serial', 'error');
       throw error; // Re-lanzamos el error para que el modal lo sepa
     }
+  };
+
+  const handleDeleteSerial = (serialId) => {
+    const serialAEliminar = formData.serialesExistentes.find(s => s.id === serialId);
+    if (!serialAEliminar) return;
+
+    // Confirmación antes de la acción destructiva
+    const confirmar = window.confirm(`¿Estás seguro de que quieres eliminar el serial "${serialAEliminar.serialNumber}"? Esta acción se guardará al confirmar los cambios del producto.`);
+    if (!confirmar) return;
+
+    // Actualizamos el estado del formulario filtrando el serial
+    setFormData(prev => ({
+      ...prev,
+      serialesExistentes: prev.serialesExistentes.filter(s => s.id !== serialId)
+    }));
+    mostrarToast(`Serial "${serialAEliminar.serialNumber}" marcado para eliminación.`, 'info');
+  };
+
+  const openImageViewer = (product) => {
+    setViewingProduct(product);
+    setIsImageViewerOpen(true);
+  };
+
+  const closeImageViewer = () => {
+    setIsImageViewerOpen(false);
+    setViewingProduct(null);
   };
 
   useEffect(() => {
@@ -290,12 +321,27 @@ const handleSave = async (e) => {
       .map(s => s.trim().toUpperCase())
       .filter(Boolean);
 
+    // --- VALIDACIÓN DE SERIALES EXISTENTES ---
+    // Verificamos si alguno de los seriales que se están intentando agregar
+    // ya existe en el sistema, excluyendo los que ya pertenecen a este producto en edición.
+    if (serialesDelInput.length > 0) {
+      const serialesGlobales = new Set(seriales.map(s => s.serialNumber));
+      const serialesPropios = new Set(serialesExistentes.map(s => s.serialNumber));
+      
+      for (const serial of serialesDelInput) {
+        if (serialesGlobales.has(serial) && !serialesPropios.has(serial)) {
+          mostrarToast?.(`El serial "${serial}" ya está registrado en el sistema.`, 'error');
+          setIsSaving(false);
+          return; // Detenemos el guardado
+        }
+      }
+    }
+
     if (isEditing) {
       // En modo edición, combinamos los seriales existentes con los nuevos, eliminando duplicados.
-      // Usamos los seriales ya cargados en el estado del formulario.
+      // Usamos los seriales que quedaron en el estado del formulario (ya filtrados si se eliminó alguno).
       const serialesExistentesStr = serialesExistentes.map(s => s.serialNumber);
-      const listaCombinada = [...serialesExistentesStr, ...serialesDelInput];
-      listaSeriales = [...new Set(listaCombinada)];
+      listaSeriales = [...new Set([...serialesExistentesStr, ...serialesDelInput])];
     } else {
       // En modo creación, solo usamos los del input.
       // Si no hay seriales en el input, la lista será un array vacío.
@@ -414,6 +460,44 @@ const handleEliminar = (prod) => {
         onCancel={cerrarConfirm}
       />
 
+      {/* Modal Visor de Imagen del Producto */}
+      {isImageViewerOpen && viewingProduct && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 backdrop-blur-lg p-4 animate-in fade-in duration-300"
+          onClick={closeImageViewer}
+        >
+          <div 
+            className="relative max-w-4xl w-full max-h-[90vh] animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()} // Evita que el clic dentro del contenido cierre el modal
+          >
+            <button 
+              onClick={closeImageViewer} 
+              className="absolute -top-4 -right-4 z-10 h-10 w-10 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/40 transition-colors"
+            >
+              <X size={20} />
+            </button>
+            <div className="bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+              <div className="md:w-3/5 bg-slate-100 flex items-center justify-center">
+                <img 
+                  src={obtenerImagenProducto(viewingProduct)} 
+                  alt={viewingProduct.nombre} 
+                  className="max-h-[80vh] w-full h-full object-contain"
+                />
+              </div>
+              <div className="md:w-2/5 p-8 space-y-4">
+                <span className="px-3 py-1 rounded-full bg-brand/10 text-brand text-[9px] font-black uppercase">{viewingProduct.categoria}</span>
+                <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{viewingProduct.nombre}</h2>
+                {viewingProduct.codigo && <p className="text-xs font-bold text-slate-400">CÓDIGO: <span className="font-mono">{viewingProduct.codigo}</span></p>}
+                <div className="flex items-baseline gap-2 pt-4 border-t">
+                  <span className="text-3xl font-black text-slate-800">RD$ {formatPrice(viewingProduct.precio)}</span>
+                </div>
+                <p className={`text-sm font-bold ${viewingProduct.stock <= LOW_STOCK_THRESHOLD ? 'text-red-500' : 'text-emerald-600'}`}>Stock disponible: {viewingProduct.stock}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-2">
         <div className="flex flex-wrap gap-1.5">
@@ -459,8 +543,15 @@ const handleEliminar = (prod) => {
         ) : vista === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 p-3">
             {productosFiltrados.map(prod => (
-              <article key={prod.id} className="group rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all hover:-translate-y-0.5 relative">
-                <div className="aspect-[2.5/1] bg-slate-50 relative border-b border-slate-100">
+              <article 
+                key={prod.id} 
+                className="group rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all hover:-translate-y-0.5 relative cursor-pointer"
+                onClick={() => obtenerImagenProducto(prod) && openImageViewer(prod)}
+                title={obtenerImagenProducto(prod) ? "Clic para ampliar imagen" : "Sin imagen"}
+              >
+                <div 
+                  className="aspect-[2.5/1] bg-slate-50 relative border-b border-slate-100"
+                >
                   {obtenerImagenProducto(prod)
                     ? <img src={obtenerImagenProducto(prod)} alt={prod.nombre} className="h-full w-full object-cover"/>
                     : <div className="h-full w-full flex items-center justify-center text-slate-200"><Package size={20}/></div>}
@@ -522,16 +613,20 @@ const handleEliminar = (prod) => {
                   <div className="px-1 py-1 text-right flex items-center justify-end gap-1 border-t border-slate-50 mt-2">
                     {prod.isActive === false ? (
                       <button 
-                        onClick={() => restaurarProducto(prod.id)} 
+                        onClick={(e) => { e.stopPropagation(); restaurarProducto(prod.id); }} 
                         className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
                       >
                         Restaurar
                       </button>
                     ) : (
                       <>
-                        <button onClick={() => abrirEditar(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); abrirEditar(prod); }} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
+                          <Edit3 size={16}/>
+                        </button>
                         {permisoInventario === 'full' && (
-                          <button onClick={() => handleEliminar(prod)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                          <button onClick={(e) => { e.stopPropagation(); handleEliminar(prod); }} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
+                            <Trash2 size={16}/>
+                          </button>
                         )}
                       </>
                     )}
@@ -627,6 +722,7 @@ const handleEliminar = (prod) => {
         almacenesDetallados={almacenesDetallados}
         handleUpdateSerial={handleUpdateSerial}
         mostrarToast={mostrarToast}
+        handleDeleteSerial={handleDeleteSerial}
       />
     </div>
   );

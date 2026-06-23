@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  X, Image, Settings, Plus, MinusCircle, Edit3
+  X, Image, Settings, Plus, MinusCircle, Edit3, Trash2
 } from 'lucide-react';
 
 const ProductoModal = ({
@@ -17,6 +17,7 @@ const ProductoModal = ({
   almacenesDetallados,
   handleUpdateSerial,
   mostrarToast,
+  handleDeleteSerial, // <-- 1. Recibimos la nueva función para eliminar
 }) => {
   if (!isOpen) return null;
 
@@ -274,6 +275,16 @@ const ProductoModal = ({
                                   }}
                                   className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
                                   <Edit3 size={14}/>
+                                </button>
+                              )}
+                              {/* -- 2. Botón de Eliminar -- */}
+                              {serial.status === 'disponible' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSerial(serial.id)}
+                                  className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Eliminar este serial del producto">
+                                  <Trash2 size={14} />
                                 </button>
                               )}
                             </td>

@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { Tags, Plus, X } from 'lucide-react';
+import { useInventario } from '../../context/InventarioContext';
 
-const CategoriasSection = ({ categorias, setCategorias, mostrarToast }) => {
+const CategoriasSection = ({ mostrarToast }) => {
+  const { categorias, agregarCategoria, eliminarCategoria } = useInventario();
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [catFormData, setCatFormData] = useState({ nombre: '', color: '#4f46e5' });
+  const [isSaving, setIsSaving] = useState(false);
 
-  const guardarCategoria = (e) => {
+  const guardarCategoria = async (e) => {
     e.preventDefault();
     if (!catFormData.nombre.trim()) return;
     
@@ -13,10 +16,17 @@ const CategoriasSection = ({ categorias, setCategorias, mostrarToast }) => {
       mostrarToast("La categoría ya existe", "warning");
       return;
     }
-
-    setCategorias(prev => [...prev, catFormData]);
-    setIsCatModalOpen(false);
-    mostrarToast("Categoría creada con éxito");
+    
+    setIsSaving(true);
+    try {
+      await agregarCategoria(catFormData);
+      setIsCatModalOpen(false);
+      mostrarToast("Categoría creada con éxito");
+    } catch (error) {
+      mostrarToast(error.message || "No se pudo crear la categoría", "error");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -41,15 +51,20 @@ const CategoriasSection = ({ categorias, setCategorias, mostrarToast }) => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 gap-3">
         {categorias.map(cat => (
-          <article key={cat.nombre} className="bg-white border border-slate-200 p-4 rounded-xl flex items-center justify-between group hover:-translate-y-0.5 hover:shadow-md transition-all relative overflow-hidden">
+          <article key={cat.id} className="bg-white border border-slate-200 p-4 rounded-xl flex items-center justify-between group hover:-translate-y-0.5 hover:shadow-md transition-all relative overflow-hidden">
             <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: cat.color }}></div>
             <span className="text-[10px] font-black uppercase text-slate-700 tracking-tight ml-2">
               {cat.nombre}
             </span>
             <button 
-              onClick={() => {
+              onClick={async () => {
                 if (window.confirm(`¿Seguro que deseas eliminar la categoría "${cat.nombre}"?`)) {
-                  setCategorias(prev => prev.filter(c => c.nombre !== cat.nombre));
+                  try {
+                    await eliminarCategoria(cat.id);
+                    mostrarToast("Categoría eliminada");
+                  } catch (error) {
+                    mostrarToast(error.message || "No se pudo eliminar", "error");
+                  }
                 }
               }}
               className="p-1.5 text-slate-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
@@ -80,8 +95,8 @@ const CategoriasSection = ({ categorias, setCategorias, mostrarToast }) => {
                     value={catFormData.color} onChange={e => setCatFormData({...catFormData, color: e.target.value})} />
                 </div>
               </div>
-              <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-brand transition-all uppercase text-[10px] tracking-[0.2em] mt-4">
-                Crear Categoría
+              <button type="submit" disabled={isSaving} className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-brand transition-all uppercase text-[10px] tracking-[0.2em] mt-4 disabled:opacity-50">
+                {isSaving ? 'Guardando...' : 'Crear Categoría'}
               </button>
             </form>
           </div>

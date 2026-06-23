@@ -29,35 +29,10 @@ export const InventarioProvider = ({ children }) => {
   const [almacenesDetallados, setAlmacenesDetallados] = useState([]);
 
   // --- Estados de configuración (Categorías y Unidades) ---
-  const [categorias, setCategorias] = useState(() => {
-    try {
-      const saved = localStorage.getItem('posfactura_categorias');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.map(c => typeof c === 'string' ? { nombre: c, color: '#4f46e5' } : c);
-      }
-    } catch (e) {
-      console.error("Error al cargar categorías de localStorage:", e);
-    }
-    return [
-      { nombre: 'General', color: '#64748b' },
-      { nombre: 'Hardware', color: '#4f46e5' },
-      { nombre: 'Software', color: '#8b5cf6' },
-      { nombre: 'Electrónica', color: '#ec4899' },
-      { nombre: 'Servicios', color: '#0ea5e9' },
-      { nombre: 'Alimentos', color: '#10b981' },
-      { nombre: 'Bebidas', color: '#f59e0b' },
-      { nombre: 'Limpieza', color: '#ef4444' }
-    ];
-  });
-
+  const [categorias, setCategorias] = useState([]);
   const [proveedores, setProveedores] = useState([]);
 
   const [unidadesMedida, setUnidadesMedida] = useState([]);
-
-  useEffect(() => {
-    localStorage.setItem('posfactura_categorias', JSON.stringify(categorias));
-  }, [categorias]);
 
   // --- Helpers ---
   const getInventoryPermission = useCallback(() => {
@@ -156,6 +131,11 @@ export const InventarioProvider = ({ children }) => {
         setTecnicos(Array.isArray(data) ? data : []);
       })
       .catch(err => console.error("Error técnicos:", err));
+  }, [usuario, refreshIndex, API_BASE_URL, getAuthHeaders]);
+
+  // Cargar categorías desde la DB
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/categories`, { headers: getAuthHeaders() }).then(res => res.json()).then(data => setCategorias(Array.isArray(data) ? data : [])).catch(err => console.error("Error categorías:", err));
   }, [usuario, refreshIndex, API_BASE_URL, getAuthHeaders]);
 
   // --- GESTIÓN DE UNIDADES DE MEDIDA (DB) ---
@@ -761,6 +741,49 @@ const registrarMovimientosMasivos = async (payload) => {
     }
   };
 
+  // --- GESTIÓN DE CATEGORÍAS (DB) ---
+  const agregarCategoria = async (categoriaData) => {
+  try {
+    const url = `${import.meta.env.VITE_API_URL}/categories`;
+    const authHeaders = getAuthHeaders();
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...authHeaders,
+        'Content-Type': 'application/json', // 👈 ¡Obligatorio para que NestJS procese el @Body!
+      },
+      body: JSON.stringify(categoriaData), // Envía { nombre: '...', descripcion: '...' }
+    });
+
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.message || 'Error al crear la categoría');
+    }
+
+    setRefreshIndex(prev => prev + 1); // Dispara la actualización para recargar la lista en la UI
+    return data;
+  } catch (error) {
+    console.error("Error en agregarCategoria:", error);
+    throw error;
+  }
+};
+
+  const eliminarCategoria = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/categories/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('No se pudo eliminar la categoría');
+      setCategorias(prev => prev.filter(c => c.id !== id));
+      return true;
+    } catch (error) {
+      console.error('Error en eliminarCategoria:', error);
+      throw error;
+    }
+  };
   // 5. Descontar Stock
   const descontarStock = async (itemsCarrito) => {
     try {
@@ -1019,7 +1042,8 @@ return (
     seriales,
     cargarSeriales,
     obtenerHistorialSerial,
-    actualizarEstadoSerial,
+    actualizarEstadoSerial, 
+    agregarCategoria, eliminarCategoria, // <-- Exponemos las nuevas funciones
     movimientos, 
     asignarSerialesTecnico,
     loading, 

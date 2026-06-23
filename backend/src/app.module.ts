@@ -17,12 +17,11 @@ import { RolesModule } from './providers/roles.module';
 import { ComodatosModule } from './comodatos/comodatos.module';
 import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module';
 import { ProductSerialsModule } from './products/product-serials.module';
+import { CategoriesModule } from './categories/categories.module'; // 🚀 1. Agregamos la importación aquí (ajusta la ruta si cambia la carpeta)
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      // NestJS buscará en orden y usará el primer archivo que encuentre.
-      // Esto elimina la necesidad de la lógica manual con 'fs'.
       envFilePath: [
         path.resolve(__dirname, `../../.env.${process.env.NODE_ENV}`),
         path.resolve(__dirname, '../../.env'),
@@ -63,6 +62,7 @@ import { ProductSerialsModule } from './products/product-serials.module';
     ComodatosModule,
     UnitsOfMeasureModule,
     ProductSerialsModule,
+    CategoriesModule, // 🚀 2. Lo registramos en los imports del sistema
   ],
 })
 export class AppModule {}
