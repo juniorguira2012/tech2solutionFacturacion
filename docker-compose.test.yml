@@ -31,6 +31,7 @@ services:
       DATABASE_USER: postgres
       DATABASE_PASSWORD: tech2_pass_2024
       DATABASE_NAME: tech_two_solution_db_test
+      DATABASE_SYNCHRONIZE: "true"
       CORS_ORIGIN: "https://inventariotest.oneredrd.com"
       FRONTEND_URL: "https://inventariotest.oneredrd.com"
       # Configuración de Gmail
