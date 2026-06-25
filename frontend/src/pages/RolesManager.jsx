@@ -5,23 +5,51 @@ import { useUsuarios } from '../context/UsuariosContext';
 
 const RolesManager = () => {
   const initialRoles = {
-  admin: { 
-    modules: { ventas: 'full', inventario: 'full', reportes: 'full', clientes: 'full' },
-    viewScope: 'all' // Puede ver todo
-  },
-  supervisor: { 
-    modules: { ventas: 'full', inventario: 'full', reportes: 'view', clientes: 'full' },
-    viewScope: 'all' // ¡Aquí está la clave! También puede ver todo
-  },
-  vendedor: { 
-    modules: { ventas: 'full', inventario: 'none', reportes: 'none', clientes: 'full' },
-    viewScope: 'own' // Solo ve sus propias ventas
-  },
-  cajero: { 
-    modules: { ventas: 'full', inventario: 'none', reportes: 'none', clientes: 'none' },
-    viewScope: 'own' // Solo ve lo que él facture
-  }
-};
+    admin: {
+      modules: {
+        ventas: 'full', reportes: 'full', clientes: 'full', configuracion: 'full',
+        // Submódulos de inventario
+        productos: 'full', categoria: 'full', movimiento: 'full', proveedores: 'full',
+        almacen: 'full', tecnicos: 'full', conteo: 'full', seriales: 'full',
+        alerta: 'full', lotes: 'full', unidades: 'full', campos: 'full',
+        comodato: 'full', integraciones: 'full',
+      },
+      viewScope: 'all'
+    },
+    supervisor: {
+      modules: {
+        ventas: 'full', reportes: 'view', clientes: 'full', configuracion: 'none',
+        // Submódulos de inventario
+        productos: 'full', categoria: 'view', movimiento: 'full', proveedores: 'view',
+        almacen: 'view', tecnicos: 'full', conteo: 'full', seriales: 'view',
+        alerta: 'view', lotes: 'view', unidades: 'none', campos: 'none',
+        comodato: 'full', integraciones: 'none',
+      },
+      viewScope: 'all'
+    },
+    vendedor: {
+      modules: {
+        ventas: 'full', reportes: 'none', clientes: 'full', configuracion: 'none',
+        // Submódulos de inventario
+        productos: 'view', categoria: 'none', movimiento: 'none', proveedores: 'none',
+        almacen: 'none', tecnicos: 'view', conteo: 'none', seriales: 'view',
+        alerta: 'view', lotes: 'none', unidades: 'none', campos: 'none',
+        comodato: 'view', integraciones: 'none',
+      },
+      viewScope: 'own'
+    },
+    cajero: {
+      modules: {
+        ventas: 'full', reportes: 'none', clientes: 'none', configuracion: 'none',
+        // Submódulos de inventario
+        productos: 'none', categoria: 'none', movimiento: 'none', proveedores: 'none',
+        almacen: 'none', tecnicos: 'none', conteo: 'none', seriales: 'none',
+        alerta: 'none', lotes: 'none', unidades: 'none', campos: 'none',
+        comodato: 'none', integraciones: 'none',
+      },
+      viewScope: 'own'
+    }
+  };
 
   const { usuario } = useAuth();
   const { recargarRoles } = useUsuarios();
@@ -55,12 +83,28 @@ const RolesManager = () => {
   }, [API_BASE_URL]);
 
   useEffect(() => { fetchRoles(); }, [fetchRoles]);
-
+  
   const modulos = [
-    { id: 'ventas', nombre: 'Módulo de Ventas', desc: 'Facturación e historial' },
-    { id: 'inventario', nombre: 'Inventario', desc: 'Stock y productos' },
-    { id: 'reportes', nombre: 'Reportes y KPI', desc: 'Ingresos y analíticas' },
-    { id: 'clientes', nombre: 'Gestión de Clientes', desc: 'Base de datos' }
+    // Módulos Principales
+    { id: 'ventas', nombre: 'Módulo de Ventas', desc: 'Acceso al POS y facturación' },
+    { id: 'reportes', nombre: 'Reportes y Analíticas', desc: 'Visualización de KPIs y datos comerciales' },
+    { id: 'clientes', nombre: 'Gestión de Clientes', desc: 'Control sobre la cartera de clientes' },
+    { id: 'configuracion', nombre: 'Configuración del Sistema', desc: 'Acceso a Usuarios, Roles y ajustes globales' },
+    // Submódulos de Inventario
+    { id: 'productos', nombre: 'Inventario: Productos', desc: 'Crear, editar y ver productos' },
+    { id: 'categoria', nombre: 'Inventario: Categorías', desc: 'Gestionar las categorías de productos' },
+    { id: 'movimiento', nombre: 'Inventario: Movimientos', desc: 'Registrar entradas, salidas y transferencias' },
+    { id: 'proveedores', nombre: 'Inventario: Proveedores', desc: 'Administrar el catálogo de proveedores' },
+    { id: 'almacen', nombre: 'Inventario: Almacenes', desc: 'Gestionar almacenes y ubicaciones físicas' },
+    { id: 'tecnicos', nombre: 'Inventario: Técnicos', desc: 'Asignar y devolver equipos a técnicos' },
+    { id: 'conteo', nombre: 'Inventario: Conteo Físico', desc: 'Realizar y publicar auditorías de stock' },
+    { id: 'seriales', nombre: 'Inventario: Seriales', desc: 'Auditoría y trazabilidad de seriales' },
+    { id: 'alerta', nombre: 'Inventario: Alertas', desc: 'Ver productos con stock crítico' },
+    { id: 'lotes', nombre: 'Inventario: Lotes', desc: 'Trazabilidad de productos por lotes' },
+    { id: 'unidades', nombre: 'Inventario: Unidades de Medida', desc: 'Configurar unidades (caja, und, etc.)' },
+    { id: 'campos', nombre: 'Inventario: Campos Personalizados', desc: 'Definir atributos extra para productos' },
+    { id: 'comodato', nombre: 'Inventario: Comodato', desc: 'Control de préstamos de equipos' },
+    { id: 'integraciones', nombre: 'Inventario: Integraciones', desc: 'Conexión con canales de venta externos' },
   ];
 
   const guardarConfiguracion = async () => {
@@ -87,7 +131,13 @@ const RolesManager = () => {
     setRolesConfig({
       ...rolesConfig,
       [rolSeleccionado]: initialRoles[rolSeleccionado] || { 
-        modules: { ventas: 'none', inventario: 'none', reportes: 'none', clientes: 'none' },
+        modules: { 
+          ventas: 'none', reportes: 'none', clientes: 'none', configuracion: 'none',
+          productos: 'none', categoria: 'none', movimiento: 'none', proveedores: 'none',
+          almacen: 'none', tecnicos: 'none', conteo: 'none', seriales: 'none',
+          alerta: 'none', lotes: 'none', unidades: 'none', campos: 'none',
+          comodato: 'none', integraciones: 'none'
+        },
         viewScope: 'own' 
       }
     });
@@ -105,7 +155,12 @@ const RolesManager = () => {
     setRolesConfig(prev => ({
       ...prev,
       [key]: {
-        modules: { ventas: 'none', inventario: 'none', reportes: 'none', clientes: 'none' },
+        modules: { 
+          ventas: 'none', reportes: 'none', clientes: 'none', configuracion: 'none',
+          productos: 'none', categoria: 'none', movimiento: 'none', proveedores: 'none',
+          almacen: 'none', tecnicos: 'none', conteo: 'none', seriales: 'none',
+          alerta: 'none', lotes: 'none', unidades: 'none', campos: 'none',
+          comodato: 'none', integraciones: 'none'},
         viewScope: 'own'
       }
     }));

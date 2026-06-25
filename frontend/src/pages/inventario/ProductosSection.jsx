@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   Package, Search, Edit3, Trash2, Plus,
   FileText, LayoutGrid, List, Tag, X,
-  AlertTriangle, MapPin
+  AlertTriangle, MapPin, MessageSquare, User, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 import { useAuth } from '../../context/AuthContext';
