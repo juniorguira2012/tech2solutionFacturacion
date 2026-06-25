@@ -20,7 +20,7 @@ const Reportes = () => {
   const [busquedaGlobal, setBusquedaGlobal] = useState(""); 
   const [tabActiva, setTabActiva] = useState('ventas'); // 'ventas' o 'clientes'
   
-  // 🚨 NUEVO: Agrupación de ventas ('transacciones', 'dias', 'meses')
+  // Agrupación de ventas ('transacciones', 'dias', 'meses')
   const [agrupacionVentas, setAgrupacionVentas] = useState('transacciones');
 
   // ==========================================
@@ -81,7 +81,6 @@ const Reportes = () => {
 
     const mapaAgrupado = ventasFiltradas.reduce((acc, v) => {
       const d = new Date(v.fecha);
-      // Generamos la llave dependiendo de la agrupación elegida
       const llave = agrupacionVentas === 'dias' 
         ? d.toLocaleDateString('es-DO', { year: 'numeric', month: '2-digit', day: '2-digit' })
         : d.toLocaleDateString('es-DO', { year: 'numeric', month: 'long' });
@@ -89,12 +88,13 @@ const Reportes = () => {
       if (!acc[llave]) {
         acc[llave] = { periodo: llave, total: 0, transacciones: 0 };
       }
-      acc[llave].total += v.total;
+      
+      // 🌟 CORRECCIÓN 1: Forzar suma numérica en la agrupación cronológica (Evita el bug de las capturas)
+      acc[llave].total += Number(v.total || 0);
       acc[llave].transacciones += 1;
       return acc;
     }, {});
 
-    // Ordenar de más reciente a más antiguo
     return Object.values(mapaAgrupado).sort((a, b) => b.periodo.localeCompare(a.periodo));
   }, [ventasFiltradas, agrupacionVentas]);
 
@@ -107,7 +107,8 @@ const Reportes = () => {
     const conteoProductos = {};
 
     ventasFiltradas.forEach(venta => {
-      totalDinero += venta.total;
+      totalDinero += Number(venta.total || 0);
+      
       const items = venta.productos || venta.articulos || [];
       items.forEach(item => {
         const cant = Number(item.cantidad) || 1;
@@ -130,11 +131,16 @@ const Reportes = () => {
     };
   }, [ventasFiltradas]);
 
+  // ==========================================
+  // 3.5 RANKING DE CLIENTES CORREGIDO
+  // ==========================================
   const reporteClientes = useMemo(() => {
     const clientesMap = ventasFiltradas.reduce((acc, v) => {
       const nombre = v.cliente || "Consumidor Final";
       if (!acc[nombre]) acc[nombre] = { nombre, total: 0, visitas: 0 };
-      acc[nombre].total += v.total;
+      
+      // 🌟 CORRECCIÓN 2: Forzar número real al acumular las compras del cliente
+      acc[nombre].total += Number(v.total || 0);
       acc[nombre].visitas += 1;
       return acc;
     }, {});
@@ -142,7 +148,7 @@ const Reportes = () => {
   }, [ventasFiltradas]);
 
   // ==========================================
-  // 4. EXPORTACIONES MÁSTER
+  // 4. EXPORTACIONES MÁSTER (EXCEL Y PDF)
   // ==========================================
   const exportarExcel = () => {
     let data = [];
@@ -150,14 +156,28 @@ const Reportes = () => {
 
     if (tabActiva === 'ventas') {
       if (agrupacionVentas === 'transacciones') {
-        data = ventasFiltradas.map(v => ({ 'Referencia': `#${v.id.toString().slice(-6)}`, 'Fecha': v.fecha.split('T')[0], 'Cajero': v.vendedorNombre || 'Admin', 'Cliente': v.cliente || 'Consumidor Final', 'Total (RD$)': v.total }));
+        data = ventasFiltradas.map(v => ({ 
+          'Referencia': `#${v.id.toString().slice(-6)}`, 
+          'Fecha': v.fecha.split('T')[0], 
+          'Cajero': v.vendedorNombre || 'Admin', 
+          'Cliente': v.cliente || 'Consumidor Final', 
+          'Total (RD$)': Number(v.total || 0) // 🌟 CORRECCIÓN 3
+        }));
         nombreArchivo = "Ventas_Detalladas";
       } else {
-        data = ventasAgrupadas.map(a => ({ 'Periodo / Fecha': a.periodo, 'Cantidad Facturas': a.transacciones, 'Total Recaudado (RD$)': a.total }));
+        data = ventasAgrupadas.map(a => ({ 
+          'Periodo / Fecha': a.periodo, 
+          'Cantidad Facturas': a.transacciones, 
+          'Total Recaudado (RD$)': Number(a.total || 0) // 🌟 CORRECCIÓN 4
+        }));
         nombreArchivo = `Ventas_Agrupadas_por_${agrupacionVentas}`;
       }
     } else {
-      data = reporteClientes.map(c => ({ 'Cliente': c.nombre, 'Facturas Emitidas': c.visitas, 'Inversión Total (RD$)': c.total }));
+      data = reporteClientes.map(c => ({ 
+        'Cliente': c.nombre, 
+        'Facturas Emitidas': c.visitas, 
+        'Inversión Total (RD$)': Number(c.total || 0) // 🌟 CORRECCIÓN 5
+      }));
       nombreArchivo = "Ranking_Clientes";
     }
     
@@ -165,9 +185,7 @@ const Reportes = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Reporte Comercial");
     
-    // Autoajustar anchos de columnas para que no se corten los textos en Excel
-    const maxProps = Object.keys(data[0] || {});
-    ws['!cols'] = maxProps.map(() => ({ wch: 22 }));
+    ws['!cols'] = maxProps = Object.keys(data[0] || {}).map(() => ({ wch: 22 }));
 
     XLSX.writeFile(wb, `${nombreArchivo}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
@@ -186,21 +204,36 @@ const Reportes = () => {
     if (tabActiva === 'ventas') {
       if (agrupacionVentas === 'transacciones') {
         headers = [["REF", "FECHA", "CAJERO", "CLIENTE", "TOTAL"]];
-        rows = ventasFiltradas.map(v => [v.id.toString().slice(-6), v.fecha.split('T')[0], v.vendedorNombre || 'Admin', v.cliente || 'Consumidor Final', `RD$ ${v.total.toLocaleString()}`]);
+        rows = ventasFiltradas.map(v => [
+          v.id.toString().slice(-6), 
+          v.fecha.split('T')[0], 
+          v.vendedorNombre || 'Admin', 
+          v.cliente || 'Consumidor Final', 
+          `RD$ ${Number(v.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` // 🌟 CORRECCIÓN 6
+        ]);
       } else {
         headers = [[agrupacionVentas === 'dias' ? "FECHA / DÍA" : "MES", "FACTURAS", "TOTAL RECAUDADO"]];
-        rows = ventasAgrupadas.map(a => [a.periodo, a.transacciones, `RD$ ${a.total.toLocaleString()}`]);
+        rows = ventasAgrupadas.map(a => [
+          a.periodo, 
+          a.transacciones, 
+          `RD$ ${Number(a.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` // 🌟 CORRECCIÓN 7
+        ]);
       }
     } else {
       headers = [["POS", "CLIENTE", "COMPRAS REALIZADAS", "INVERSIÓN TOTAL"]];
-      rows = reporteClientes.map((c, i) => [i + 1, c.nombre, `${c.visitas} vtas`, `RD$ ${c.total.toLocaleString()}`]);
+      rows = reporteClientes.map((c, i) => [
+        i + 1, 
+        c.nombre, 
+        `${c.visitas} vtas`, 
+        `RD$ ${Number(c.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` // 🌟 CORRECCIÓN 8
+      ]);
     }
 
     doc.autoTable({
       head: headers,
       body: rows,
       startY: 33,
-      headStyles: { fillColor: [15, 23, 42] }, // Slate-900 muy elegante
+      headStyles: { fillColor: [15, 23, 42] },
       theme: 'striped'
     });
     
@@ -295,7 +328,9 @@ const Reportes = () => {
               <div className="bg-emerald-500 p-6 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
               <DollarSign className="absolute -right-2 -top-2 opacity-10" size={80} />
               <p className="text-[10px] font-blue uppercase opacity-60 italic">Total Neto Recaudado</p>
-              <h3 className="text-2xl font-black italic mt-1">RD$ {statsVentas.total.toLocaleString()}</h3>
+              <h3 className="text-2xl font-black italic mt-1">
+                RD$ {statsVentas.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h3>
             </div>
             <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
               <Hash className="absolute right-4 top-4 text-slate-100" size={30} />

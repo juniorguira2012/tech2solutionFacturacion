@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Users, Box, AlertTriangle, ArrowRight, TrendingUp, Clock, Star, PieChart, HandHelping } from 'lucide-react';
+import { ShoppingCart, Users, Box, AlertTriangle, ArrowRight, TrendingUp, Clock, Star, PieChart } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import { useAuth } from '../context/AuthContext';
 import { useClientes } from '../context/ClienteContext';
@@ -32,11 +32,15 @@ const Home = () => {
   const ventasVisibles = useMemo(() => {
     if (!usuario) return [];
     if (usuario.rol === 'admin') return historialVentas;
-    // Filtramos por ID del vendedor para mayor precisión
     return historialVentas.filter(v => String(v.vendedorId) === String(usuario.id));
   }, [historialVentas, usuario]);
 
-  const totalVentas = useMemo(() => ventasVisibles.reduce((acc, v) => acc + v.total, 0), [ventasVisibles]);
+  // 🌟 CORRECCIÓN 1: Forzar Number() en el total global
+  const totalVentas = useMemo(() => 
+    ventasVisibles.reduce((acc, v) => acc + Number(v.total || 0), 0), 
+    [ventasVisibles]
+  );
+
   const totalClientes = clientes.length;
   const stockCriticoCount = productos.filter(p => Number(p.stock) <= 5).length;
   const totalProductos = productos.length;
@@ -49,9 +53,12 @@ const Home = () => {
       const d = new Date();
       d.setDate(hoy.getDate() - (6 - i));
       const fechaStr = d.toISOString().split('T')[0];
+      
+      // 🌟 CORRECCIÓN 2: Forzar Number() en la suma del rendimiento semanal
       const totalDia = ventasVisibles
         .filter(v => v.fecha?.split('T')[0] === fechaStr)
-        .reduce((acc, v) => acc + v.total, 0);
+        .reduce((acc, v) => acc + Number(v.total || 0), 0);
+        
       return { dia: dias[d.getDay()], total: totalDia };
     });
   }, [ventasVisibles]);
@@ -60,9 +67,9 @@ const Home = () => {
   const distribucionCategorias = useMemo(() => {
     return categorias.map(cat => ({
       nombre: cat.nombre,
-      cantidad: productos.filter(p => p.categoria === cat.nombre).length,
+      amount: productos.filter(p => p.categoria === cat.nombre).length,
       color: cat.color
-    })).sort((a, b) => b.cantidad - a.cantidad).slice(0, 4);
+    })).sort((a, b) => b.amount - a.amount).slice(0, 4);
   }, [categorias, productos]);
 
   // Productos Más Vendidos
@@ -87,7 +94,7 @@ const Home = () => {
     {
       id: 'reportes',
       title: 'Venta Global',
-      value: `RD$ ${totalVentas.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+      value: `RD$ ${totalVentas.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       icon: <ShoppingCart className="text-emerald-600" size={24} />,
       path: '/reportes',
       color: 'bg-emerald-50',
@@ -117,7 +124,7 @@ const Home = () => {
       value: stockCriticoCount,
       icon: <AlertTriangle className="text-rose-600" size={24} />,
       path: '/inventario',
-      state: { filter: 'low_stock' }, // Pasamos el filtro al componente de inventario
+      state: { filter: 'low_stock' },
       color: 'bg-rose-50',
       borderColor: 'border-rose-100',
       isAlert: stockCriticoCount > 0
@@ -210,7 +217,10 @@ const Home = () => {
                   <p className="text-[10px] font-black text-slate-800 uppercase">{v.cliente || "Consumidor Final"}</p>
                   <p className="text-[8px] text-slate-400 font-bold">{new Date(v.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                 </div>
-                <span className="text-xs font-black text-emerald-600">RD$ {v.total.toLocaleString()}</span>
+                {/* 🌟 CORRECCIÓN 3: Convertir a Number antes de aplicar toLocaleString() en la lista de recientes */}
+                <span className="text-xs font-black text-emerald-600">
+                  RD$ {Number(v.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </div>
             ))}
             {ventasRecientes.length === 0 && <p className="text-center py-10 text-[10px] font-black text-slate-300 uppercase italic">Sin ventas hoy</p>}
@@ -234,7 +244,7 @@ const Home = () => {
               <div key={i} className="p-4 rounded-3xl border border-slate-100 bg-slate-50/50">
                 <div className="flex items-center justify-between mb-2">
                   <div className="h-2 w-2 rounded-full" style={{ backgroundColor: cat.color }}></div>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{cat.cantidad} Prods</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{cat.amount} Prods</span>
                 </div>
                 <p className="text-xs font-black text-slate-700 uppercase italic">{cat.nombre}</p>
               </div>

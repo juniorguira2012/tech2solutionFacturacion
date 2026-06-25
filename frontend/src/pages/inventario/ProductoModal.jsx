@@ -95,11 +95,15 @@ const ProductoModal = ({
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Categoría</label>
               <select 
+                required // Hacemos que sea obligatorio seleccionar una categoría
                 className="w-full px-5 py-3 rounded-2xl border outline-none focus:border-brand font-bold text-sm bg-white" 
-                value={formData.categoria} 
+                value={formData.categoria || ''} // Aseguramos un valor controlado incluso si es null/undefined
                 onChange={(e) => setFormData({...formData, categoria: e.target.value})}
               >
-                {categorias.map(cat => <option key={cat.nombre} value={cat.nombre}>{cat.nombre}</option>)}
+                <option value="" disabled>-- Seleccionar Categoría --</option>
+                {categorias.map(cat => (
+                  <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
+                ))}
               </select>
             </div>
 

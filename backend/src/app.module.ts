@@ -17,7 +17,7 @@ import { RolesModule } from './providers/roles.module';
 import { ComodatosModule } from './comodatos/comodatos.module';
 import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module';
 import { ProductSerialsModule } from './products/product-serials.module';
-import { CategoriesModule } from './categories/categories.module'; // 🚀 1. Agregamos la importación aquí (ajusta la ruta si cambia la carpeta)
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -62,7 +62,7 @@ import { CategoriesModule } from './categories/categories.module'; // 🚀 1. Ag
     ComodatosModule,
     UnitsOfMeasureModule,
     ProductSerialsModule,
-    CategoriesModule, // 🚀 2. Lo registramos en los imports del sistema
+    CategoriesModule,
   ],
 })
 export class AppModule {}

@@ -121,7 +121,7 @@ const ProductosSection = ({ mostrarToast }) => {
   const [formData, setFormData] = useState({
     nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
     modelo: '', serie: '',
-    isSerialized: false,
+    isSerialized: false, // ... (resto de campos)
     serialsInput: '', // Para nuevos seriales
     serialesExistentes: [], // Para mostrar los que ya están en la DB
     almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '',
@@ -132,7 +132,7 @@ const ProductosSection = ({ mostrarToast }) => {
     setFormData({
       id: prod.id,
       nombre: prod.nombre,
-      categoria: prod.categoria || 'General',
+      categoria: prod.categoria || '', // <-- CORRECCIÓN: Usar '' si no hay categoría definida
       precio: prod.precio,
       stock: prod.stock,
       codigo: prod.codigo || '',
@@ -422,15 +422,13 @@ const handleEliminar = (prod) => {
   const cerrarModal = () => {
     setIsModalOpen(false);
     setIsEditing(false);
-    setFormData({
-      nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
-      modelo: '', serie: '',
-      isSerialized: false,
-      serialsInput: '',
-      serialesExistentes: [],
-      almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '',
-      movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
-    });
+    // Reseteamos el formulario. La categoría ahora inicia vacía.
+    setFormData({ 
+      nombre: '', categoria: '', precio: '', stock: '', codigo: '', modelo: '', serie: '',
+      isSerialized: false, serialsInput: '', serialesExistentes: [], almacen: 'Principal', 
+      pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '', movimientoInventario: 'Entrada', 
+      descripcion: '', imagen: '', camposPersonalizados: [] 
+    }); 
   };
 
   const productosFiltrados = useMemo(() => productos.filter(p => {

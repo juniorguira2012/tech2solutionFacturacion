@@ -6,14 +6,8 @@ const VentasContext = createContext();
 // El VentasProvider se encarga de manejar el historial de ventas y registrar nuevas ventas.
 export const VentasProvider = ({ children }) => {
   const { usuario } = useAuth();
-  const [historialVentas, setHistorialVentas] = useState(() => {
-    try {
-        const saved = localStorage.getItem('posfacura_ventas');
-        return (saved && saved !== "undefined") ? JSON.parse(saved) : [];
-    } catch {
-        return [];
-    }
-  });
+  const [historialVentas, setHistorialVentas] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
     ? '/api' 
@@ -21,9 +15,33 @@ export const VentasProvider = ({ children }) => {
     
   const API_SALES_URL = API_BASE_URL + '/sales';
 
+  // 1. Función para cargar el historial desde el backend
+  const cargarHistorialVentas = useCallback(async () => {
+    if (!usuario) return; // No hacer nada si no hay usuario
+
+    setLoading(true);
+    try {
+      const res = await fetch(API_SALES_URL, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': usuario?.id || '',
+        },
+      });
+      if (!res.ok) throw new Error('No se pudo cargar el historial de ventas.');
+      const data = await res.json();
+      setHistorialVentas(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error cargando historial de ventas:", error);
+      setHistorialVentas([]); // En caso de error, asegurar que sea un array vacío
+    } finally {
+      setLoading(false);
+    }
+  }, [usuario, API_SALES_URL]);
+
+  // 2. Cargar el historial cuando el componente se monta o el usuario cambia
   useEffect(() => {
-    localStorage.setItem('posfacura_ventas', JSON.stringify(historialVentas));
-  }, [historialVentas]);
+    cargarHistorialVentas();
+  }, [cargarHistorialVentas]);
 
   const registrarVenta = async (nuevaVenta) => {
     try {
@@ -43,8 +61,8 @@ export const VentasProvider = ({ children }) => {
       }
 
       const ventaProcesada = await res.json();
-
-      setHistorialVentas(prev => [ventaProcesada, ...prev]);
+      // completo desde la base de datos para evitar duplicados.
+      await cargarHistorialVentas();
       return { success: true, venta: ventaProcesada };
     } catch (error) {
       console.error("Error al registrar venta:", error);
@@ -53,7 +71,7 @@ export const VentasProvider = ({ children }) => {
   };
 
   return (
-    <VentasContext.Provider value={{ historialVentas, registrarVenta }}>
+    <VentasContext.Provider value={{ historialVentas, loading, registrarVenta, recargarVentas: cargarHistorialVentas }}>
       {children}
     </VentasContext.Provider>
   );

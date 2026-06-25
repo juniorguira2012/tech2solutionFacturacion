@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useInventario } from '../../context/InventarioContext';
 
 const TecnicosSection = ({ mostrarToast }) => {
+
   const {
     seriales,
     movimientos,
@@ -30,11 +31,14 @@ const TecnicosSection = ({ mostrarToast }) => {
     cargarMovimientos();
   }, [cargarMovimientos]);
 
-  const entregasRecientes = useMemo(() => (
-    movimientos
-      .filter(m => m.tipo === 'DESPACHAR' && (m.technician || String(m.nota || '').includes('Entrega a técnico:')))
-      .slice(0, 8)
-  ), [movimientos]);
+  const entregasRecientes = useMemo(() => {
+    // Filtro más robusto: Se basa en la existencia de un `technicianId` en el movimiento.
+    // Esto asegura que solo mostramos movimientos explícitamente asignados a un técnico
+    // desde esta sección, manteniendo la separación con movimientos generales.
+    return movimientos
+      .filter(m => m.tipo === 'DESPACHAR' && m.technicianId)
+      .slice(0, 8);
+  }, [movimientos]);
 
   const tecnicosOrdenados = useMemo(() => (
     [...tecnicos].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || '')))
@@ -191,18 +195,21 @@ const TecnicosSection = ({ mostrarToast }) => {
 
   const [expandedTechnician, setExpandedTechnician] = useState(null);
 
-  const handleDevolverSerial = async (serialNumber) => {
-    const confirmar = window.confirm(`¿Confirmas la devolución del serial ${serialNumber} al inventario?`);
-    if (!confirmar) return;
+  // Al inicio de tu componente TecnicoSection, asegúrate de estar extrayendo el usuario:
+// const { user } = useAuth(); o la forma en que consumas tu contexto global.
 
-    try {
-      await devolverSerialTecnico(serialNumber, `Devuelto por técnico`);
-      mostrarToast?.(`Serial ${serialNumber} devuelto al inventario`, 'success');
-      // La recarga se maneja en el context, no es necesario aquí.
-    } catch (error) {
-      mostrarToast?.(error.message || 'No se pudo procesar la devolución', 'error');
-    }
-  };
+const handleDevolverSerial = async (serialNumber) => {
+  const confirmar = window.confirm(`¿Confirmas la devolución del serial ${serialNumber} al inventario?`);
+  if (!confirmar) return;
+
+  try {
+    // 👈 Le pasamos 'user' como tercer parámetro
+    await devolverSerialTecnico(serialNumber, `Devuelto por técnico`, usuario);
+    mostrarToast?.(`Serial ${serialNumber} devuelto al inventario`, 'success');
+  } catch (error) {
+    mostrarToast?.(error.message || 'No se pudo procesar la devolución', 'error');
+  }
+};
 
   const handleDevolucionMasiva = async (e) => {
     e.preventDefault();
@@ -220,7 +227,8 @@ const TecnicosSection = ({ mostrarToast }) => {
 
     for (const serial of serialesADevolver) {
       try {
-        await devolverSerialTecnico(serial, 'Devolución manual desde módulo de técnicos');
+        // 👈 Le pasamos 'user' aquí también para el bucle masivo
+        await devolverSerialTecnico(serial, 'Devolución manual desde módulo de técnicos', usuario);
         exitosos++;
       } catch (error) {
         fallidos++;
@@ -228,21 +236,14 @@ const TecnicosSection = ({ mostrarToast }) => {
       }
     }
 
-    // 🚨 REGLA DE ORO: Sincronizar el Contexto del Inventario y Movimientos
-    if (exitosos > 0) {
-      mostrarToast?.(`${exitosos} serial(es) devuelto(s) al inventario con éxito.`, 'success');
-      if (typeof recargarInventario === 'function') recargarInventario();
-      if (typeof cargarMovimientos === 'function') cargarMovimientos(); 
-    }
-    
-    if (fallidos > 0) {
-      mostrarToast?.(`${fallidos} serial(es) no pudieron ser devueltos. Detalles en consola.`, 'error');
-      console.error("Errores en devolución masiva:", errores);
-    }
-
+    // Manejo de respuestas finales (Toasts de éxito o errores acumulados)
     setDevolucionLoading(false);
-    setDevolucionModalOpen(false);
-    setDevolucionSerialesInput('');
+    if (errores.length > 0) {
+      console.error("Errores en devolución masiva:", errores);
+      mostrarToast?.(`Procesados: ${exitosos} éxitos, ${fallidos} fallas.`, 'error');
+    } else {
+      mostrarToast?.(`Se devolvieron ${exitosos} seriales correctamente.`, 'success');
+    }
   };
   const entregarProducto = async (e) => {
     e.preventDefault();
@@ -270,11 +271,19 @@ const TecnicosSection = ({ mostrarToast }) => {
         return;
       }
 
+      const nombreTecnico = obtenerNombreTecnico();
+      const nota = [
+        `Entrega a técnico: ${nombreTecnico}`,
+        form.referencia ? `Referencia: ${form.referencia}` : '',
+        form.nota ? `Nota: ${form.nota}` : ''
+      ].filter(Boolean).join(' | ');
+
       try {
         await asignarSerialesTecnico({
           technicianId: tecnicoId,
           serials: serials,
           usuarioId: Number(usuario?.id),
+          nota: nota,
         });
         mostrarToast?.(`${serials.length} serial(es) asignado(s) a ${obtenerNombreTecnico()}`, 'success');
         recargarInventario();

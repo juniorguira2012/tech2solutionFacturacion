@@ -51,92 +51,79 @@ export const InventarioProvider = ({ children }) => {
     'x-inventory-permission': getInventoryPermission(),
   }), [usuario?.id, usuario?.rol, getInventoryPermission]);
 
-  // 1. Cargar productos
+  // --- EFECTO PRINCIPAL DE CARGA DE DATOS ---
+  // Este efecto centraliza todas las peticiones iniciales para optimizar el rendimiento.
+  // Se ejecuta cuando el usuario cambia, se fuerza una recarga (refreshIndex) o cambia el filtro de eliminados.
   useEffect(() => {
     if (!usuario) return;
+
     setLoading(true);
     setErrorConexion(null);
-
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
-
-    // Agregamos el query parameter isActive según el estado verEliminados
-    const urlConFiltro = verEliminados === 'all'
-      ? `${API_URL}?isActive=all`
-      : `${API_URL}?isActive=${verEliminados ? 'false' : 'true'}`;
-
-    console.log("InventarioContext: Intentando cargar productos desde:", urlConFiltro);
-
-    fetch(urlConFiltro, { signal: controller.signal, headers: getAuthHeaders() })
-      .then(res => {
-        if (!res.ok) throw new Error(`Error: ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
-        console.log("InventarioContext: Productos recibidos con éxito:", data);
-        setProductos(Array.isArray(data) ? data : []);
-      })
-      .catch(err => {
-        console.error("InventarioContext: Error al cargar productos:", err);
-        setErrorConexion(err.name === 'AbortError' ? "Tiempo de espera agotado" : `Error de conexión: ${err.message}`);
-      })
-      .finally(() => {
-        window.clearTimeout(timeoutId);
-        setLoading(false);
-      });
-  }, [usuario, refreshIndex, API_URL, verEliminados, getAuthHeaders]);
-
-  // Efecto para cargar catálogos globales (Proveedores, Almacenes y Unidades)
-  useEffect(() => {
-    if (!usuario) return;
-
     const headers = getAuthHeaders();
+    const fetchResource = async (url) => {
+      const response = await fetch(url, { headers });
+      if (!response.ok) throw new Error(`Fallo al cargar ${url}: ${response.statusText}`);
+      return response.json();
+    };
 
-    // Cargar proveedores
-    fetch(`${API_BASE_URL}/providers`, { headers })
-      .then(res => res.json().then(data => setProveedores(Array.isArray(data) ? data : [])))
-      .catch(err => console.error("Error proveedores:", err));
+    const productsUrl = `${API_URL}?isActive=${verEliminados === 'all' ? 'all' : (verEliminados ? 'false' : 'true')}`;
 
-    // Cargar almacenes directamente desde la DB
-    fetch(`${API_BASE_URL}/warehouses`, { headers })
-      .then(res => {
-        if (!res.ok) throw new Error('Error al obtener almacenes');
-        return res.json();
-      })
-      .then(data => {
-        setAlmacenesDetallados(Array.isArray(data) ? data : []);
-      })
-      .catch(err => console.error("Error almacenes:", err));
+    Promise.allSettled([
+      fetchResource(productsUrl),
+      fetchResource(`${API_BASE_URL}/providers`),
+      fetchResource(`${API_BASE_URL}/warehouses`),
+      fetchResource(`${API_BASE_URL}/units-of-measure`),
+      fetchResource(`${API_BASE_URL}/movements/technicians`),
+      fetchResource(`${API_BASE_URL}/categories`),
+      fetchResource(`${API_BASE_URL}/product-serials`),
+      fetchResource(`${API_BASE_URL}/comodatos`),
+    ]).then(results => {
+      const [
+        productsResult,
+        providersResult,
+        warehousesResult,
+        unitsResult,
+        techniciansResult,
+        categoriesResult,
+        serialsResult,
+        prestamosResult,
+      ] = results;
 
-    // Cargar unidades de medida directamente desde la DB para que estén disponibles globalmente
-    fetch(`${API_BASE_URL}/units-of-measure`, { headers })
-      .then(res => {
-        if (!res.ok) {
-          console.error(`Status: ${res.status} al cargar catálogos de unidades`);
-          throw new Error(`Error al obtener unidades (${res.status})`);
-        }
-        return res.json();
-      })
-      .then(data => {
-        setUnidadesMedida(Array.isArray(data) ? data : []);
-      })
-      .catch(err => console.error("Error unidades:", err));
+      if (productsResult.status === 'fulfilled') setProductos(Array.isArray(productsResult.value) ? productsResult.value : []);
+      else console.error("Error cargando productos:", productsResult.reason);
 
-    fetch(`${API_BASE_URL}/movements/technicians`, { headers })
-      .then(res => {
-        if (!res.ok) throw new Error('Error al obtener técnicos');
-        return res.json();
-      })
-      .then(data => {
-        setTecnicos(Array.isArray(data) ? data : []);
-      })
-      .catch(err => console.error("Error técnicos:", err));
-  }, [usuario, refreshIndex, API_BASE_URL, getAuthHeaders]);
+      if (providersResult.status === 'fulfilled') setProveedores(Array.isArray(providersResult.value) ? providersResult.value : []);
+      else console.error("Error cargando proveedores:", providersResult.reason);
 
-  // Cargar categorías desde la DB
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/categories`, { headers: getAuthHeaders() }).then(res => res.json()).then(data => setCategorias(Array.isArray(data) ? data : [])).catch(err => console.error("Error categorías:", err));
-  }, [usuario, refreshIndex, API_BASE_URL, getAuthHeaders]);
+      if (warehousesResult.status === 'fulfilled') setAlmacenesDetallados(Array.isArray(warehousesResult.value) ? warehousesResult.value : []);
+      else console.error("Error cargando almacenes:", warehousesResult.reason);
+
+      if (unitsResult.status === 'fulfilled') setUnidadesMedida(Array.isArray(unitsResult.value) ? unitsResult.value : []);
+      else console.error("Error cargando unidades de medida:", unitsResult.reason);
+
+      if (techniciansResult.status === 'fulfilled') setTecnicos(Array.isArray(techniciansResult.value) ? techniciansResult.value : []);
+      else console.error("Error cargando técnicos:", techniciansResult.reason);
+
+      if (categoriesResult.status === 'fulfilled') setCategorias(Array.isArray(categoriesResult.value) ? categoriesResult.value : []);
+      else console.error("Error cargando categorías:", categoriesResult.reason);
+
+      if (serialsResult.status === 'fulfilled') setSeriales(Array.isArray(serialsResult.value) ? serialsResult.value : []);
+      else console.error("Error cargando seriales:", serialsResult.reason);
+
+      if (prestamosResult.status === 'fulfilled') setPrestamos(Array.isArray(prestamosResult.value) ? prestamosResult.value : []);
+      else console.error("Error cargando préstamos:", prestamosResult.reason);
+
+      // Si alguna de las promesas falló, se puede registrar aquí.
+      const failedPromises = results.filter(r => r.status === 'rejected');
+      if (failedPromises.length > 0) {
+        setErrorConexion(`Fallaron ${failedPromises.length} recursos al cargar.`);
+      }
+
+    }).finally(() => {
+      setLoading(false);
+    });
+
+  }, [usuario, refreshIndex, verEliminados, getAuthHeaders, API_URL, API_BASE_URL]);
 
   // --- GESTIÓN DE UNIDADES DE MEDIDA (DB) ---
   const cargarUnidadesMedida = useCallback(async () => {
@@ -352,23 +339,26 @@ export const InventarioProvider = ({ children }) => {
     }
   };
 
-    const devolverSerialTecnico = async (serialNumber, nota) => {
+  const devolverSerialTecnico = async (serialNumber, nota, user) => {
       try {
         const url = `${import.meta.env.VITE_API_URL}/movements/return-from-technician`;
-        
-        // Obtenemos tus cabeceras de autenticación habituales
         const authHeaders = getAuthHeaders();
+
+        // 🛠️ Validación preventiva utilizando el parámetro 'user' pasado desde el componente
+        if (!user || !user.id) {
+          throw new Error('No se ha detectado una sesión activa. Por favor, vuelve a iniciar sesión.');
+        }
 
         const res = await fetch(url, {
           method: 'POST',
           headers: {
             ...authHeaders,
-            'Content-Type': 'application/json', // 👈 Vital para que NestJS entienda el @Body()
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({ 
             serialNumber, 
             nota,
-            usuarioId: '1' // 👈 Le pasamos el ID del usuario logueado (ajusta 'user?.id' según tu estado global)
+            usuarioId: Number(user.id) // 👈 Inyección dinámica del ID numérico real
           }),
         });
 
@@ -377,7 +367,11 @@ export const InventarioProvider = ({ children }) => {
           throw new Error(data.message || 'Error al procesar la devolución');
         }
 
-        setRefreshIndex(prev => prev + 1); 
+        // Si setRefreshIndex no está en el mismo archivo, asegúrate de pasarlo también o manejarlo en el context
+        if (typeof setRefreshIndex === 'function') {
+          setRefreshIndex(prev => prev + 1); 
+        }
+        
         return data;
       } catch (error) {
         throw error;
@@ -744,8 +738,8 @@ const registrarMovimientosMasivos = async (payload) => {
   // --- GESTIÓN DE CATEGORÍAS (DB) ---
   const agregarCategoria = async (categoriaData) => {
   try {
-    const url = `${import.meta.env.VITE_API_URL}/categories`;
-    const authHeaders = getAuthHeaders();
+    const url = `${API_BASE_URL}/categories`; // <-- CORRECCIÓN: Usar la URL base consistente
+    const authHeaders = getAuthHeaders(); // <-- Ya incluye 'Content-Type' por defecto
 
     const res = await fetch(url, {
       method: 'POST',
@@ -769,6 +763,28 @@ const registrarMovimientosMasivos = async (payload) => {
     throw error;
   }
 };
+
+  const actualizarCategoria = async (id, categoriaData) => {
+    try {
+      const url = `${API_BASE_URL}/categories/${id}`;
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(categoriaData),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Error al actualizar la categoría');
+      }
+
+      setCategorias(prev => prev.map(c => (c.id === id ? data : c)));
+      return data;
+    } catch (error) {
+      console.error('Error en actualizarCategoria:', error);
+      throw error;
+    }
+  };
 
   const eliminarCategoria = async (id) => {
     try {
@@ -1028,11 +1044,6 @@ const registrarMovimientosMasivos = async (payload) => {
     }
   };
 
-  useEffect(() => {
-    if (usuario) cargarPrestamos();
-  }, [usuario, cargarPrestamos, refreshIndex]); // Añadir refreshIndex aquí
-
-  // --- Al final de InventarioContext.jsx ---
 
 return (
   <InventarioContext.Provider value={{ 
@@ -1042,8 +1053,10 @@ return (
     seriales,
     cargarSeriales,
     obtenerHistorialSerial,
-    actualizarEstadoSerial, 
-    agregarCategoria, eliminarCategoria, // <-- Exponemos las nuevas funciones
+    actualizarEstadoSerial,
+    agregarCategoria,
+    actualizarCategoria, // <-- Exponemos la nueva función
+    eliminarCategoria,
     movimientos, 
     asignarSerialesTecnico,
     loading, 

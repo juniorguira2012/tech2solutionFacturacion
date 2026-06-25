@@ -3,7 +3,7 @@ import {
   Search as SearchIcon, Plus as PlusIcon, Minus as MinusIcon, 
   Trash2 as TrashIcon, User as UserIcon, ShoppingCart as CartIcon, 
   DollarSign as DollarIcon, Ticket as TicketIcon, Clock, Receipt, X, Save, Edit3,
-  AlertTriangle, CheckCircle2, Loader2
+  AlertTriangle, CheckCircle2, Loader2, HelpCircle
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import { useClientes } from '../context/ClienteContext';
@@ -17,19 +17,23 @@ const VentaDialog = ({ dialog, onClose }) => {
   const isSuccess = dialog.type === 'success';
   const isWarning = dialog.type === 'warning';
   const isConfirm = dialog.type === 'confirm';
-  const Icon = isSuccess ? CheckCircle2 : AlertTriangle;
+  const Icon = isSuccess ? CheckCircle2 : isWarning ? AlertTriangle : HelpCircle;
 
   return (
     <div className="fixed inset-0 z-[220] flex items-center justify-center bg-slate-950/55 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200">
+        
         <div className="px-8 pt-8 pb-5 text-center">
+          {/* El contenedor del icono cambia dinámicamente según el estado */}
           <div className={`h-16 w-16 mx-auto rounded-2xl flex items-center justify-center ${
             isSuccess ? 'bg-emerald-50 text-emerald-500' : isWarning ? 'bg-amber-50 text-amber-500' : 'bg-indigo-50 text-brand'
           }`}>
             {dialog.loading ? <Loader2 size={32} className="animate-spin" /> : <Icon size={34} />}
           </div>
+          
           <h3 className="mt-5 text-xl font-black text-slate-800 uppercase italic tracking-tight">{dialog.title}</h3>
           <p className="mt-2 text-xs font-bold text-slate-400 leading-relaxed uppercase tracking-wide">{dialog.message}</p>
+          
           {dialog.total && (
             <div className="mt-6 rounded-2xl bg-slate-50 border border-slate-100 px-5 py-4">
               <span className="block text-[9px] font-black uppercase tracking-[0.25em] text-slate-400">Total a cobrar</span>
@@ -38,6 +42,7 @@ const VentaDialog = ({ dialog, onClose }) => {
           )}
         </div>
 
+        {/* BOTONES DE ACCIÓN */}
         <div className="flex border-t border-slate-100">
           {isConfirm && (
             <button
@@ -60,6 +65,7 @@ const VentaDialog = ({ dialog, onClose }) => {
             {dialog.loading ? 'Procesando' : isConfirm ? 'Procesar' : 'Aceptar'}
           </button>
         </div>
+
       </div>
     </div>
   );
@@ -134,12 +140,23 @@ const Ventas = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // --- LÓGICA DE CÁLCULO ---
-  const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-  const montoDescuento = subtotal * (descuentoPorcentaje / 100);
-  const subtotalConDescuento = subtotal - montoDescuento;
-  const impuesto = subtotalConDescuento * (itbisGlobal / 100);
-  const totalFinal = subtotalConDescuento + impuesto;
+  // --- LÓGICA DE CÁLCULO (CORREGIDA Y MEMOIZADA) ---
+  const { subtotal, montoDescuento, impuesto, totalFinal } = useMemo(() => {
+    // 1. Aseguramos que el precio y la cantidad sean números antes de multiplicar
+    const st = carrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
+    const md = st * (Number(descuentoPorcentaje) / 100);
+    const subtotalConDescuento = st - md;
+    const imp = subtotalConDescuento * (itbisGlobal / 100);
+    const tf = subtotalConDescuento + imp;
+
+    return {
+      subtotal: st,
+      montoDescuento: md,
+      impuesto: imp,
+      totalFinal: tf,
+    };
+  }, [carrito, descuentoPorcentaje, itbisGlobal]);
+
   const formatoMoneda = useCallback((valor) => (
     Number(valor).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   ), []);

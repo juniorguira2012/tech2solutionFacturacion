@@ -1,53 +1,42 @@
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Category } from './entities/category.entity';
+import { Category } from './category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
-import { Product } from '../products/entities/product.entity';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Injectable()
 export class CategoriesService {
   constructor(
     @InjectRepository(Category)
-    private readonly categoryRepository: Repository<Category>,
-    @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>,
+    private repository: Repository<Category>,
   ) {}
 
-  async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
-    const existing = await this.categoryRepository.findOneBy({
-      nombre: createCategoryDto.nombre,
-    });
-    if (existing) {
-      throw new ConflictException('La categoría ya existe');
-    }
-    const category = this.categoryRepository.create(createCategoryDto);
-    return this.categoryRepository.save(category);
+  create(createCategoryDto: CreateCategoryDto) {
+    const category = this.repository.create(createCategoryDto);
+    return this.repository.save(category);
   }
 
-  findAll(): Promise<Category[]> {
-    return this.categoryRepository.find({ order: { nombre: 'ASC' } });
+  findAll() {
+    return this.repository.find({ order: { nombre: 'ASC' } });
   }
 
-  async remove(id: number): Promise<{ message: string }> {
-    const categoriaAEliminar = await this.categoryRepository.findOneBy({ id });
-    if (!categoriaAEliminar) {
+  async findOne(id: number) {
+    const category = await this.repository.findOneBy({ id });
+    if (!category) {
       throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
     }
-    const productosEnUso = await this.productRepository.count({
-      where: { categoria: categoriaAEliminar.nombre },
-    });
-    if (productosEnUso > 0) {
-      throw new ConflictException(`No se puede eliminar. La categoría "${categoriaAEliminar.nombre}" está en uso por ${productosEnUso} producto(s).`);
-    }
-    const result = await this.categoryRepository.delete(id);
-    if (result.affected === 0) {
-      throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
-    }
-    return { message: `Categoría con ID ${id} eliminada` };
+    return category;
+  }
+
+  async update(id: number, updateCategoryDto: UpdateCategoryDto) {
+    await this.repository.update(id, updateCategoryDto);
+    return this.findOne(id);
+  }
+
+  async remove(id: number) {
+    const category = await this.findOne(id);
+    await this.repository.remove(category);
+    return { message: `Categoría "${category.nombre}" eliminada con éxito.` };
   }
 }

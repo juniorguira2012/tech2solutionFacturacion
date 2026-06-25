@@ -1,11 +1,11 @@
-import { IsString, IsNotEmpty, IsHexColor, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateCategoryDto {
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El nombre de la categoría no puede estar vacío.' })
   nombre: string;
 
-  @IsHexColor()
+  @IsString()
   @IsOptional()
-  color?: string;
+  descripcion?: string;
 }

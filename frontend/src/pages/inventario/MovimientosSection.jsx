@@ -380,8 +380,11 @@ const exportarKardexCSV = () => {
     const listaSeriales = serialesSeleccionados.map(s => s.serialNumber);
 
     // 🚨 CONTROL DE SEGURIDAD PARA EL USUARIO ACTIVO
-    // Si 'usuario.id' no existe, intentamos con 'usuario._id' o asignamos un valor fallback temporal para desarrollo (ej. 1)
-    const idDelUsuarioActivo = usuario?.id || usuario?._id || 1; 
+    // Validamos que el usuario activo tenga un ID antes de continuar.
+    if (!usuario?.id) {
+      mostrarToast?.("No se ha detectado una sesión de usuario activa.", "error");
+      return;
+    }
 
     setAsignacionIsLoading(true);
     try {
@@ -389,7 +392,7 @@ const exportarKardexCSV = () => {
       const exito = await asignarSerialesTecnico({
         technicianId: Number(asignacionTecnicoId),
         serials: listaSeriales, // Array de strings listo
-        usuarioId: Number(idDelUsuarioActivo), // Asegura un entero válido de verdad
+        usuarioId: Number(usuario.id), // Asegura un entero válido
         nota: `Asignación masiva de ${listaSeriales.length} equipos.`
       });
 

@@ -33,7 +33,12 @@ export class ProductsService {
         }
       }
 
-      const nuevoProducto = queryRunner.manager.create(Product, productData);
+      // 💡 CORRECCIÓN: Aseguramos que siempre haya un almacén por defecto.
+      const datosConAlmacen = {
+        ...productData,
+        almacen: productData.almacen || 'Principal',
+      };
+      const nuevoProducto = queryRunner.manager.create(Product, datosConAlmacen);
 
       if (nuevoProducto.isSerialized && serials && serials.length > 0) {
         // Validar duplicados dentro de la misma lista antes de crear
@@ -149,10 +154,7 @@ export class ProductsService {
         // Solo intentamos guardar si realmente hay seriales nuevos que añadir.
         if (serialesACrear.length > 0) {
           const nuevosSerialesGuardados = await queryRunner.manager.save(ProductSerial, serialesACrear);
-          // ¡AQUÍ LA CORRECCIÓN!
-          // Añadimos los nuevos seriales guardados al array de la entidad principal
-          // para que la operación final de 'save' no intente desvincularlos.
-          producto.seriales.push(...nuevosSerialesGuardados);
+          producto.seriales = [...(producto.seriales || []), ...nuevosSerialesGuardados];
         }
         
         // Asignamos el nuevo stock basado en los seriales finales
