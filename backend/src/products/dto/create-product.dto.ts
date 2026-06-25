@@ -102,6 +102,10 @@ export class CreateProductDto {
   @IsOptional()
   correo?: string;
 
+  @IsString()
+  @IsOptional()
+  nota?: string;
+
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

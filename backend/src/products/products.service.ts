@@ -24,7 +24,7 @@ export class ProductsService {
     await queryRunner.startTransaction();
 
     try {
-      const { serials, ...productData } = createProductDto;
+      const { serials, nota, ...productData } = createProductDto;
 
       if (productData.proveedorId) {
         const provider = await queryRunner.manager.findOneBy(Provider, { id: productData.proveedorId });
@@ -37,6 +37,7 @@ export class ProductsService {
       const datosConAlmacen = {
         ...productData,
         almacen: productData.almacen || 'Principal',
+        nota: nota, // <-- Añadimos la nota al objeto del producto
       };
       const nuevoProducto = queryRunner.manager.create(Product, datosConAlmacen);
 

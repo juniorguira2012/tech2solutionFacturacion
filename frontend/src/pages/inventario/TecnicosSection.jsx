@@ -32,11 +32,12 @@ const TecnicosSection = ({ mostrarToast }) => {
   }, [cargarMovimientos]);
 
   const entregasRecientes = useMemo(() => {
-    // Filtro más robusto: Se basa en la existencia de un `technicianId` en el movimiento.
-    // Esto asegura que solo mostramos movimientos explícitamente asignados a un técnico
-    // desde esta sección, manteniendo la separación con movimientos generales.
+    // Filtro mejorado: Muestra cualquier despacho que tenga un `technicianId`
+    // O cuya nota comience con "Entrega a técnico:", para incluir también
+    // las entregas a técnicos manuales (sin ID).
     return movimientos
-      .filter(m => m.tipo === 'DESPACHAR' && m.technicianId)
+      .filter(m => m.tipo === 'DESPACHAR' && 
+        (m.technicianId || m.nota?.startsWith('Entrega a técnico:')))
       .slice(0, 8);
   }, [movimientos]);
 
@@ -67,6 +68,7 @@ const TecnicosSection = ({ mostrarToast }) => {
   // Estados para el nuevo modal de devolución masiva
   const [devolucionModalOpen, setDevolucionModalOpen] = useState(false);
   const [devolucionSerialesInput, setDevolucionSerialesInput] = useState('');
+  const [devolucionNota, setDevolucionNota] = useState(''); // <-- Nuevo estado para la nota
   const [devolucionLoading, setDevolucionLoading] = useState(false);
 
 
@@ -199,12 +201,16 @@ const TecnicosSection = ({ mostrarToast }) => {
 // const { user } = useAuth(); o la forma en que consumas tu contexto global.
 
 const handleDevolverSerial = async (serialNumber) => {
-  const confirmar = window.confirm(`¿Confirmas la devolución del serial ${serialNumber} al inventario?`);
-  if (!confirmar) return;
+  // 1. Pedimos una nota al usuario. Si cancela, la función termina.
+  const nota = window.prompt(`Introduce una nota para la devolución del serial ${serialNumber}:`, 'Devuelto por técnico');
+  if (nota === null) {
+    mostrarToast?.('Devolución cancelada.', 'info');
+    return;
+  }
 
   try {
-    // 👈 Le pasamos 'user' como tercer parámetro
-    await devolverSerialTecnico(serialNumber, `Devuelto por técnico`, usuario);
+    // 2. Pasamos la nota capturada a la función del contexto.
+    await devolverSerialTecnico(serialNumber, nota, usuario);
     mostrarToast?.(`Serial ${serialNumber} devuelto al inventario`, 'success');
   } catch (error) {
     mostrarToast?.(error.message || 'No se pudo procesar la devolución', 'error');
@@ -227,8 +233,11 @@ const handleDevolverSerial = async (serialNumber) => {
 
     for (const serial of serialesADevolver) {
       try {
-        // 👈 Le pasamos 'user' aquí también para el bucle masivo
-        await devolverSerialTecnico(serial, 'Devolución manual desde módulo de técnicos', usuario);
+        // 3. Usamos la nota del formulario del modal. Si está vacía, ponemos un texto por defecto.
+        await devolverSerialTecnico(
+          serial, 
+          devolucionNota.trim() || 'Devolución masiva desde módulo de técnicos', 
+          usuario);
         exitosos++;
       } catch (error) {
         fallidos++;
@@ -243,6 +252,10 @@ const handleDevolverSerial = async (serialNumber) => {
       mostrarToast?.(`Procesados: ${exitosos} éxitos, ${fallidos} fallas.`, 'error');
     } else {
       mostrarToast?.(`Se devolvieron ${exitosos} seriales correctamente.`, 'success');
+      // 4. Limpiamos y cerramos el modal al finalizar con éxito.
+      setDevolucionModalOpen(false);
+      setDevolucionSerialesInput('');
+      setDevolucionNota('');
     }
   };
   const entregarProducto = async (e) => {
@@ -634,6 +647,16 @@ const handleDevolverSerial = async (serialNumber) => {
                     onChange={(e) => setDevolucionSerialesInput(e.target.value)}
                     placeholder="SN-DEV-001&#10;SN-DEV-002&#10;SN-DEV-003"
                     className="w-full p-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-mono text-xs bg-white h-48 resize-y"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nota de Devolución (Opcional)</label>
+                  <input
+                    type="text"
+                    value={devolucionNota}
+                    onChange={(e) => setDevolucionNota(e.target.value)}
+                    placeholder="Ej: Equipo defectuoso, fin de proyecto..."
+                    className="w-full h-12 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white"
                   />
                 </div>
                 <button

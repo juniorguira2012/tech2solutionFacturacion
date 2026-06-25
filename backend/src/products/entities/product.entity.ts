@@ -72,6 +72,9 @@ export class Product {
   @Column({ type: 'text', nullable: true })
   descripcion: string;
 
+  @Column({ type: 'text', nullable: true })
+  nota: string;
+
   @Column({ type: 'jsonb', default: [], nullable: true })
   camposPersonalizados: any[];
 
