@@ -597,7 +597,10 @@ const handleEliminar = (prod) => {
                         {serialesDisponibles.length > 0 ? (
                           <div className="flex flex-wrap gap-1 mt-1">
                             {serialesDisponibles.slice(0, 3).map(s => (
-                              <span key={s.id} className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-[9px] font-mono font-bold">{s.serialNumber}</span>
+                              <div key={s.id} className="flex items-center gap-1 bg-slate-200 text-slate-700 rounded px-1.5 py-0.5" title={s.lastReturnNote ? `Última devolución: ${s.lastReturnNote}` : ''}>
+                                <span className="text-[9px] font-mono font-bold">{s.serialNumber}</span>
+                                {s.lastReturnNote && <MessageSquare size={10} className="text-slate-500" />}
+                              </div>
                             ))}
                             {serialesDisponibles.length > 3 && (
                               <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">+{serialesDisponibles.length - 3} más</span>
@@ -652,7 +655,11 @@ const handleEliminar = (prod) => {
                     {/* --- INICIO: Mostrar Seriales en Tooltip --- */}
                     {prod.isSerialized && (() => {
                       const serialesDisponibles = prod.seriales?.filter(s => s.status === 'disponible') || [];
-                      const serialesTooltip = serialesDisponibles.map(s => s.serialNumber).join('\n');
+                      // 💡 MEJORA: El tooltip ahora muestra la nota de devolución si existe.
+                      const serialesTooltip = serialesDisponibles
+                        .map(s => s.serialNumber + (s.lastReturnNote ? ` (Devuelto: ${s.lastReturnNote})` : ''))
+                        .join('\n');
+
                       return (
                         <div 
                           className="flex items-center gap-1.5 text-brand mt-1 cursor-help"

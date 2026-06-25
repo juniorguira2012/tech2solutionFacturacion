@@ -1,9 +1,13 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional } from 'class-validator';
 
 export class ReturnSerialDto {
   @IsString()
-  @IsNotEmpty()
-  serialNumber: string;
+  @IsOptional() // Lo volvemos opcional aquí...
+  serialNumber?: string;
+
+  @IsString()
+  @IsOptional() // ...para permitir que también pueda venir bajo el nombre 'serial'
+  serial?: string;
 
   @IsString()
   @IsOptional()

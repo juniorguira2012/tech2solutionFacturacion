@@ -41,6 +41,14 @@ export class ProductSerial {
   @Column({ length: 100, comment: 'Almacén donde se encuentra físicamente el serial' })
   almacen: string;
 
+  // 🌟 CORRECCIÓN: Columna para registrar notas generales o motivos de asignación
+  @Column({ type: 'text', nullable: true, comment: 'Nota general o de entrega del serial' })
+  nota: string;
+
+  // 🌟 CORRECCIÓN: Columna requerida por el MovementsService para mitigar el error TS2339
+  @Column({ type: 'text', nullable: true, comment: 'Última nota de devolución registrada por el técnico' })
+  lastReturnNote: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

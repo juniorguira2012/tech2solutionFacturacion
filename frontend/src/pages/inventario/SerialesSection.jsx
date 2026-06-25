@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Tag, Edit, ChevronLeft, ChevronRight, History, X } from 'lucide-react';
+import { Search, Tag, Edit, ChevronLeft, ChevronRight, History, X, Package, User, Warehouse } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 
 const SerialesSection = ({ mostrarToast }) => {
@@ -92,6 +92,10 @@ const SerialesSection = ({ mostrarToast }) => {
     }
   };
 
+  const cerrarModalHistorial = () => {
+    setHistorialModalOpen(false);
+  };
+
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
@@ -176,7 +180,50 @@ const SerialesSection = ({ mostrarToast }) => {
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No se encontraron seriales</p>
           </div>
         )}
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-4 border-t">
+            <span className="text-[10px] font-bold text-slate-500">
+              Página {currentPage} de {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-md bg-slate-100 text-slate-600 disabled:opacity-50"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-md bg-slate-100 text-slate-600 disabled:opacity-50"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Modal de Historial */}
+      {historialModalOpen && serialSeleccionado && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={cerrarModalHistorial}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b flex justify-between items-center bg-slate-50">
+              <div>
+                <h3 className="text-sm font-black text-slate-800 uppercase">Historial del Serial: {serialSeleccionado.serialNumber}</h3>
+                <p className="text-[10px] font-bold text-slate-500">{serialSeleccionado.producto?.nombre}</p>
+              </div>
+              <button onClick={cerrarModalHistorial} className="p-2 rounded-full hover:bg-slate-200"><X size={18} /></button>
+            </div>
+            <div className="p-6 max-h-96 overflow-y-auto">
+              {/* Aquí iría la tabla o lista del historial */}
+              <p className="text-center text-sm text-slate-400">Historial de movimientos...</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

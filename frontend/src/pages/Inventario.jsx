@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import {
   Package, Tags, ArrowLeftRight, CheckCircle,
   ClipboardList, Bell, Layers3, AlertTriangle, RefreshCw,
-  Warehouse, Ruler, Braces, Plug, Truck, HandHelping, Wrench
+  Warehouse, Ruler, Braces, Plug, Truck, HandHelping, Wrench, Fingerprint
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import AlmacenSection from './inventario/AlmacenSection';
@@ -18,6 +18,7 @@ import ProveedoresSection from './inventario/ProveedoresSection';
 import LotesSection from './inventario/LotesSection';
 import ComodatoSection from './inventario/ComodatoSection';
 import TecnicosSection from './inventario/TecnicosSection';
+import SerialesSection from './inventario/SerialesSection'; // <-- 1. Importamos el nuevo componente
 
 const Inventario = () => {
   const { productos, categorias, setCategorias } = useInventario();
@@ -58,6 +59,7 @@ const Inventario = () => {
     { id: 'almacen', label: 'Almacén', icon: Warehouse },
     { id: 'tecnicos', label: 'Técnicos', icon: Wrench },
     { id: 'conteo', label: 'Conteo Físico', icon: ClipboardList },
+    { id: 'seriales', label: 'Seriales', icon: Fingerprint }, // <-- 2. Añadimos la nueva pestaña
     { id: 'alerta', label: 'Alerta', icon: Bell },
     { id: 'lotes', label: 'Lotes Unidades', icon: Layers3 },
     { id: 'unidades', label: 'Unidades', icon: Ruler },
@@ -105,6 +107,8 @@ const Inventario = () => {
             <TecnicosSection mostrarToast={mostrarToast} />
           ) : seccionActiva === 'conteo' ? (
             <ConteoFisicoSection mostrarToast={mostrarToast} />
+          ) : seccionActiva === 'seriales' ? ( // <-- 3. Añadimos la lógica de renderizado
+            <SerialesSection mostrarToast={mostrarToast} />
         ) : seccionActiva === 'alerta' ? (
           <div className="space-y-4 animate-in fade-in duration-300">
             <div className="flex items-center gap-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
