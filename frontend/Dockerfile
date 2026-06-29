@@ -2,6 +2,9 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
+#RUN apk add --no-cache postgresql-client 
+RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+
 # Argumento para la URL de la API (necesario en build time para Vite)
 ARG VITE_API_URL=https://inventario.oneredrd.com/api
 ENV VITE_API_URL=$VITE_API_URL

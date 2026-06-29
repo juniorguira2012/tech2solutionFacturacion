@@ -18,7 +18,10 @@ services:
       - network_public
     deploy:
       mode: replicated
-      replicas: 1        
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager     
       restart_policy:
         condition: any
 
@@ -34,6 +37,9 @@ services:
       DATABASE_SYNCHRONIZE: "true"
       CORS_ORIGIN: "https://inventariotest.oneredrd.com"
       FRONTEND_URL: "https://inventariotest.oneredrd.com"
+
+      NEXTCLOUD_USER: "juniorguira2012@gmail.com"
+      NEXTCLOUD_APP_PASSWORD: "Mamatingo271990"
       # Configuración de Gmail
       EMAIL_HOST: "smtp.gmail.com"
       EMAIL_PORT: "587"

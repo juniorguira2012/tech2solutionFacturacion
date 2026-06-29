@@ -1,3 +1,4 @@
+// src/app.module.ts
 import { Module } from '@nestjs/common';
 import * as path from 'path';
 import { Logger } from '@nestjs/common';
@@ -18,6 +19,8 @@ import { ComodatosModule } from './comodatos/comodatos.module';
 import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module';
 import { ProductSerialsModule } from './products/product-serials.module';
 import { CategoriesModule } from './categories/categories.module';
+import { DatabaseModule } from './database/database.module'; 
+import { ScheduleModule } from '@nestjs/schedule'; // 🌟 Importado correctamente
 
 @Module({
   imports: [
@@ -50,6 +53,7 @@ import { CategoriesModule } from './categories/categories.module';
         };
       },
     }),
+    ScheduleModule.forRoot(), // 🚀 ¡REPARACIÓN! Inicializa el motor de Crons globalmente
     ProductsModule,
     InventoryCountsModule,
     MovementsModule,
@@ -63,6 +67,7 @@ import { CategoriesModule } from './categories/categories.module';
     UnitsOfMeasureModule,
     ProductSerialsModule,
     CategoriesModule,
+    DatabaseModule, 
   ],
 })
 export class AppModule {}

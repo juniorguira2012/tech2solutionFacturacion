@@ -12,6 +12,7 @@ const Configuracion = ({ mostrarToast }) => {
   const { usuario } = useAuth();
   
   const [guardando, setGuardando] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
 
   // --- ESTADOS GENERALES ---
   const [itbis, setItbis] = useState(localStorage.getItem('posfactura_itbis') || 18);
@@ -36,6 +37,11 @@ const Configuracion = ({ mostrarToast }) => {
       alertaMinima: 50           // Alerta cuando queden pocos NCF
     };
   });
+
+  // Sincronizamos la URL con la lógica global del sistema
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+    ? '/api' 
+    : (import.meta.env.VITE_API_URL || '/api');
 
   // Sincronizar datos con backend al cargar el componente (Opcional si tienes la API lista)
   useEffect(() => {
@@ -87,6 +93,46 @@ const Configuracion = ({ mostrarToast }) => {
       mostrarToast?.("Hubo un error al guardar en el servidor", "error");
     } finally {
       setGuardando(false);
+    }
+  };
+
+  // --- FUNCIÓN PARA MANEJAR EL BACKUP ---
+  const handleBackup = async () => {
+    if (usuario?.rol !== 'admin') {
+      mostrarToast?.("Solo los administradores pueden realizar esta acción.", "error");
+      return;
+    }
+
+    setBackupLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/database/backup`);
+
+      if (!res.ok) {
+        throw new Error("El servidor no pudo generar el archivo de respaldo.");
+      }
+
+      // Convertimos la respuesta en un objeto descargable (Blob)
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Creamos un enlace temporal para iniciar la descarga
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      const timestamp = new Date().toISOString().split('T')[0];
+      a.download = `backup-tech2solution-${timestamp}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Limpiamos el enlace y la URL del objeto
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      mostrarToast?.("Copia de seguridad generada con éxito.", "success");
+    } catch (error) {
+      mostrarToast?.(error.message || "Error de conexión al solicitar el backup.", "error");
+    } finally {
+      setBackupLoading(false);
     }
   };
 
@@ -261,10 +307,17 @@ const Configuracion = ({ mostrarToast }) => {
               Es una buena práctica descargar una copia local de tus datos comerciales de forma periódica.
             </p>
 
-            <button className="w-full flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-left">
+            <button 
+              onClick={handleBackup}
+              disabled={backupLoading}
+              className="w-full flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <div className="flex items-center gap-3">
-                <Download size={14} className="text-emerald-400" />
-                <span className="font-black text-[9px] uppercase tracking-widest">Exportar Base de Datos</span>
+                {backupLoading 
+                  ? <Save size={14} className="text-amber-400 animate-spin" />
+                  : <Download size={14} className="text-emerald-400" />
+                }
+                <span className="font-black text-[9px] uppercase tracking-widest">{backupLoading ? 'Generando...' : 'Exportar Base de Datos'}</span>
               </div>
               <ArrowRight size={12} className="text-white/20" />
             </button>
