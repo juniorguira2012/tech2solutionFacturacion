@@ -814,11 +814,16 @@ const registrarMovimientosMasivos = async (payload) => {
         const res = await fetch(`${API_BASE_URL}/movements`, {
           method: 'POST',
           headers: headers,
-          body: JSON.stringify({ 
-            productoId: Number(item.id), // Aseguramos que sea número para la DB
+          body: JSON.stringify({
+            productoId: Number(item.id),
             tipo: 'DESPACHAR',
-            cantidad: Number(item.cantidad),
-            nota: 'Venta realizada desde el POS'
+            nota: 'Venta realizada desde el POS',
+            // Si el item tiene seriales, los enviamos. Si no, enviamos la cantidad.
+            // El backend debe estar preparado para recibir uno u otro.
+            ...(item.serials && item.serials.length > 0
+              ? { serials: item.serials }
+              : { cantidad: Number(item.cantidad) }
+            )
           })
         });
 
@@ -836,7 +841,7 @@ const registrarMovimientosMasivos = async (payload) => {
       throw error; // Re-lanzamos el error para que Ventas.jsx lo capture
     }
   };
-
+  // --- GESTIÓN DE CONTEO FÍSICO (Auditoría) ---
   // --- GESTIÓN DE CONTEO FÍSICO (Auditoría) ---
   const cargarConteos = useCallback(async (almacen = '') => {
     try {
@@ -844,15 +849,32 @@ const registrarMovimientosMasivos = async (payload) => {
         ? `${API_BASE_URL}/inventory-counts?almacen=${almacen}`
         : `${API_BASE_URL}/inventory-counts`;
       
-      const res = await fetch(url, { headers: getAuthHeaders() });
+      // Obtenemos los headers de autenticación de tu sistema
+      const headers = getAuthHeaders();
+      
+      // 🛡️ SI EL TOKEN NO ESTÁ LISTO: Abortamos la petición antes de que tire un 401
+      if (!headers || !headers.Authorization || headers.Authorization.includes('undefined')) {
+        console.warn("Carga de conteos pospuesta: El token de autenticación no está listo.");
+        return;
+      }
+
+      const res = await fetch(url, { headers });
+      
+      // 🛡️ SI EL BACKEND RESPONDE 401 (Ej: El Cajero o Técnico no tienen permiso en NestJS)
+      if (res.status === 401) {
+        console.warn("401: Este perfil no tiene autorización en el backend para ver conteos físicos.");
+        setConteos([]); // Limpiamos el estado de forma segura para que no se quede cargando
+        return;
+      }
+
       if (!res.ok) throw new Error('Error al cargar conteos');
+      
       const data = await res.json();
       setConteos(data);
     } catch (err) {
       console.error("Error cargando conteos:", err);
     }
   }, [API_BASE_URL]);
-
   const crearConteo = async (payload) => {
     try {
       const res = await fetch(`${API_BASE_URL}/inventory-counts`, {

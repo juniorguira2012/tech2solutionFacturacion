@@ -54,7 +54,7 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
 };
 
 //Componente Principal 
-const ProductosSection = ({ mostrarToast }) => {
+const ProductosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos como prop
   const {
     productos,
     loading,
@@ -198,16 +198,6 @@ const ProductosSection = ({ mostrarToast }) => {
   }, [vista]);
 
   const LOW_STOCK_THRESHOLD = 5;
-
-  const permisoInventario = useMemo(() => {
-    if (usuario?.rol === 'admin') return 'full';
-    const savedRoles = localStorage.getItem('posfactura_roles_config');
-    if (savedRoles && usuario) {
-      const config = JSON.parse(savedRoles);
-      return config[usuario.rol]?.modules?.inventario || 'none';
-    }
-    return 'none';
-  }, [usuario]);
 
   const formatPrice = (value) => {
     const price = Number(value);
@@ -509,12 +499,13 @@ const handleEliminar = (prod) => {
           ))}
         </div>
         <div className="flex gap-2">
+          {/* 🛡️ 2. Condicionamos los botones de acción principales */}
           <div className="flex bg-slate-100 p-1 rounded-lg">
             <button onClick={() => setVista('grid')} className={`p-1.5 rounded-md ${vista === 'grid' ? 'bg-white text-brand shadow-sm' : 'text-slate-400'}`}><LayoutGrid size={16}/></button>
             <button onClick={() => setVista('lista')} className={`p-1.5 rounded-md ${vista === 'lista' ? 'bg-white text-brand shadow-sm' : 'text-slate-400'}`}><List size={16}/></button>
           </div>
           <button onClick={exportarAExcel} className="h-9 w-9 flex items-center justify-center bg-emerald-500 text-white rounded-lg shadow-sm hover:bg-emerald-600"><FileText size={16}/></button>
-          {permisoInventario === 'full' && (
+          {permisos.create && (
             <button onClick={() => setIsModalOpen(true)} className="h-9 w-9 flex items-center justify-center bg-brand text-white rounded-lg shadow-sm hover:bg-indigo-600"><Plus size={18}/></button>
           )}
         </div>
@@ -610,6 +601,7 @@ const handleEliminar = (prod) => {
                       </div>
                     );
                   })()}
+                  {/* 🛡️ 3. Condicionamos los botones de acción en la VISTA DE CUADRÍCULA */}
                   {/* --- FIN: Mostrar Seriales Disponibles --- */}
                   <div className="px-1 py-1 text-right flex items-center justify-end gap-1 border-t border-slate-50 mt-2">
                     {prod.isActive === false ? (
@@ -621,10 +613,12 @@ const handleEliminar = (prod) => {
                       </button>
                     ) : (
                       <>
-                        <button onClick={(e) => { e.stopPropagation(); abrirEditar(prod); }} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
-                          <Edit3 size={16}/>
-                        </button>
-                        {permisoInventario === 'full' && (
+                        {permisos.edit && (
+                          <button onClick={(e) => { e.stopPropagation(); abrirEditar(prod); }} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
+                            <Edit3 size={16}/>
+                          </button>
+                        )}
+                        {permisos.delete && (
                           <button onClick={(e) => { e.stopPropagation(); handleEliminar(prod); }} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
                             <Trash2 size={16}/>
                           </button>
@@ -688,6 +682,7 @@ const handleEliminar = (prod) => {
                   </td>
                   <td className="px-6 py-3 text-center font-black">{prod.stock}</td>
                   <td className="px-6 py-3 text-right font-black italic">RD$ {formatPrice(prod.precio)}</td>
+                  {/* 🛡️ 4. Condicionamos los botones de acción en la VISTA DE LISTA */}
                   <td className="px-6 py-3 text-right flex items-center justify-end gap-1">
                     {prod.isActive === false ? (
                       <button 
@@ -698,10 +693,14 @@ const handleEliminar = (prod) => {
                       </button>
                     ) : (
                       <>
-                        <button onClick={() => abrirEditar(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
-                        {permisoInventario === 'full' && (
-                          <button onClick={() => handleEliminar(prod)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                        {permisos.edit && (
+                          <button onClick={() => abrirEditar(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
                         )}
+                        {permisos.delete && (
+                          <button onClick={() => handleEliminar(prod)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
+                            <Trash2 size={16}/>
+                          </button>
+                        )} 
                       </>
                     )}
                   </td>

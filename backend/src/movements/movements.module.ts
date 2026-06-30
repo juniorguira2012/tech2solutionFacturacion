@@ -8,7 +8,7 @@ import { ProductWarehouseStock } from '../products/entities/product-warehouse-st
 import { InventoryBatch } from './entities/inventory-batch.entity';
 import { Technician } from './entities/technician.entity';
 import { ProductSerial } from '../products/entities/product-serial.entity';
-import { User } from '../providers/user.entity';
+import { User } from '../providers/entities/user.entity';
 
 @Module({
   imports: [

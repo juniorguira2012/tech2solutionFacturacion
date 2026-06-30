@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { CountItem } from '../../inventory-counts/entities/count-item.entity';
 import { ProductWarehouseStock } from './product-warehouse-stock.entity';
-import { Provider } from '../../providers/provider.entity';
+import { Provider } from '../../providers/entities/provider.entity';
 import { ProductSerial } from './product-serial.entity';
 
 @Entity('products')

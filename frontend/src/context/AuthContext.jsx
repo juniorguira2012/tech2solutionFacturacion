@@ -8,11 +8,11 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [permisos, setPermisos] = useState(null);
 
-  // Calculamos la URL base de la API
-  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
-    ? '/api' 
-    : (import.meta.env.VITE_API_URL || '/api');
-  
+  // 🚨 CORRECCIÓN: Simplificamos la lógica de la URL.
+  // VITE_API_URL debe ser la URL completa del backend, ej: http://localhost:3000
+  // Si no está definida, se usará una ruta relativa, ideal para producción.
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
   // Debug: log para verificar la URL
   console.log('API_BASE_URL:', API_BASE_URL);
 

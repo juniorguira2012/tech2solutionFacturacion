@@ -4,7 +4,7 @@ import { Repository, DataSource } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { Provider } from '../providers/provider.entity';
+import { Provider } from '../providers/entities/provider.entity';
 import { ProductSerial, SerialStatus } from './entities/product-serial.entity';
 
 @Injectable()

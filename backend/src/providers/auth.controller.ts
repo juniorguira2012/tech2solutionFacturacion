@@ -2,7 +2,7 @@ import { Body, Controller, Post, UnauthorizedException, BadRequestException, Log
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from './users.service';
 import { EmailService } from './email.service';
-import { ResetPasswordDto } from './user.dto';
+import { ResetPasswordDto } from './dto/user.dto';
 import * as bcrypt from 'bcryptjs';
 
 @Controller('auth')

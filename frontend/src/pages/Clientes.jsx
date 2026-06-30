@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { UserPlus, Search, Edit3, Trash2, MapPin, Phone, Mail, X, FileText, Globe, Lock, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useClientes } from '../context/ClienteContext';
-import { useAuth } from '../context/AuthContext'; // Importamos Auth para los permisos
+import { usePermissions } from '../hooks/usePermissions'; // 🛡️ 1. Importamos el hook de permisos
 
 // Modal de Confirmación Estilizado
 const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo = 'danger' }) => {
@@ -43,7 +43,7 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
 
 const Clientes = () => {
   const { clientes, loading, agregarCliente, actualizarCliente, eliminarCliente } = useClientes();
-  const { usuario } = useAuth();
+  const permisos = usePermissions('clientes'); // 🛡️ 2. Obtenemos los permisos para este módulo
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -71,10 +71,6 @@ const Clientes = () => {
     nombre: '', rnc: '', telefono: '', direccion: '', zona: '', email: '', categoria: 'Bronce'
   });
 
-  // --- 1. LÓGICA DE PERMISOS PARA CLIENTES ---
-  // Obtenemos el permiso directamente del usuario logueado
-  const permisoClientes = usuario?.rol === 'admin' ? 'full' : (usuario?.permisos?.modules?.clientes || 'none');
-
   const clientesFiltrados = useMemo(() => {
     const busqueda = searchTerm.trim().toLowerCase();
 
@@ -92,8 +88,8 @@ const Clientes = () => {
       });
   }, [clientes, searchTerm]);
 
-  // Bloqueo total si el permiso es 'none'
-  if (permisoClientes === 'none') {
+  // 🛡️ 3. Bloqueo de acceso si no hay permiso de vista
+  if (!permisos.view) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
         <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-200">
@@ -160,6 +156,12 @@ const Clientes = () => {
   };
 
   const handleEliminarCliente = (cliente) => {
+    // 🛡️ 4. Verificación de permiso de eliminación
+    if (!permisos.delete) {
+      mostrarToast("No tienes permiso para eliminar clientes", "error");
+      return;
+    }
+
     if (cliente.id === 1) {
       mostrarToast("No puedes eliminar al Consumidor Final", "error");
       return;
@@ -200,7 +202,12 @@ const Clientes = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (permisoClientes !== 'full') return;
+    // 🛡️ 5. Verificación de permisos de creación/edición
+    if ((isEditing && !permisos.edit) || (!isEditing && !permisos.create)) {
+      mostrarToast("No tienes permiso para realizar esta acción", "error");
+      return;
+    }
+
     try {
       if (isEditing) {
         await actualizarCliente(formData);
@@ -217,7 +224,12 @@ const Clientes = () => {
   };
 
   const abrirEditar = (cliente) => {
-    if (permisoClientes !== 'full') return;
+    // 🛡️ 6. Verificación de permiso de edición
+    if (!permisos.edit) {
+      mostrarToast("No tienes permiso para editar clientes", "error");
+      return;
+    }
+
     setFormData(cliente);
     setIsEditing(true);
     setIsModalOpen(true);
@@ -245,7 +257,7 @@ const Clientes = () => {
             <FileText size={18} /> <span className="hidden md:inline">Exportar</span>
           </button>
           
-          {permisoClientes === 'full' && (
+          {permisos.create && ( // 🛡️ 7. Condicionamos el botón de "Nuevo Cliente"
             <button 
               onClick={() => setIsModalOpen(true)}
               className="flex items-center gap-2 bg-brand text-white px-5 py-3 rounded-xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-600 transition-all active:scale-95 text-xs uppercase tracking-widest"
@@ -268,7 +280,7 @@ const Clientes = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        {permisoClientes === 'view' && (
+        {!permisos.create && !permisos.edit && !permisos.delete && (
            <div className="hidden md:flex items-center gap-2 text-brand bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 italic font-black text-[10px] uppercase ml-4">
              <Lock size={14} /> Consulta de Clientes
            </div>
@@ -284,13 +296,13 @@ const Clientes = () => {
               <th className="px-6 py-4">Categoría / Zona</th>
               <th className="px-6 py-4">Contacto / Email</th>
               <th className="px-6 py-4">Dirección</th>
-              {permisoClientes === 'full' && <th className="px-6 py-4 text-right">Acciones</th>}
+              {(permisos.edit || permisos.delete) && <th className="px-6 py-4 text-right">Acciones</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {loading && (
               <tr>
-                <td colSpan={permisoClientes === 'full' ? 5 : 4} className="px-6 py-12 text-center">
+                <td colSpan={(permisos.edit || permisos.delete) ? 5 : 4} className="px-6 py-12 text-center">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Cargando clientes...</span>
                 </td>
               </tr>
@@ -298,7 +310,7 @@ const Clientes = () => {
 
             {!loading && clientesFiltrados.length === 0 && (
               <tr>
-                <td colSpan={permisoClientes === 'full' ? 5 : 4} className="px-6 py-12 text-center">
+                <td colSpan={(permisos.edit || permisos.delete) ? 5 : 4} className="px-6 py-12 text-center">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">No hay clientes para mostrar</span>
                 </td>
               </tr>
@@ -337,21 +349,25 @@ const Clientes = () => {
                   </div>
                 </td>
                 
-                {permisoClientes === 'full' && (
+                {(permisos.edit || permisos.delete) && ( // 🛡️ 8. Condicionamos la columna de acciones
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-1">
-                      <button 
-                        onClick={() => abrirEditar(cliente)} 
-                        className="p-2 text-slate-400 hover:text-brand hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-xl transition-all shadow-sm"
-                      >
-                        <Edit3 size={18}/>
-                      </button>
-                      <button 
-                        onClick={() => handleEliminarCliente(cliente)} // Llamada a la función corregida
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-all shadow-sm"
-                      >
-                        <Trash2 size={18}/>
-                      </button>
+                      {permisos.edit && (
+                        <button 
+                          onClick={() => abrirEditar(cliente)} 
+                          className="p-2 text-slate-400 hover:text-brand hover:bg-indigo-50 border border-transparent hover:border-indigo-100 rounded-xl transition-all shadow-sm"
+                        >
+                          <Edit3 size={18}/>
+                        </button>
+                      )}
+                      {permisos.delete && (
+                        <button 
+                          onClick={() => handleEliminarCliente(cliente)}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-all shadow-sm"
+                        >
+                          <Trash2 size={18}/>
+                        </button>
+                      )}
                     </div>
                   </td>
                 )}
@@ -362,7 +378,7 @@ const Clientes = () => {
       </div>
 
       {/* Modal - Solo si es Full */}
-      {isModalOpen && permisoClientes === 'full' && (
+      {isModalOpen && (permisos.create || permisos.edit) && ( // 🛡️ 9. El modal se abre si se puede crear o editar
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 text-slate-800">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">

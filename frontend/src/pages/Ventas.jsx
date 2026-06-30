@@ -5,6 +5,7 @@ import {
   DollarSign as DollarIcon, Ticket as TicketIcon, Clock, Receipt, X, Save, Edit3,
   AlertTriangle, CheckCircle2, Loader2, HelpCircle
 } from 'lucide-react';
+import { usePermissions } from '../hooks/usePermissions'; // 🛡️ Importamos el hook de permisos
 import { useInventario } from '../context/InventarioContext';
 import { useClientes } from '../context/ClienteContext';
 import { useVentas } from '../context/VentasContext';
@@ -80,6 +81,7 @@ const Ventas = () => {
   const { registrarVenta } = useVentas();
   const { productos, descontarStock, setVerEliminados } = useInventario();
   const { clientes } = useClientes();
+  const permisos = usePermissions('ventas'); // 🛡️ Obtenemos los permisos para el módulo de ventas
   const { usuario } = useAuth();
   
   // Load company data from local storage
@@ -125,6 +127,11 @@ const Ventas = () => {
   const [showDescuentoModal, setShowDescuentoModal] = useState(false);
   const [tempDescuento, setTempDescuento] = useState("");
 
+  // --- ESTADOS PARA SERIALES ---
+  const [serialModalOpen, setSerialModalOpen] = useState(false);
+  const [productoParaSeriales, setProductoParaSeriales] = useState(null);
+  const [serialesInput, setSerialesInput] = useState('');
+
   // --- CONFIGURACIÓN Y TIEMPO ---
   const itbisGlobal = Number(localStorage.getItem('posfactura_itbis')) || 18;
   const [fechaHora, setFechaHora] = useState(new Date());
@@ -143,7 +150,13 @@ const Ventas = () => {
   // --- LÓGICA DE CÁLCULO (CORREGIDA Y MEMOIZADA) ---
   const { subtotal, montoDescuento, impuesto, totalFinal } = useMemo(() => {
     // 1. Aseguramos que el precio y la cantidad sean números antes de multiplicar
-    const st = carrito.reduce((acc, item) => acc + (Number(item.precio) * Number(item.cantidad)), 0);
+    const st = carrito.reduce((acc, item) => {
+      // Si es serializado, la cantidad es el número de seriales. Si no, es item.cantidad.
+      const cantidad = item.isSerialized ? (item.serials?.length || 0) : (Number(item.cantidad) || 0);
+      const precio = Number(item.precio) || 0;
+      return acc + (precio * cantidad);
+    }, 0);
+
     const md = st * (Number(descuentoPorcentaje) / 100);
     const subtotalConDescuento = st - md;
     const imp = subtotalConDescuento * (itbisGlobal / 100);
@@ -169,23 +182,21 @@ const Ventas = () => {
 
   // --- VALIDACIÓN DE PERMISOS PARA DESCUENTO ---
   const aplicarDescuentoSeguro = () => {
-    const valor = parseFloat(tempDescuento) || 0;
-    let limite = 0;
-
-    if (usuario?.rol === 'admin') limite = 100;
-    else if (usuario?.rol === 'supervisor') limite = 25;
-    else limite = 5; 
-
-    if (valor > limite) {
-      alert(`⚠️ Tu rol (${usuario?.rol}) solo permite hasta el ${limite}%.\nSolicita autorización.`);
-      return;
+    // 🛡️ Si no tiene permiso de edición, no puede aplicar descuentos.
+    if (!permisos.edit) {
+      return alert("No tienes permiso para aplicar descuentos.");
     }
-
+    const valor = parseFloat(tempDescuento) || 0;
     setDescuentoPorcentaje(valor);
     setShowDescuentoModal(false);
   };
 
   const procesarVenta = useCallback(async () => {
+    // 🛡️ Verificación de permiso de creación antes de procesar
+    if (!permisos.create) {
+      return alert("No tienes permiso para registrar ventas.");
+    }
+
     if (!mountedRef.current) return; // Evitar cualquier operación si el componente ya no está montado
 
     setVentaDialog(prev => ({ ...prev, loading: true })); // Inicia el estado de carga
@@ -200,9 +211,14 @@ const Ventas = () => {
         itbis: Number(impuesto),
         total: Number(totalFinal),
         items: carrito.map(item => ({
-          productoId: Number(item.id),
-          cantidad: Number(item.cantidad),
-          precio: Number(item.precio)
+          productoId: Number(item.id), // ID del producto
+          precio: Number(item.precio), // Precio al momento de la venta
+          // Si es serializado, enviamos el array de seriales.
+          // Si no, enviamos la cantidad.
+          ...(item.isSerialized 
+            ? { serials: item.serials } 
+            : { cantidad: Number(item.cantidad) }
+          )
         })),
         vendedorId: usuario?.id?.toString(),
       };
@@ -272,7 +288,7 @@ const Ventas = () => {
         message: error.message || 'Ocurrió un error al registrar la venta.',
       });
     }
-  }, [carrito, totalFinal, clienteId, clientes, usuario, subtotal, montoDescuento, impuesto, registrarVenta, descontarStock, formatoMoneda, companyData, mountedRef, papelSize]);
+  }, [carrito, totalFinal, clienteId, clientes, usuario, subtotal, montoDescuento, impuesto, registrarVenta, descontarStock, formatoMoneda, companyData, mountedRef, papelSize, permisos.create]);
 
   const finalizarVenta = useCallback(async () => {
     if (carrito.length === 0) {
@@ -285,6 +301,16 @@ const Ventas = () => {
       return;
     }
 
+    // 🛡️ Verificación de permiso de creación antes de abrir el diálogo de confirmación
+    if (!permisos.create) {
+      setVentaDialog({
+        open: true,
+        type: 'warning',
+        title: 'Acción no permitida',
+        message: 'Tu rol actual no tiene permisos para crear nuevas facturas.',
+      });
+      return;
+    }
     setVentaDialog({
       open: true,
       type: 'confirm',
@@ -293,7 +319,7 @@ const Ventas = () => {
       total: formatoMoneda(totalFinal),
       onConfirm: procesarVenta,
     });
-  }, [carrito.length, totalFinal, formatoMoneda, procesarVenta]);
+  }, [carrito.length, totalFinal, formatoMoneda, procesarVenta, permisos.create]);
 
   useEffect(() => {
     const manejarTeclado = (e) => {
@@ -345,6 +371,12 @@ const Ventas = () => {
   }, [facturasAbiertas]);
 
   // --- BUSCADOR ---
+  // 🛡️ Si el usuario no tiene permiso de crear, no debería poder agregar productos al carrito.
+  const puedeAgregar = permisos.create;
+  if (!permisos.view) {
+    return <div className="p-8 text-center text-red-500 font-bold">No tienes permiso para acceder a este módulo.</div>;
+  }
+
   useEffect(() => {
     if (!busqueda.trim()) return setResultados([]);
     const filtrados = productos.filter(p => 
@@ -358,12 +390,33 @@ const Ventas = () => {
   }, [busqueda, productos]);
 
   const handleAgregar = (producto) => {
+    // 🛡️ Verificación de permiso de creación antes de agregar al carrito
+    if (!puedeAgregar) {
+      return alert("No tienes permiso para agregar productos al carrito.");
+    }
+
+    // Si el producto es serializado, abrimos el modal para pedir los seriales
+    if (producto.isSerialized) {
+      const itemExistente = carrito.find(i => i.id === producto.id);
+      setProductoParaSeriales(producto);
+      // Si ya estaba en el carrito, precargamos los seriales que ya se habían ingresado.
+      setSerialesInput(itemExistente ? itemExistente.serials.join('\n') : '');
+      setSerialModalOpen(true);
+      return;
+    }
+
+    // Lógica existente para productos por cantidad
     const itemExistente = carrito.find(i => i.id === producto.id);
     const cantActual = itemExistente ? itemExistente.cantidad : 0;
     if (producto.stock <= cantActual) return alert("Stock insuficiente");
 
     setCarrito(prev => {
-      if (itemExistente) return prev.map(item => item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item);
+      if (itemExistente) {
+        return prev.map(item => 
+          item.id === producto.id 
+            ? { ...item, cantidad: item.cantidad + 1 } 
+            : item);
+      }
       return [...prev, { ...producto, className: 'item-carrito', cantidad: 1 }];
     });
     setBusqueda("");
@@ -371,7 +424,36 @@ const Ventas = () => {
     inputBusquedaRef.current?.focus();
   };
 
+  // Función para guardar los seriales desde el modal
+  const handleGuardarSeriales = () => {
+    if (!productoParaSeriales) return;
+
+    const serialsArray = serialesInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+    
+    // Validación para no vender más seriales que el stock disponible
+    if (serialsArray.length > productoParaSeriales.stock) {
+      alert(`Stock insuficiente. Solo hay ${productoParaSeriales.stock} unidades disponibles.`);
+      return;
+    }
+
+    const itemExistente = carrito.find(i => i.id === productoParaSeriales.id);
+
+    if (itemExistente) {
+      setCarrito(carrito.map(item => item.id === productoParaSeriales.id ? { ...item, serials: serialsArray } : item));
+    } else {
+      setCarrito([...carrito, { ...productoParaSeriales, serials: serialsArray }]);
+    }
+
+    setSerialModalOpen(false);
+    setProductoParaSeriales(null);
+    setSerialesInput('');
+  };
   const guardarEnAbiertas = () => {
+    // 🛡️ Verificación de permiso de creación antes de pausar una venta
+    if (!permisos.create) {
+      return alert("No tienes permiso para pausar ventas.");
+    }
+
     if (carrito.length === 0) return;
     const clienteSeleccionado = clientes.find(c => c.id.toString() === clienteId.toString());
     const nuevaAbierta = {
@@ -422,7 +504,7 @@ const Ventas = () => {
           <button onClick={() => setShowAbiertasModal(true)} className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 bg-amber-50 text-amber-600 border border-amber-100 rounded-xl font-black text-[10px] uppercase hover:bg-amber-100 transition-all">
             <Receipt size={14} /> <span>Abiertas ({facturasAbiertas.length})</span>
           </button>
-          <button onClick={guardarEnAbiertas} disabled={carrito.length === 0} className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 bg-indigo-50 text-brand border border-indigo-100 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-100 transition-all disabled:opacity-50">
+          <button onClick={guardarEnAbiertas} disabled={carrito.length === 0 || !permisos.create} className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 bg-indigo-50 text-brand border border-indigo-100 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed" title={!permisos.create ? "No tienes permiso para pausar" : ""}>
             <Save size={14} /> <span>Pausar</span>
           </button>
 
@@ -492,7 +574,7 @@ const Ventas = () => {
             
             {/* Resultados del Buscador */}
             {resultados.length > 0 && (
-              <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-white border border-slate-200 shadow-2xl rounded-xl max-h-48 overflow-y-auto p-1.5">
+              <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-white border border-slate-200 shadow-2xl rounded-xl max-h-48 overflow-y-auto p-1.5" role="listbox">
                 {resultados.map(prod => (
                   <div key={prod.id} onClick={() => { handleAgregar(prod); setBusqueda(""); }} className="flex justify-between items-center gap-2 px-3 py-2.5 hover:bg-indigo-50 rounded-lg cursor-pointer transition-colors border-b border-slate-50 last:border-0">
                     <div className="flex-1 min-w-0">
@@ -529,14 +611,27 @@ const Ventas = () => {
                   carrito.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-4 py-2.5 uppercase text-slate-700 max-w-[140px] truncate">{item.nombre}</td>
-                      <td className="px-2 py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button onClick={() => setCarrito(prev => prev.map(i => i.id === item.id ? {...i, cantidad: Math.max(1, i.cantidad - 1)} : i))} className="p-1 rounded-md bg-slate-100 hover:bg-slate-200"><MinusIcon size={10}/></button>
-                          <span className="w-5 text-center font-black text-[11px]">{item.cantidad}</span>
-                          <button onClick={() => handleAgregar(item)} className="p-1 rounded-md bg-slate-100 hover:bg-slate-200"><PlusIcon size={10}/></button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-black italic text-slate-800">RD$ {(item.precio * item.cantidad).toLocaleString()}</td>
+                      {item.isSerialized ? (
+                        <>
+                          <td className="px-2 py-2.5 text-center">
+                            <button onClick={() => handleAgregar(item)} className="text-brand font-black text-[10px] uppercase flex items-center gap-1 mx-auto">
+                              <Edit3 size={12} /> {item.serials?.length || 0} Seriales
+                            </button>
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-black italic text-slate-800">RD$ {(item.precio * (item.serials?.length || 0)).toLocaleString()}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-2 py-2.5 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button onClick={() => setCarrito(prev => prev.map(i => i.id === item.id ? {...i, cantidad: Math.max(1, i.cantidad - 1)} : i))} className="p-1 rounded-md bg-slate-100 hover:bg-slate-200"><MinusIcon size={10}/></button>
+                              <span className="w-5 text-center font-black text-[11px]">{item.cantidad}</span>
+                              <button onClick={() => handleAgregar(item)} className="p-1 rounded-md bg-slate-100 hover:bg-slate-200"><PlusIcon size={10}/></button>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-black italic text-slate-800">RD$ {(item.precio * item.cantidad).toLocaleString()}</td>
+                        </>
+                      )}
                       <td className="px-3 py-2.5 text-right">
                         <button onClick={() => setCarrito(carrito.filter(i => i.id !== item.id))} className="text-slate-300 hover:text-red-500 transition-colors"><TrashIcon size={14}/></button>
                       </td>
@@ -563,7 +658,7 @@ const Ventas = () => {
                   <span className="text-slate-800">RD$ {subtotal.toLocaleString()}</span>
                 </div>
                 
-                <div className="flex justify-between items-center cursor-pointer group" onClick={() => setShowDescuentoModal(true)}>
+                <div className={`flex justify-between items-center group ${permisos.edit ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`} onClick={() => permisos.edit && setShowDescuentoModal(true)} title={!permisos.edit ? "No tienes permiso para editar descuentos" : ""}>
                   <span className="text-[9px] text-slate-400 group-hover:text-brand flex items-center gap-1 transition-colors">
                     Descuento ({descuentoPorcentaje}%) <Edit3 size={10}/>
                   </span>
@@ -589,9 +684,10 @@ const Ventas = () => {
 
             <button 
               onClick={finalizarVenta} 
-              disabled={carrito.length === 0} 
+              disabled={carrito.length === 0 || !permisos.create} 
+              title={!permisos.create ? "No tienes permiso para crear ventas" : ""}
               className={`w-full py-4 rounded-xl font-black text-xs shadow-md transition-all uppercase flex flex-col items-center justify-center ${
-                carrito.length > 0 ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-100 text-slate-300'
+                (carrito.length > 0 && permisos.create) ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-100 text-slate-300 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center gap-2">
@@ -653,6 +749,33 @@ const Ventas = () => {
         </div>
       )}
 
+      {/* --- MODAL PARA INGRESO DE SERIALES --- */}
+      {serialModalOpen && productoParaSeriales && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+              <div>
+                <h3 className="font-black uppercase text-xs tracking-widest italic">Ingresar Seriales</h3>
+                <p className="text-[9px] text-slate-400 font-bold uppercase">{productoParaSeriales.nombre}</p>
+              </div>
+              <button onClick={() => setSerialModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <label className="text-[10px] font-black text-slate-400 uppercase">
+                Un serial por línea. Disponibles: {productoParaSeriales.stock}
+              </label>
+              <textarea
+                autoFocus
+                value={serialesInput}
+                onChange={(e) => setSerialesInput(e.target.value)}
+                placeholder="SN-001&#10;SN-002&#10;SN-003"
+                className="w-full p-4 rounded-2xl border font-mono text-xs h-48 resize-y bg-slate-50 border-slate-200"
+              />
+              <button onClick={handleGuardarSeriales} className="w-full bg-brand text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md hover:bg-indigo-600 transition-all">Confirmar Seriales ({serialesInput.split(/[\n,]+/).filter(Boolean).length})</button>
+            </div>
+          </div>
+        </div>
+      )}
       <VentaDialog dialog={ventaDialog} onClose={cerrarVentaDialog} />
 
     </div>

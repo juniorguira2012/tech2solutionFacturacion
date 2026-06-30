@@ -8,7 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
-import { User } from '../../providers/user.entity';
+import { User } from '../../providers/entities/user.entity';
 
 @Entity('comodatos')
 export class Comodato {

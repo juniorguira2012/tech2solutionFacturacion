@@ -1,13 +1,16 @@
+// src/providers/roles.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Role } from './role.entity';
-import { RolesService } from './roles.service';
 import { RolesController } from './roles.controller';
+import { RolesService } from './roles.service';
+import { Role } from './entities/role.entity'; // Importa la entidad Role
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Role])],
-  providers: [RolesService],
+  imports: [
+    TypeOrmModule.forFeature([Role]) // Registra la entidad en este módulo
+  ],
   controllers: [RolesController],
-  exports: [RolesService],
+  providers: [RolesService],
+  exports: [RolesService], // 🌟 Exportamos solo el servicio, es más seguro y limpio
 })
 export class RolesModule {}

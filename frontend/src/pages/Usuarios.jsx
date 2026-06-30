@@ -76,7 +76,7 @@ const Usuarios = () => {
       }))
     : [
         { id: 'admin', nombre: 'Administrador' },
-        { id: 'supervisor', nombre: 'Supervisor' },
+        { id: 'supervisor', nombre: 'Supervisor' }, 
         { id: 'vendedor', nombre: 'Vendedor' },
         { id: 'cajero', nombre: 'Cajero' }
       ];

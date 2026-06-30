@@ -30,7 +30,7 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion }) => {
   );
 };
 
-const CategoriasSection = ({ mostrarToast }) => {
+const CategoriasSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
   const { categorias, agregarCategoria, actualizarCategoria, eliminarCategoria } = useInventario();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,12 +40,16 @@ const CategoriasSection = ({ mostrarToast }) => {
   const [confirm, setConfirm] = useState({ isOpen: false, onConfirm: null });
 
   const abrirModalParaCrear = () => {
+    // 🛡️ 2. Verificamos el permiso antes de abrir el modal
+    if (!permisos.create) return mostrarToast('No tienes permiso para crear categorías', 'error');
     setIsEditing(false);
     setFormData({ id: null, nombre: '', descripcion: '' });
     setIsModalOpen(true);
   };
 
   const abrirModalParaEditar = (categoria) => {
+    // 🛡️ 3. Verificamos el permiso antes de abrir el modal
+    if (!permisos.edit) return mostrarToast('No tienes permiso para editar categorías', 'error');
     setIsEditing(true);
     setFormData(categoria);
     setIsModalOpen(true);
@@ -75,6 +79,8 @@ const CategoriasSection = ({ mostrarToast }) => {
   };
 
   const handleDelete = (categoria) => {
+    // 🛡️ 4. Verificamos el permiso antes de mostrar la confirmación
+    if (!permisos.delete) return mostrarToast('No tienes permiso para eliminar categorías', 'error');
     setConfirm({
       isOpen: true,
       onConfirm: async () => {
@@ -111,9 +117,11 @@ const CategoriasSection = ({ mostrarToast }) => {
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Organiza tu inventario</p>
           </div>
         </div>
-        <button onClick={abrirModalParaCrear} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-sky-600 transition-all active:scale-95">
-          <Plus size={16} /> Crear Categoría
-        </button>
+        {permisos.create && ( // 🛡️ 5. Condicionamos el botón principal de creación
+          <button onClick={abrirModalParaCrear} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-sky-600 transition-all active:scale-95">
+            <Plus size={16} /> Crear Categoría
+          </button>
+        )}
       </div>
 
       {/* Lista de Categorías */}
@@ -127,14 +135,17 @@ const CategoriasSection = ({ mostrarToast }) => {
                     <h3 className="font-black text-slate-800 uppercase text-xs">{cat.nombre}</h3>
                     <p className="text-[10px] text-slate-400 font-medium mt-1 line-clamp-2">{cat.descripcion || 'Sin descripción'}</p>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => abrirModalParaEditar(cat)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg">
-                      <Edit2 size={14} />
-                    </button>
-                    <button onClick={() => handleDelete(cat)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  {/* 🛡️ 6. Condicionamos los botones de acción dentro de cada tarjeta */}
+                  {(permisos.edit || permisos.delete) && (
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {permisos.edit && (
+                        <button onClick={() => abrirModalParaEditar(cat)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg"><Edit2 size={14} /></button>
+                      )}
+                      {permisos.delete && (
+                        <button onClick={() => handleDelete(cat)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))

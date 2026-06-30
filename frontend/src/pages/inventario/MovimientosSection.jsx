@@ -4,6 +4,7 @@ import { ArrowLeftRight, List, Download, Truck, RefreshCw, Trash2, Search, X, Us
 import { useInventario } from '../../context/InventarioContext';
 import { useVentas } from '../../context/VentasContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePermissions } from '../../hooks/usePermissions'; // Importamos el hook
 import { useUsuarios } from '../../context/UsuariosContext';
 
 // Importación de la lógica y subcomponentes extraídos
@@ -12,13 +13,22 @@ import { FormTransferencia } from './FormTransferencia';
 import { FormMovimientoSimple } from './FormMovimientoSimple';
 import { FormAjuste } from '../../components/FormAjuste';
 
-const MovimientosSection = ({ mostrarToast }) => {
-  const { productos, movimientos, proveedores, tecnicos, seriales, registrarMovimiento, registrarTransferencia, registrarMovimientosMasivos, asignarSerialesTecnico, cargarMovimientos, recargarInventario, almacenesDetallados } = useInventario();
+// 1. 🛡️ Recibimos 'permisos' desde el padre (Inventario.jsx)
+const MovimientosSection = ({ mostrarToast, permisos }) => {
+  
+  // 2. 🛡️ Desestructuramos para tener variables limpias y descriptivas
+  const { create: puedeCrear, edit: puedeEditar, delete: puedeEliminar } = permisos || {};
+  
+  const { 
+    productos, movimientos, proveedores, tecnicos, seriales, registrarMovimiento, 
+    registrarTransferencia, registrarMovimientosMasivos, asignarSerialesTecnico, 
+    cargarMovimientos, recargarInventario, almacenesDetallados 
+  } = useInventario();
+  
   const { historialVentas } = useVentas();
   const { usuario } = useAuth();
   const { usuarios } = useUsuarios();
   
-  // Mapeamos los almacenes detallados a una lista de nombres para el selector
   const almacenesNombres = useMemo(() => almacenesDetallados.map(a => a.nombre), [almacenesDetallados]);
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState('');
 
@@ -36,11 +46,9 @@ const MovimientosSection = ({ mostrarToast }) => {
     setItemsEnCarritoMovimiento([]);
     setBusquedaCarrito('');
     setResultadosBusquedaCarrito([]);
-    // Limpieza para el nuevo modal de asignación
     setAsignacionTecnicoId('');
     setAsignacionSerialesInput('');
     setAsignacionIsLoading(false);
-    // Limpieza de la nueva UI de asignación de seriales
     setSerialesSeleccionados([]);
     setBusquedaSerial('');
     setSerialesDisponibles(seriales.filter(s => s.status === 'disponible'));
@@ -53,10 +61,9 @@ const MovimientosSection = ({ mostrarToast }) => {
     recargarInventario, cerrarModal, mostrarToast, usuario, tipoMovimiento
   );
 
-  // Estados específicos para los flujos masivos y devoluciones que se quedaron en la vista principal
   const [itemsEnCarritoMovimiento, setItemsEnCarritoMovimiento] = useState([]);
   const [busquedaCarrito, setBusquedaCarrito] = useState('');
-  const [resultadosBusquedaCarrito, setResultadosBusquedaCarrito] = useState([]); // Mantener este estado local
+  const [resultadosBusquedaCarrito, setResultadosBusquedaCarrito] = useState([]); 
   const [resultadosBusquedaFactura, setResultadosBusquedaFactura] = useState([]);
 
   const [subTipoDevolucion, setSubTipoDevolucion] = useState('producto'); 
@@ -64,11 +71,9 @@ const MovimientosSection = ({ mostrarToast }) => {
   const [facturaEncontrada, setFacturaEncontrada] = useState(null);
   const [itemsDevolucion, setItemsDevolucion] = useState([]);
 
-  // Estados para el nuevo modal de asignación a técnico
   const [asignacionTecnicoId, setAsignacionTecnicoId] = useState('');
   const [asignacionSerialesInput, setAsignacionSerialesInput] = useState('');
   const [asignacionIsLoading, setAsignacionIsLoading] = useState(false);
-  // Nuevos estados para la selección interactiva de seriales
   const [serialesDisponibles, setSerialesDisponibles] = useState([]);
   const [serialesSeleccionados, setSerialesSeleccionados] = useState([]);
   const [busquedaSerial, setBusquedaSerial] = useState('');
@@ -95,14 +100,19 @@ const MovimientosSection = ({ mostrarToast }) => {
     const filtradas = historialVentas.filter(v => 
       v.id.toString().includes(busquedaFactura) || 
       v.cliente?.toLowerCase().includes(busquedaFactura.toLowerCase())
-    ).slice(0, 5); // Limitamos a 5 resultados para el dropdown
+    ).slice(0, 5); 
     setResultadosBusquedaFactura(filtradas);
   }, [busquedaFactura, historialVentas]);
 
   // Cargar historial al montar el componente
   useEffect(() => {
-    cargarMovimientos();
-  }, [cargarMovimientos]);
+    // 🛡️ CONTROL DE PERMISOS: Usamos el prop directamente
+    if (permisos?.view) {
+      cargarMovimientos();
+    } else {
+      mostrarToast?.("No tienes permisos para visualizar el historial de movimientos", "error");
+    }
+  }, [cargarMovimientos, permisos?.view]);
 
   // Gestión del carrito masivo (Recibir / Despachar)
   const obtenerStockEnAlmacen = (producto, almacen) => {
@@ -112,6 +122,12 @@ const MovimientosSection = ({ mostrarToast }) => {
   };
 
   const agregarAlCarritoMovimiento = (producto) => {
+    // 🛡️ CONTROL DE PERMISOS: Bloqueo lógico con la propiedad desestructurada
+    if (!puedeCrear) {
+      mostrarToast?.("Acción denegada: No tienes permisos de escritura.", "error");
+      return;
+    }
+
     const existe = itemsEnCarritoMovimiento.find(item => item.id === producto.id);
     if (existe) {
       mostrarToast?.("El producto ya está en la lista", "warning");
@@ -135,8 +151,8 @@ const MovimientosSection = ({ mostrarToast }) => {
       ...producto, 
       almacen: almacenInicial,
       lote: '',
-      serials: producto.isSerialized ? [] : undefined, // Array para guardar los seriales
-      serialsInput: producto.isSerialized ? '' : undefined, // String para el textarea
+      serials: producto.isSerialized ? [] : undefined, 
+      serialsInput: producto.isSerialized ? '' : undefined, 
       cantidadMovimiento: tipoMovimiento === 'despachar' ? Math.min(1, stockDisponibleAlmacen) : 1,
     }]);
     setBusquedaCarrito('');
@@ -145,6 +161,12 @@ const MovimientosSection = ({ mostrarToast }) => {
 
   // Función para cargar automáticamente los items de una factura al carrito
   const cargarItemsDeFactura = (factura) => {
+    // 🛡️ CONTROL DE PERMISOS: Una devolución genera un movimiento de entrada (Creación)
+    if (!permisos.create) {
+      mostrarToast?.("No tienes permisos para procesar devoluciones", "error");
+      return;
+    }
+
     const itemsNuevos = factura.items.map(item => {
       const p = productos.find(prod => prod.id === item.productoId);
       return {
@@ -157,7 +179,6 @@ const MovimientosSection = ({ mostrarToast }) => {
       };
     });
 
-    // Evitar duplicados al cargar
     const idsExistentes = new Set(itemsEnCarritoMovimiento.map(i => i.id));
     const itemsUnicos = itemsNuevos.filter(i => !idsExistentes.has(i.id));
     
@@ -169,6 +190,18 @@ const MovimientosSection = ({ mostrarToast }) => {
   };
 
   const abrirModal = (tipo) => {
+    // 🛡️ CONTROL DE PERMISOS: Filtramos las operaciones prohibidas antes de levantar el modal
+    if (!permisos.create && ['recibir', 'despachar', 'transferencia', 'devolucion', 'asignacion_tecnico'].includes(tipo)) {
+      mostrarToast?.(`No tienes autorización para realizar la acción: ${tipo.toUpperCase()}`, "error");
+      return;
+    }
+
+    // Si tuvieras un tipo 'ajuste' que requiera permisos de edición especiales:
+    if (!permisos.edit && tipo === 'ajuste') {
+      mostrarToast?.("No tienes permisos para realizar ajustes de inventario", "error");
+      return;
+    }
+
     setTipoMovimiento(tipo);
     setItemsEnCarritoMovimiento([]);
     setBusquedaCarrito('');
@@ -183,9 +216,8 @@ const MovimientosSection = ({ mostrarToast }) => {
     setBusquedaSerial('');
     setSerialesDisponibles(seriales.filter(s => s.status === 'disponible'));
     
-    // Reseteamos el estado interno del formulario simple a través del hook si es necesario
+    // Reseteamos el estado interno del formulario
     formProps.setMovimientoData({ productoId: '', cantidad: 1, almacenDestino: almacenesNombres[0] || 'Principal', nota: '' });
-    //Limpieza de los campos de ajuste para que el modal aparezca en blanco
     formProps.setAjusteProductoId('');
     formProps.setAjusteAlmacen('');
     formProps.setAjusteCantidad('');
@@ -432,7 +464,18 @@ const exportarKardexCSV = () => {
     );
   }, [busquedaSerial, serialesDisponibles]);
 
-  return (
+ // Puedes dejar este array fuera del componente o justo arriba del return
+const BOTONES_ACCION = [
+  { id: 'multilinea', label: 'Recibo multi-línea', icon: List, color: 'bg-slate-900 hover:bg-brand' },
+  { id: 'recibir', label: 'Recibir', icon: Download, color: 'bg-emerald-500 hover:bg-emerald-600' },
+  { id: 'despachar', label: 'Despachar', icon: Truck, color: 'bg-sky-500 hover:bg-sky-600' },
+  { id: 'transferir', label: 'Transferir', icon: ArrowLeftRight, color: 'bg-indigo-500 hover:bg-indigo-600' },
+  { id: 'ajustar', label: 'Ajustar', icon: RefreshCw, color: 'bg-amber-500 hover:bg-amber-600' },
+  { id: 'devolucion', label: 'Devolución', icon: RefreshCw, color: 'bg-purple-500 hover:bg-purple-600' },
+  { id: 'descartar', label: 'Descartar', icon: Trash2, color: 'bg-rose-500 hover:bg-rose-600' },
+];
+
+return (
     <div className="space-y-5 animate-in fade-in duration-300">
       {/* CARD SUPERIOR DE ACCIONES */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
@@ -446,32 +489,23 @@ const exportarKardexCSV = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => abrirModal('multilinea')} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-brand transition-all active:scale-95">
-            <List size={14} /> Recibo multi-línea
-          </button>
-          <button onClick={() => abrirModal('recibir')} className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-emerald-600 transition-all active:scale-95">
-            <Download size={14} /> Recibir
-          </button>
-          <button onClick={() => abrirModal('despachar')} className="flex items-center gap-2 bg-sky-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-sky-600 transition-all active:scale-95">
-            <Truck size={14} /> Despachar
-          </button>
-          <button onClick={() => abrirModal('transferir')} className="flex items-center gap-2 bg-indigo-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-indigo-600 transition-all active:scale-95">
-            <ArrowLeftRight size={14} /> Transferir
-          </button>
-          <button onClick={() => abrirModal('ajustar')} className="flex items-center gap-2 bg-amber-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-amber-600 transition-all active:scale-95">
-            <RefreshCw size={14} /> Ajustar
-          </button>
-          <button onClick={() => abrirModal('devolucion')} className="flex items-center gap-2 bg-purple-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-purple-600 transition-all active:scale-95">
-            <RefreshCw size={14} /> Devolución
-          </button>
-          <button onClick={() => abrirModal('descartar')} className="flex items-center gap-2 bg-rose-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-rose-600 transition-all active:scale-95">
-            <Trash2 size={14} /> Descartar
-          </button>
-          {/* <button onClick={() => abrirModal('asignar_tecnico')} className="flex items-center gap-2 bg-cyan-500 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md hover:bg-cyan-600 transition-all active:scale-95">
-            <UserCheck size={14} /> Asignar a Técnico
-          </button> */}
-        </div>
+        {/* Mapeo dinámico y limpio de botones controlado por permisos */}
+        {permisos.create && (
+          <div className="flex flex-wrap gap-2">
+            {BOTONES_ACCION.map((btn) => {
+              const IconoBtn = btn.icon;
+              return (
+                <button
+                  key={btn.id}
+                  onClick={() => abrirModal(btn.id)}
+                  className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase shadow-md transition-all active:scale-95 ${btn.color}`}
+                >
+                  <IconoBtn size={14} /> {btn.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* FILTROS DE BÚSQUEDA Y RANGOS */}
@@ -584,9 +618,9 @@ const exportarKardexCSV = () => {
                 </div>
                 <h2 className="text-sm font-black text-slate-800 uppercase italic tracking-wider">
                   {tipoMovimiento === 'multilinea' ? 'Recibo Multi-línea' : 
-                   tipoMovimiento === 'recibir' ? 'Recibir Inventario' : 
-                   tipoMovimiento === 'despachar' ? 'Despachar Inventario' : 
-                   tipoMovimiento === 'devolucion' ? 'Devolución de Stock' : `${tipoMovimiento}`}
+                  tipoMovimiento === 'recibir' ? 'Recibir Inventario' : 
+                  tipoMovimiento === 'despachar' ? 'Despachar Inventario' : 
+                  tipoMovimiento === 'devolucion' ? 'Devolución de Stock' : `${tipoMovimiento}`}
                 </h2>
               </div>
               <button onClick={cerrarModal} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400">
@@ -600,7 +634,6 @@ const exportarKardexCSV = () => {
               {/* 1. FLUJOS MASIVOS (CARRITO) */}
               {esFlujoMovimientoMasivo && (
                 <div className="space-y-4 relative">
-                  {/* Selector de Proveedor para Recibos */}
                   {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Proveedor de Mercancía</label>
@@ -615,7 +648,6 @@ const exportarKardexCSV = () => {
                     </div>
                   )}
 
-                  {/* Buscador de Factura opcional para vincular recibos */}
                   <div className="relative">
                     <RefreshCw className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input 
@@ -827,7 +859,6 @@ const exportarKardexCSV = () => {
                             <p className="text-[9px] font-black text-brand uppercase">Factura: {facturaEncontrada.id}</p>
                             <p className="text-[11px] font-bold text-slate-700">{facturaEncontrada.cliente}</p>
                           </div>
-                          {/* Mapeo de items devueltos de factura acortado aquí para limpieza */}
                           <button onClick={procesarDevolucionFactura} className="w-full py-4 bg-purple-500 hover:bg-purple-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest">Procesar Devolución Total</button>
                         </div>
                       )}
@@ -839,15 +870,15 @@ const exportarKardexCSV = () => {
               {/* 3. SUBCOMPONENTE DE TRANSFERENCIAS DIRECTAS */}
               {tipoMovimiento === 'transferir' && (
                 <FormTransferencia 
-                  productos={productos} // Productos se mantiene del contexto principal
-                  almacenesDisponibles={almacenesNombres} // <-- Usamos los nombres de los almacenes del contexto
+                  productos={productos}
+                  almacenesDisponibles={almacenesNombres}
                   onSubmit={formProps.ejecutarMovimiento}
                   {...formProps}
                 />
               )}
 
-              {/* 4. MOVIMIENTOS SIMPLES DIRECTOS (Ajustar, Descartar) */}
-              {(tipoMovimiento === 'descartar') && (
+              {/* 4. MOVIMIENTOS SIMPLES DIRECTOS (Descartar) */}
+              {tipoMovimiento === 'descartar' && (
                 <FormMovimientoSimple 
                   tipoMovimiento={tipoMovimiento}
                   productos={productos}
@@ -857,18 +888,17 @@ const exportarKardexCSV = () => {
                   setMovimientoData={formProps.setMovimientoData}
                 />
               )}
-              {/* 5. NUEVO: FORMULARIO DE AJUSTE AVANZADO (Con Almacén, Cantidad y Costo) */}
+
+              {/* 5. FORMULARIO DE AJUSTE AVANZADO */}
               {tipoMovimiento === 'ajustar' && (
                 <FormAjuste 
                   productos={productos}
-                  almacenesDisponibles={almacenesNombres} // Tus almacenes del contexto general
+                  almacenesDisponibles={almacenesNombres}
                   onSubmit={formProps.ejecutarMovimiento}
-                  
-                  // Mapeo explícito de los estados específicos de ajuste desde el hook
                   ajusteProductoId={formProps.ajusteProductoId}
                   setAjusteProductoId={formProps.setAjusteProductoId}
-                  almacenDestino={formProps.ajusteAlmacen}       // Enlazado con ajusteAlmacen del hook
-                  setAlmacenDestino={formProps.setAjusteAlmacen}  // Enlazado con setAjusteAlmacen del hook
+                  almacenDestino={formProps.ajusteAlmacen}
+                  setAlmacenDestino={formProps.setAjusteAlmacen}
                   ajusteCantidad={formProps.ajusteCantidad}
                   setAjusteCantidad={formProps.setAjusteCantidad}
                   ajusteCosto={formProps.ajusteCosto}

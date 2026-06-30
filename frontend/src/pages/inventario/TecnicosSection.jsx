@@ -3,7 +3,7 @@ import { CheckCircle, ClipboardList, Edit2, Mail, PackageSearch, Phone, Search, 
 import { useAuth } from '../../context/AuthContext';
 import { useInventario } from '../../context/InventarioContext';
 
-const TecnicosSection = ({ mostrarToast }) => {
+const TecnicosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
 
   const {
     seriales,
@@ -130,12 +130,20 @@ const TecnicosSection = ({ mostrarToast }) => {
   };
 
   const abrirNuevoTecnico = () => {
+    // 🛡️ 2. Verificación de permiso de creación
+    if (!permisos.create) {
+      return mostrarToast('No tienes permiso para registrar nuevos técnicos', 'error');
+    }
     setEditandoTecnicoId(null);
     setFormTecnico({ nombre: '', telefono: '', email: '' });
     setModalTecnicoOpen(true);
   };
 
   const abrirEditarTecnico = (tecnico) => {
+    // 🛡️ 3. Verificación de permiso de edición
+    if (!permisos.edit) {
+      return mostrarToast('No tienes permiso para editar técnicos', 'error');
+    }
     setEditandoTecnicoId(tecnico.id);
     setFormTecnico({
       nombre: tecnico.nombre || '',
@@ -151,6 +159,12 @@ const TecnicosSection = ({ mostrarToast }) => {
 
     if (!nombre) {
       mostrarToast?.('El nombre del técnico es obligatorio', 'error');
+      return;
+    }
+
+    // 🛡️ 4. Verificación de permisos de creación/edición
+    if ((editandoTecnicoId && !permisos.edit) || (!editandoTecnicoId && !permisos.create)) {
+      mostrarToast("No tienes permiso para realizar esta acción", "error");
       return;
     }
 
@@ -181,6 +195,11 @@ const TecnicosSection = ({ mostrarToast }) => {
   };
 
   const borrarTecnico = async (tecnico) => {
+    // 🛡️ 5. Verificación de permiso de eliminación
+    if (!permisos.delete) {
+      return mostrarToast('No tienes permiso para eliminar técnicos', 'error');
+    }
+
     const confirmar = window.confirm(`¿Eliminar a ${tecnico.nombre} del catálogo de técnicos?`);
     if (!confirmar) return;
 
@@ -218,6 +237,11 @@ const handleDevolverSerial = async (serialNumber) => {
 };
 
   const handleDevolucionMasiva = async (e) => {
+    // 🛡️ 6. Verificación de permiso de creación (ya que genera un movimiento de entrada)
+    if (!permisos.create) {
+      return mostrarToast('No tienes permiso para procesar devoluciones', 'error');
+    }
+
     e.preventDefault();
     const serialesADevolver = devolucionSerialesInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
 
@@ -260,6 +284,10 @@ const handleDevolverSerial = async (serialNumber) => {
   };
   const entregarProducto = async (e) => {
     e.preventDefault();
+    // 🛡️ 7. Verificación de permiso de creación (ya que genera un movimiento de salida)
+    if (!permisos.create) {
+      return mostrarToast('No tienes permiso para registrar entregas', 'error');
+    }
 
     if (!productoSeleccionado) {
       mostrarToast?.('Selecciona un producto válido', 'error');
@@ -411,24 +439,27 @@ const handleDevolverSerial = async (serialNumber) => {
               <div className="p-3">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-[10px] font-black text-slate-800 uppercase truncate">{tecnico.nombre}</p>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => abrirEditarTecnico(tecnico)}
-                      className="h-7 w-7 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-brand hover:border-brand/30 flex items-center justify-center transition-colors"
-                      title="Editar técnico"
-                    >
-                      <Edit2 size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => borrarTecnico(tecnico)}
-                      className="h-7 w-7 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 flex items-center justify-center transition-colors"
-                      title="Eliminar técnico"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
+                  {/* 🛡️ 9. Condicionamos los botones de acción por fila */}
+                  {(permisos.edit || permisos.delete) && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      {permisos.edit && (
+                        <button
+                          type="button"
+                          onClick={() => abrirEditarTecnico(tecnico)}
+                          className="h-7 w-7 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-brand hover:border-brand/30 flex items-center justify-center transition-colors"
+                          title="Editar técnico"
+                        ><Edit2 size={13} /></button>
+                      )}
+                      {permisos.delete && (
+                        <button
+                          type="button"
+                          onClick={() => borrarTecnico(tecnico)}
+                          className="h-7 w-7 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 flex items-center justify-center transition-colors"
+                          title="Eliminar técnico"
+                        ><Trash2 size={13} /></button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="mt-2 space-y-1">
                   <p className="flex items-center gap-2 text-[9px] font-bold text-slate-400 truncate">
@@ -612,7 +643,7 @@ const handleDevolverSerial = async (serialNumber) => {
 
           <button
             type="submit"
-            disabled={guardando}
+            disabled={guardando || !permisos.create} // 🛡️ 10. Deshabilitamos si no hay permiso
             className="w-full h-12 bg-slate-900 hover:bg-brand disabled:opacity-60 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
           >
             <CheckCircle size={16} />
@@ -621,7 +652,7 @@ const handleDevolverSerial = async (serialNumber) => {
         </form>
 
         {/* Modal de Devolución Masiva */}
-        {devolucionModalOpen && (
+        {devolucionModalOpen && permisos.create && ( // 🛡️ 11. Condicionamos el modal
           <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
             <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -695,7 +726,7 @@ const handleDevolverSerial = async (serialNumber) => {
         </aside>
       </div>
 
-      {modalTecnicoOpen && (
+      {modalTecnicoOpen && (permisos.create || permisos.edit) && ( // 🛡️ 12. Condicionamos el modal
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">

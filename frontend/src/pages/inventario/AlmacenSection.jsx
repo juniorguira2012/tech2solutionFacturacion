@@ -124,7 +124,7 @@ const CategoryBreakdownModal = ({ isOpen, onClose, almacen, productos, categoria
   );
 };
 
-const AlmacenSection = ({ mostrarToast }) => {
+const AlmacenSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
   const [isAlmacenModalOpen, setIsAlmacenModalOpen] = useState(false);
   const [isUbicacionModalOpen, setIsUbicacionModalOpen] = useState(false);
   const [selectedAlmacen, setSelectedAlmacen] = useState(null);
@@ -186,6 +186,10 @@ const AlmacenSection = ({ mostrarToast }) => {
   }, [vistaAlmacen]);
 
   const handleAbrirCrear = () => {
+    if (!permisos.create) {
+      mostrarToast("No tienes permiso para crear almacenes", "error");
+      return;
+    }
     setAlmacenFormData({ nombre: '', descripcion: '' });
     setEditandoAlmacenId(null);
     setIsEditingAlmacen(false);
@@ -207,6 +211,10 @@ const AlmacenSection = ({ mostrarToast }) => {
   };
 
   const handleAbrirEditar = (almacen) => {
+    if (!permisos.edit) {
+      mostrarToast("No tienes permiso para editar almacenes", "error");
+      return;
+    }
     setAlmacenFormData({ nombre: almacen.nombre, descripcion: almacen.descripcion });
     setEditandoAlmacenId(almacen.id);
     setIsEditingAlmacen(true);
@@ -214,6 +222,10 @@ const AlmacenSection = ({ mostrarToast }) => {
   };
 
   const handleEliminarAlmacen = (almacen) => {
+    if (!permisos.delete) {
+      mostrarToast("No tienes permiso para eliminar almacenes", "error");
+      return;
+    }
     mostrarConfirm({
       titulo: '¿Eliminar Almacén?',
       descripcion: `¿Estás seguro de que deseas eliminar permanentemente el almacén "${almacen.nombre}"? Esta acción no se puede deshacer.`,
@@ -237,6 +249,10 @@ const AlmacenSection = ({ mostrarToast }) => {
 
   const handleGuardarAlmacen = async (e) => {
     e.preventDefault();
+    if ((isEditingAlmacen && !permisos.edit) || (!isEditingAlmacen && !permisos.create)) {
+      mostrarToast("No tienes permiso para realizar esta acción", "error");
+      return;
+    }
     try {
       if (isEditingAlmacen) {
         await actualizarAlmacen({ id: editandoAlmacenId, ...almacenFormData });
@@ -252,6 +268,10 @@ const AlmacenSection = ({ mostrarToast }) => {
   };
 
   const handleAbrirEditarUbicacion = (almacen, ubi, idx) => {
+    if (!permisos.edit) {
+      mostrarToast("No tienes permiso para editar ubicaciones", "error");
+      return;
+    }
     setSelectedAlmacen(almacen);
     setUbicacionFormData(ubi);
     setEditandoUbicacionIdx(idx);
@@ -260,6 +280,10 @@ const AlmacenSection = ({ mostrarToast }) => {
   };
 
   const handleEliminarUbicacion = (almacen, idx) => {
+    if (!permisos.delete) {
+      mostrarToast("No tienes permiso para eliminar ubicaciones", "error");
+      return;
+    }
     const ubicacion = almacen.ubicaciones[idx];
     mostrarConfirm({
       titulo: '¿Eliminar Ubicación?',
@@ -281,6 +305,10 @@ const AlmacenSection = ({ mostrarToast }) => {
 
   const handleGuardarUbicacion = async (e) => {
     e.preventDefault();
+    if (!permisos.edit) {
+      mostrarToast("No tienes permiso para guardar ubicaciones", "error");
+      return;
+    }
     try {
       let nuevasUbicaciones;
       if (isEditingUbicacion) {
@@ -352,12 +380,14 @@ const AlmacenSection = ({ mostrarToast }) => {
               <List size={16} />
             </button>
           </div>
-          <button 
-            onClick={handleAbrirCrear}
-            className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-indigo-600 transition-all active:scale-95"
-          >
-            <Plus size={16} /> Crear almacén
-          </button>
+          {permisos.create && ( // 🛡️ 2. Condicionamos el botón de "Crear almacén"
+            <button 
+              onClick={handleAbrirCrear}
+              className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-indigo-600 transition-all active:scale-95"
+            >
+              <Plus size={16} /> Crear almacén
+            </button>
+          )}
         </div>
       </div>
 
@@ -392,35 +422,43 @@ const AlmacenSection = ({ mostrarToast }) => {
                   <p className="text-[9px] text-slate-400 font-bold uppercase">{almacen.descripcion || 'Sin descripción'}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                <button 
-                  onClick={() => {
-                    setSelectedAlmacen(almacen);
-                    setIsUbicacionModalOpen(true);
-                  }}
-                  className="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                  title="Agregar ubicación"
-                  aria-label={`Agregar ubicación a ${almacen.nombre}`}
-                >
-                  <MapPin size={16} />
-                </button>
-                <button
-                  onClick={() => handleAbrirEditar(almacen)}
-                  className="p-2 text-slate-500 bg-white border border-slate-100 rounded-lg hover:bg-amber-50 hover:text-amber-600 hover:border-amber-100 transition-all shadow-sm"
-                  title="Editar almacén"
-                  aria-label={`Editar almacén ${almacen.nombre}`}
-                >
-                  <Edit2 size={16} />
-                </button>
-                <button
-                  onClick={() => handleEliminarAlmacen(almacen)}
-                  className="p-2 text-slate-400 bg-white border border-slate-100 rounded-lg hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all shadow-sm"
-                  title="Eliminar almacén"
-                  aria-label={`Eliminar almacén ${almacen.nombre}`}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
+              {(permisos.edit || permisos.delete) && ( // 🛡️ 3. Condicionamos los botones de acción
+                <div className="flex items-center gap-1">
+                  {permisos.edit && (
+                    <button 
+                      onClick={() => {
+                        setSelectedAlmacen(almacen);
+                        setIsUbicacionModalOpen(true);
+                      }}
+                      className="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                      title="Agregar ubicación"
+                      aria-label={`Agregar ubicación a ${almacen.nombre}`}
+                    >
+                      <MapPin size={16} />
+                    </button>
+                  )}
+                  {permisos.edit && (
+                    <button
+                      onClick={() => handleAbrirEditar(almacen)}
+                      className="p-2 text-slate-500 bg-white border border-slate-100 rounded-lg hover:bg-amber-50 hover:text-amber-600 hover:border-amber-100 transition-all shadow-sm"
+                      title="Editar almacén"
+                      aria-label={`Editar almacén ${almacen.nombre}`}
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                  )}
+                  {permisos.delete && (
+                    <button
+                      onClick={() => handleEliminarAlmacen(almacen)}
+                      className="p-2 text-slate-400 bg-white border border-slate-100 rounded-lg hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all shadow-sm"
+                      title="Eliminar almacén"
+                      aria-label={`Eliminar almacén ${almacen.nombre}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             
             <div className="p-5 flex-1 space-y-6">
@@ -435,20 +473,26 @@ const AlmacenSection = ({ mostrarToast }) => {
                           <span className="text-[8px] font-bold text-indigo-600 uppercase tracking-tighter bg-white px-1.5 py-0.5 rounded border border-indigo-50">{ubi.codigo}</span>
                           <span className="text-[7px] font-black text-slate-400 uppercase italic">{ubi.tipo}</span>
                         </div>
-                        <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover/ubi:opacity-100 transition-opacity">
-                          <button 
-                            onClick={() => handleAbrirEditarUbicacion(almacen, ubi, idx)}
-                            className="p-1 bg-white border border-slate-100 rounded text-slate-400 hover:text-amber-500 shadow-sm transition-colors"
-                          >
-                            <Edit2 size={10} />
-                          </button>
-                          <button 
-                            onClick={() => handleEliminarUbicacion(almacen, idx)}
-                            className="p-1 bg-white border border-slate-100 rounded text-slate-400 hover:text-rose-500 shadow-sm transition-colors"
-                          >
-                            <Trash2 size={10} />
-                          </button>
-                        </div>
+                        {(permisos.edit || permisos.delete) && ( // 🛡️ 4. Condicionamos acciones de ubicación
+                          <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover/ubi:opacity-100 transition-opacity">
+                            {permisos.edit && (
+                              <button 
+                                onClick={() => handleAbrirEditarUbicacion(almacen, ubi, idx)}
+                                className="p-1 bg-white border border-slate-100 rounded text-slate-400 hover:text-amber-500 shadow-sm transition-colors"
+                              >
+                                <Edit2 size={10} />
+                              </button>
+                            )}
+                            {permisos.delete && (
+                              <button 
+                                onClick={() => handleEliminarUbicacion(almacen, idx)}
+                                className="p-1 bg-white border border-slate-100 rounded text-slate-400 hover:text-rose-500 shadow-sm transition-colors"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -517,7 +561,7 @@ const AlmacenSection = ({ mostrarToast }) => {
       </div>
 
       {/* Modal Crear Almacén */}
-      {isAlmacenModalOpen && (
+      {isAlmacenModalOpen && (permisos.create || permisos.edit) && ( // 🛡️ 5. Condicionamos el modal
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
@@ -546,7 +590,7 @@ const AlmacenSection = ({ mostrarToast }) => {
       )}
 
       {/* Modal Agregar Ubicación */}
-      {isUbicacionModalOpen && (
+      {isUbicacionModalOpen && permisos.edit && ( // 🛡️ 6. Condicionamos el modal de ubicación
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">

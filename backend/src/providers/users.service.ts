@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './user.entity';
-import { CreateUserDto, UpdateUserDto } from './user.dto';
+import { User } from './entities/user.entity';
+import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 
