@@ -21,14 +21,13 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Post()
-  @UseGuards(InventoryWriteGuard)
+  @UseGuards(InventoryWriteGuard) // 📊 Luego evalúa si tiene permiso para crear
   create(@Body() createProductDto: CreateProductDto) {
     return this.productsService.create(createProductDto);
   }
 
   @Get()
   findAll(@Query('isActive') isActive?: string) {
-    // Si no se envía el parámetro, por defecto mostramos los activos (true)
     let showActive: boolean | 'all' = true;
     if (isActive === 'false') showActive = false;
     if (isActive === 'all') showActive = 'all';
@@ -41,7 +40,7 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  @UseGuards(InventoryWriteGuard)
+  @UseGuards(InventoryWriteGuard) // 📊 Evalúa si tiene permiso para editar
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateProductDto: UpdateProductDto,
@@ -50,7 +49,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @UseGuards(InventoryWriteGuard)
+  @UseGuards(InventoryWriteGuard) // 📊 Evalúa si tiene permiso para eliminar
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.productsService.remove(id);
   }

@@ -11,7 +11,7 @@ export class DatabaseService {
   private readonly logger = new Logger(DatabaseService.name);
 
   // ⏱️ TAREA PROGRAMADA
-  @Cron('0 1 * * *')
+  @Cron('30 1 * * *')
   async handleAutomaticBackup() {
     this.logger.log('🚀 [CRON] Iniciando el proceso de backup automático diario...');
     let filePath: string | null = null;
