@@ -35,6 +35,10 @@ services:
       CORS_ORIGIN: "https://inventario.oneredrd.com"
       FRONTEND_URL: "https://inventario.oneredrd.com"
       DATABASE_SYNCHRONIZE: "false" # Deshabilitado a favor de migraciones
+
+      NEXTCLOUD_USER: "juniorguira2012@gmail.com"
+      NEXTCLOUD_APP_PASSWORD: "Mamatingo271990"
+      
       # Configuración de Gmail
       EMAIL_HOST: "smtp.gmail.com"
       EMAIL_PORT: "587"

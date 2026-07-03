@@ -34,100 +34,110 @@ export const InventarioProvider = ({ children }) => {
 
   const [unidadesMedida, setUnidadesMedida] = useState([]);
 
-  // --- Helpers ---
   const getInventoryPermission = useCallback(() => {
     if (usuario?.rol === 'admin') return 'full';
+    
     try {
+      // Leemos la configuración que AuthContext ahora mantiene actualizada.
       const savedRoles = localStorage.getItem('posfactura_roles_config');
-      const config = savedRoles ? JSON.parse(savedRoles) : {};
-      return config[usuario?.rol]?.modules?.inventario || 'none';
-    } catch { return 'none'; }
+      const rolesConfig = savedRoles ? JSON.parse(savedRoles) : {};
+      
+      // Extraemos los permisos específicos para el rol del usuario y el módulo de inventario.
+      const inventarioPerms = rolesConfig[usuario?.rol]?.modules?.inventario;
+      
+      if (!inventarioPerms) return 'none';
+      
+      // Devolvemos el permiso más alto disponible para el header HTTP.
+      if (inventarioPerms.edit) return 'edit';
+      if (inventarioPerms.view) return 'view';
+      
+      return 'none';
+    } catch (error) {
+      console.error("Error al obtener permisos de inventario:", error);
+      return 'none'; 
+    }
   }, [usuario?.rol]);
 
-  const getAuthHeaders = useCallback(() => ({
-    'Content-Type': 'application/json',
-    'x-user-id': usuario?.id || '', // Aseguramos que el ID del usuario se envíe
-    'x-user-role': usuario?.rol || '',
-    'x-inventory-permission': getInventoryPermission(),
-  }), [usuario?.id, usuario?.rol, getInventoryPermission]);
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('posfactura_token');
+
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : '', 
+      'x-user-id': usuario?.id || '', 
+      'x-user-role': usuario?.rol || '',
+      'x-inventory-permission': getInventoryPermission(),
+    };
+  }, [usuario?.id, usuario?.rol, getInventoryPermission]);
 
   // --- EFECTO PRINCIPAL DE CARGA DE DATOS ---
   // Este efecto centraliza todas las peticiones iniciales para optimizar el rendimiento.
-  // Se ejecuta cuando el usuario cambia, se fuerza una recarga (refreshIndex) o cambia el filtro de eliminados.
   useEffect(() => {
     if (!usuario) return;
+  
+    const headers = getAuthHeaders();
+  
+    // 🚀 MEJORA 1: Función para cargar los productos de forma prioritaria.
+    // Esta función se encarga de la carga principal y controla el estado de 'loading'.
+    const cargarProductosPrioritarios = async () => {
+      setLoading(true);
+      setErrorConexion(null);
+      try {
+        const productsUrl = `${API_URL}?isActive=${verEliminados === 'all' ? 'all' : (verEliminados ? 'false' : 'true')}`;
+        const res = await fetch(productsUrl, { headers });
+        if (!res.ok) throw new Error(`Error ${res.status} al cargar productos`);
+        const data = await res.json();
+        setProductos(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Error crítico al cargar productos:", error);
+        setErrorConexion(error.message);
+        setProductos([]); // Aseguramos un estado limpio en caso de error
+      } finally {
+        setLoading(false); // Liberamos el loading tan pronto como los productos están listos.
+      }
+    };
+  
+    // 🚀 MEJORA 2: Función para cargar el resto de los datos en segundo plano.
+    // Estos datos no bloquean la renderización de la lista de productos.
+    const cargarDatosSecundarios = async () => {
+      const fetchResource = async (url, setter) => {
+        try {
+          const response = await fetch(url, { headers });
+          if (!response.ok) throw new Error(`Fallo en ${url}`);
+          const data = await response.json();
+          setter(Array.isArray(data) ? data : []);
+        } catch (error) {
+          console.warn(`Advertencia al cargar recurso secundario ${url}:`, error.message);
+        }
+      };
+  
+      // Ejecutamos todas las cargas secundarias en paralelo.
+      Promise.all([
+        fetchResource(`${API_BASE_URL}/providers`, setProveedores),
+        fetchResource(`${API_BASE_URL}/warehouses`, setAlmacenesDetallados),
+        fetchResource(`${API_BASE_URL}/units-of-measure`, setUnidadesMedida),
+        fetchResource(`${API_BASE_URL}/movements/technicians`, setTecnicos),
+        fetchResource(`${API_BASE_URL}/categories`, setCategorias),
+        fetchResource(`${API_BASE_URL}/product-serials`, setSeriales),
+        fetchResource(`${API_BASE_URL}/comodatos`, setPrestamos),
+      ]);
+    };
+  
+    // 🚀 MEJORA 3: Orquestamos la carga.
+    cargarProductosPrioritarios();
+    cargarDatosSecundarios();
+  
+  }, [usuario, refreshIndex, verEliminados, getAuthHeaders, API_URL, API_BASE_URL]);
 
-    setLoading(true);
-    setErrorConexion(null);
+  // --- GESTIÓN DE UNIDADES DE MEDIDA (DB) ---
+  const cargarUnidadesMedida = useCallback(async () => {
+    if (!usuario) return;
     const headers = getAuthHeaders();
     const fetchResource = async (url) => {
       const response = await fetch(url, { headers });
       if (!response.ok) throw new Error(`Fallo al cargar ${url}: ${response.statusText}`);
       return response.json();
     };
-
-    const productsUrl = `${API_URL}?isActive=${verEliminados === 'all' ? 'all' : (verEliminados ? 'false' : 'true')}`;
-
-    Promise.allSettled([
-      fetchResource(productsUrl),
-      fetchResource(`${API_BASE_URL}/providers`),
-      fetchResource(`${API_BASE_URL}/warehouses`),
-      fetchResource(`${API_BASE_URL}/units-of-measure`),
-      fetchResource(`${API_BASE_URL}/movements/technicians`),
-      fetchResource(`${API_BASE_URL}/categories`),
-      fetchResource(`${API_BASE_URL}/product-serials`),
-      fetchResource(`${API_BASE_URL}/comodatos`),
-    ]).then(results => {
-      const [
-        productsResult,
-        providersResult,
-        warehousesResult,
-        unitsResult,
-        techniciansResult,
-        categoriesResult,
-        serialsResult,
-        prestamosResult,
-      ] = results;
-
-      if (productsResult.status === 'fulfilled') setProductos(Array.isArray(productsResult.value) ? productsResult.value : []);
-      else console.error("Error cargando productos:", productsResult.reason);
-
-      if (providersResult.status === 'fulfilled') setProveedores(Array.isArray(providersResult.value) ? providersResult.value : []);
-      else console.error("Error cargando proveedores:", providersResult.reason);
-
-      if (warehousesResult.status === 'fulfilled') setAlmacenesDetallados(Array.isArray(warehousesResult.value) ? warehousesResult.value : []);
-      else console.error("Error cargando almacenes:", warehousesResult.reason);
-
-      if (unitsResult.status === 'fulfilled') setUnidadesMedida(Array.isArray(unitsResult.value) ? unitsResult.value : []);
-      else console.error("Error cargando unidades de medida:", unitsResult.reason);
-
-      if (techniciansResult.status === 'fulfilled') setTecnicos(Array.isArray(techniciansResult.value) ? techniciansResult.value : []);
-      else console.error("Error cargando técnicos:", techniciansResult.reason);
-
-      if (categoriesResult.status === 'fulfilled') setCategorias(Array.isArray(categoriesResult.value) ? categoriesResult.value : []);
-      else console.error("Error cargando categorías:", categoriesResult.reason);
-
-      if (serialsResult.status === 'fulfilled') setSeriales(Array.isArray(serialsResult.value) ? serialsResult.value : []);
-      else console.error("Error cargando seriales:", serialsResult.reason);
-
-      if (prestamosResult.status === 'fulfilled') setPrestamos(Array.isArray(prestamosResult.value) ? prestamosResult.value : []);
-      else console.error("Error cargando préstamos:", prestamosResult.reason);
-
-      // Si alguna de las promesas falló, se puede registrar aquí.
-      const failedPromises = results.filter(r => r.status === 'rejected');
-      if (failedPromises.length > 0) {
-        setErrorConexion(`Fallaron ${failedPromises.length} recursos al cargar.`);
-      }
-
-    }).finally(() => {
-      setLoading(false);
-    });
-
-  }, [usuario, refreshIndex, verEliminados, getAuthHeaders, API_URL, API_BASE_URL]);
-
-  // --- GESTIÓN DE UNIDADES DE MEDIDA (DB) ---
-  const cargarUnidadesMedida = useCallback(async () => {
-    if (!usuario) return;
     try {
       const res = await fetch(`${API_BASE_URL}/units-of-measure`, { headers: getAuthHeaders() });
       if (!res.ok) {
@@ -689,51 +699,41 @@ const registrarMovimientosMasivos = async (payload) => {
     }
   };
 
-  // 4. Actualizar Producto (CORREGIDO: nombre y limpieza de datos)
-  const actualizarProducto = async (editado) => {
-    try {
-      // Quitamos objetos relacionales y metadatos antes de enviar
-      const { 
-        id, 
-        createdAt, 
-        updatedAt, 
-        countItems, 
-        proveedor, 
-        warehouseStocks, 
-        proveedorId, 
-        ...datosParaEnviar 
-      } = editado;
+  const actualizarProducto = async (id, productoEditado) => {
+  try {
+    // 1. 🔑 Obtenemos los headers de autenticación
+    const headers = getAuthHeaders(); 
 
-      const res = await fetch(`${API_URL}/${id}`, {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          ...datosParaEnviar,
-          precio: Number(editado.precio) || 0,
-          stock: Number(editado.stock) || 0,
-          proveedorId: proveedorId ? Number(proveedorId) : null
-        })
-      });
+    // 🚀 NUEVO: Sacamos el id y las fechas para que NestJS no rebote con Error 400
+    // Usamos '_ ' para ignorar el id porque ya lo tenemos como parámetro en la función
+    const { id: _, createdAt, updatedAt, ...datosLimpios } = productoEditado;
 
-      // Intentamos obtener la respuesta del servidor incluso si falló
-      const data = await res.json();
+    // 2. Enviamos la petición PATCH incluyendo los headers del token
+    const res = await fetch(`${API_BASE_URL}/products/${id}`, {
+      method: 'PATCH',
+      headers: {
+        ...headers, 
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(datosLimpios), // 👈 ¡AHORA ENVIAMOS SOLO LOS DATOS LIMPIOS!
+    });
 
-      if (!res.ok) {
-        // Imprimimos el error real del backend para saber qué campo falló
-        console.error("Error detallado del servidor (400):", data);
-        // Si el backend envía un mensaje (de ValidationPipe), lo usamos
-        const mensaje = Array.isArray(data.message) ? data.message.join(', ') : data.message;
-        throw new Error(mensaje || 'Error en el servidor');
-      }
-      
-      setProductos(prev => prev.map(p => p.id === data.id ? data : p));
-      setRefreshIndex(prev => prev + 1); // Dispara la recarga global de catálogos y productos
-      return true;
-    } catch (err) {
-      console.error("Error al actualizar:", err);
-      throw err; // Re-lanzamos el error
+    if (!res.ok) {
+      // Si el backend responde con un error, extraemos el mensaje
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Error al actualizar el producto');
     }
-  };
+
+    const data = await res.json();
+    
+    // 🚀 Actualizamos el estado local con los datos frescos del producto.
+    setProductos(prev => prev.map(p => p.id === id ? data : p));
+    return data;
+  } catch (err) {
+    console.error("Error en actualizarProducto:", err);
+    throw err; 
+  }
+};
 
   // --- GESTIÓN DE CATEGORÍAS (DB) ---
   const agregarCategoria = async (categoriaData) => {
@@ -859,8 +859,7 @@ const registrarMovimientosMasivos = async (payload) => {
       }
 
       const res = await fetch(url, { headers });
-      
-      // 🛡️ SI EL BACKEND RESPONDE 401 (Ej: El Cajero o Técnico no tienen permiso en NestJS)
+    
       if (res.status === 401) {
         console.warn("401: Este perfil no tiene autorización en el backend para ver conteos físicos.");
         setConteos([]); // Limpiamos el estado de forma segura para que no se quede cargando

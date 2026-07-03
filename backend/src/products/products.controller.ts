@@ -28,6 +28,7 @@ export class ProductsController {
 
   @Get()
   findAll(@Query('isActive') isActive?: string) {
+    console.log("📢 ¡PROBANDO SI EL BACKEND EN PORTAINER SE ACTUALIZÓ DE VERDAD! 📢");
     let showActive: boolean | 'all' = true;
     if (isActive === 'false') showActive = false;
     if (isActive === 'all') showActive = 'all';

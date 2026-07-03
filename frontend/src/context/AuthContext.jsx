@@ -12,19 +12,25 @@ export const AuthProvider = ({ children }) => {
   // VITE_API_URL debe ser la URL completa del backend, ej: http://localhost:3000
   // Si no está definida, se usará una ruta relativa, ideal para producción.
   const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-
-  // Debug: log para verificar la URL
-  console.log('API_BASE_URL:', API_BASE_URL);
-
+  
   const cargarPermisos = useCallback(async (rolName) => {
     try {
       const res = await fetch(`${API_BASE_URL}/roles`);
       if (!res.ok) return null;
       const roles = await res.json();
+
+      // 🚀 MEJORA 1: Guardamos la configuración completa de roles en localStorage.
+      // Esto servirá como un "caché" para que otros componentes puedan leerla.
+      if (Array.isArray(roles) && roles.length > 0) {
+        const rolesMap = Object.fromEntries(roles.map(r => [r.name, r.config]));
+        localStorage.setItem('posfactura_roles_config', JSON.stringify(rolesMap));
+      } else {
+        localStorage.removeItem('posfactura_roles_config');
+      }
+
       const miRol = roles.find(r => r.name === rolName);
       
       if (miRol) return miRol.config;
-
       // Fallback: Si no hay roles en la DB pero es admin, dar permisos full
       if (rolName === 'admin') {
         return {
@@ -38,14 +44,14 @@ export const AuthProvider = ({ children }) => {
     }
   }, [API_BASE_URL]);
 
-  // 1. Inicialización Segura
+  // Inicialización Segura
   useEffect(() => {
     const inicializarAuth = async () => {
       try {
         const userSaved = localStorage.getItem('posfactura_user');
 
         if (userSaved && userSaved !== "undefined") {
-          const user = JSON.parse(userSaved);
+          const user = JSON.parse(userSaved); // El usuario ya está guardado
           setUsuario(user);
           const config = await cargarPermisos(user.rol);
           setPermisos(config);
@@ -60,10 +66,9 @@ export const AuthProvider = ({ children }) => {
     inicializarAuth();
   }, []);
 
-  // 2. Función de Login mejorada
+  // Función de Login mejorada
   const login = useCallback(async (identifier, password) => {
     try {
-      console.log('Iniciando intento de login para:', identifier);
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
@@ -71,20 +76,18 @@ export const AuthProvider = ({ children }) => {
         },
         body: JSON.stringify({
           email: identifier,
+          identifier: identifier, // 🚀 CORRECCIÓN: Usamos 'identifier' que es lo que el backend espera.
           password,
         }),
       });
 
       if (!response.ok) {
-        // En caso de 500, el body puede no ser JSON. Intentamos leerlo como texto.
         const errorText = await response.text();
         let msg = 'Error de autenticación';
         try {
           const errorJson = JSON.parse(errorText);
           msg = errorJson.message || msg;
         } catch (e) {}
-
-        console.error(`[Auth] Error ${response.status}:`, errorText);
 
         return {
           success: false,
@@ -94,13 +97,12 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
-      // DEBUG: Para ver qué devuelve el servidor realmente
-      console.log("Respuesta login:", data);
-
-      if (data.user || data.id) { // A veces el backend devuelve el user directamente
-        const user = data.user || data;
+      if (data.user || data.id || data.access_token || data.token) { 
+        const user = data.user || (data.token || data.access_token ? data : data);
         
-        // Según tu SQL, la columna es 'isActive'. Validamos ambas posibilidades.
+        // 🚀 CAPTURA DEL TOKEN (Soporta si viene como access_token o token)
+        const tokenReal = data.access_token || data.token || user.token || user.access_token;
+
         if (user.estado === 'inactivo' || user.isActive === false) {
           return {
             success: false,
@@ -108,16 +110,25 @@ export const AuthProvider = ({ children }) => {
           };
         }
 
+        // Limpiamos cualquier propiedad extraña si el user vino mezclado con el token
+        if(user.access_token) delete user.access_token;
+        if(user.token) delete user.token;
+
         setUsuario(user);
 
+        // 🚀 MEJORA 2: Al hacer login, cargamos los permisos y actualizamos el caché de roles.
         const config = await cargarPermisos(user.rol);
-
         setPermisos(config);
 
-        localStorage.setItem(
-          'posfactura_user',
-          JSON.stringify(user)
-        );
+        // 🚀 GUARDAR ALMA Y CUERPO EN EL NAVEGADOR
+        // Guardamos el usuario y el token por separado.
+        localStorage.setItem('posfactura_user', JSON.stringify(user));
+        
+        if (tokenReal) {
+          localStorage.setItem('posfactura_token', tokenReal); // 👈 ¡GUARDAMOS EL PASAPORTE!
+        } else {
+          console.warn("⚠️ ¡Ojo! El backend no devolvió ningún token en la respuesta.");
+        }
 
         return { success: true };
       }
@@ -128,7 +139,6 @@ export const AuthProvider = ({ children }) => {
       };
     } catch (error) {
       console.error('Error en Login:', error);
-
       return {
         success: false,
         message: 'Error de conexión con la base de datos.',
@@ -136,10 +146,13 @@ export const AuthProvider = ({ children }) => {
     }
   }, [API_BASE_URL, cargarPermisos]);
 
+  // Logout limpio
   const logout = useCallback(() => {
     setUsuario(null);
     setPermisos(null);
+    // 🚀 LIMPIAMOS TODO EL RASTRO VIEJO
     localStorage.removeItem('posfactura_user');
+    localStorage.removeItem('posfactura_token'); 
   }, []);
 
   return (

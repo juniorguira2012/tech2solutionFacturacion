@@ -10,7 +10,7 @@ export class DatabaseService {
   // Inicializamos el logger para ver los reportes en los logs de Portainer
   private readonly logger = new Logger(DatabaseService.name);
 
-  // ⏱️ TAREA PROGRAMADA
+  // ⏱️ TAREA PROGRAMADA 
   @Cron('30 1 * * *')
   async handleAutomaticBackup() {
     this.logger.log('🚀 [CRON] Iniciando el proceso de backup automático diario...');

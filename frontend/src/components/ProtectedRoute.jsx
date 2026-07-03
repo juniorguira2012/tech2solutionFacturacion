@@ -11,16 +11,19 @@ const ProtectedRoute = ({ children, moduloRequerido }) => {
     return <Navigate to="/login" />;
   }
 
-  // 1. Cargamos la configuración de roles del localStorage
+  // Si es admin, siempre tiene acceso.
+  if (usuario.rol === 'admin') {
+    return children;
+  }
+
+  // Cargamos la configuración de roles que AuthContext mantiene actualizada en localStorage.
   const savedRoles = localStorage.getItem('posfactura_roles_config');
   const rolesConfig = savedRoles ? JSON.parse(savedRoles) : null;
 
-  // 2. Si hay una configuración para el rol del usuario, verificamos el módulo
+  // Verificamos si el rol del usuario tiene permiso para ver el módulo requerido.
   if (rolesConfig && rolesConfig[usuario.rol]) {
-    const permiso = rolesConfig[usuario.rol].modules[moduloRequerido];
-    
-    // Si el permiso es 'none' (Bloqueado), lo mandamos al inicio
-    if (permiso === 'none') {
+    const moduloPermisos = rolesConfig[usuario.rol].modules?.[moduloRequerido];
+    if (!moduloPermisos?.view) {
       console.warn(`Acceso denegado a ${moduloRequerido} para el rol ${usuario.rol}`);
       return <Navigate to="/" />;
     }

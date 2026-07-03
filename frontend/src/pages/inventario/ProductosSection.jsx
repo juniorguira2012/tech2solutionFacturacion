@@ -360,7 +360,7 @@ const handleSave = async (e) => {
   try {
     let guardado;
     if (isEditing) {
-      guardado = await actualizarProducto(dataProcesada);
+      guardado = await actualizarProducto(dataProcesada.id, dataProcesada);
     } else {
       guardado = await agregarProducto(dataProcesada);
     }
