@@ -158,9 +158,12 @@ export class ProductsService {
           producto.seriales = [...(producto.seriales || []), ...nuevosSerialesGuardados];
         }
         
-        // Asignamos el nuevo stock basado en los seriales finales
-        // El stock para productos serializados SIEMPRE se calcula en el backend.
-        producto.stock = serialesNuevosStr.length;
+        // 💡 CORRECCIÓN: Calculamos el stock contando únicamente los seriales disponibles.
+        // Esto evita que seriales vendidos, en reparación, etc., se sumen al stock.
+        const serialesDisponiblesActuales = serialesActuales.filter(s => s.status === SerialStatus.DISPONIBLE).length;
+        const serialesDisponiblesNuevos = serialesACrear.length; // Los nuevos siempre son 'DISPONIBLE'
+        const serialesDisponiblesAEliminar = serialesAEliminar.filter(s => s.status === SerialStatus.DISPONIBLE).length;
+        producto.stock = serialesDisponiblesActuales + serialesDisponiblesNuevos - serialesDisponiblesAEliminar;
       }
 
       // 3. Guardamos la entidad 'producto' completa.
@@ -204,5 +207,42 @@ export class ProductsService {
 
     producto.isActive = true;
     return await this.productRepository.save(producto);
+  }
+
+  // --- NUEVO MÉTODO PARA EL RESUMEN DE INVENTARIO ---
+  async getInventorySummary() {
+    // 1. Calcular el valor total del inventario (solo de productos activos)
+    const totalValueResult = await this.productRepository
+      .createQueryBuilder('product')
+      .select('SUM(product.stock * product.precio)', 'totalValue')
+      .where('product.isActive = :isActive', { isActive: true })
+      .getRawOne();
+
+    const totalValue = parseFloat(totalValueResult.totalValue) || 0;
+
+    // 2. Contar productos por categoría (solo de productos activos)
+    const productsPerCategory = await this.productRepository
+      .createQueryBuilder('product')
+      .select('product.categoria', 'category')
+      .addSelect('COUNT(product.id)', 'count')
+      .where('product.isActive = :isActive', { isActive: true })
+      .groupBy('product.categoria')
+      .orderBy('count', 'DESC')
+      .getRawMany();
+
+    // 3. Contar el total de productos y el stock total (solo de productos activos)
+    const totalsResult = await this.productRepository
+      .createQueryBuilder('product')
+      .select('COUNT(product.id)', 'totalProducts')
+      .addSelect('SUM(product.stock)', 'totalStock')
+      .where('product.isActive = :isActive', { isActive: true })
+      .getRawOne();
+
+    return {
+      totalValue,
+      productsPerCategory,
+      totalProducts: parseInt(totalsResult.totalProducts, 10) || 0,
+      totalStock: parseInt(totalsResult.totalStock, 10) || 0,
+    };
   }
 }

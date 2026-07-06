@@ -41,6 +41,12 @@ export class CreateProductDto {
   @Min(0)
   stock: number;
 
+  @IsOptional()
+  @Type(() => Number) // <-- AÑADIDO: Transforma el valor a número.
+  @IsInt()
+  @Min(0) // <-- AÑADIDO: Asegura que no sea un valor negativo.
+  stockMinimo?: number;
+
   // 👇 AGREGA ESTE CAMPO AQUÍ PARA QUE EL BACKEND LO ACEPTE
   @IsOptional()
   @Type(() => Boolean)

@@ -49,8 +49,6 @@ const Inventario = () => {
     }
   }, [location.state]);
 
-  const LOW_STOCK_THRESHOLD = 5;
-
   const seccionesInventario = [
     { id: 'productos', label: 'Producto', icon: Package },
     { id: 'categoria', label: 'Categoría', icon: Tags },
@@ -138,16 +136,16 @@ const Inventario = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {productos.filter(p => (Number(p.stock) || 0) <= LOW_STOCK_THRESHOLD && p.categoria !== 'Servicios').map(p => (
+                {productos.filter(p => (Number(p.stock) || 0) <= (p.stockMinimo ?? 5) && p.categoria !== 'Servicios').map(p => (
                   <article key={p.id} className="p-4 bg-white border border-red-100 rounded-xl flex items-center gap-3 shadow-sm hover:shadow-md transition-all">
                     <AlertTriangle className="text-red-500 shrink-0" size={20} />
                     <div className="min-w-0">
                       <h4 className="text-[10px] font-black uppercase text-slate-700 truncate">{p.nombre}</h4>
-                      <p className="text-[9px] font-bold text-red-500 italic uppercase">Stock crítico: {p.stock} uds</p>
+                      <p className="text-[9px] font-bold text-red-500 italic uppercase">Stock: {p.stock} (Mín: {p.stockMinimo ?? 5})</p>
                     </div>
                   </article>
                 ))}
-                {productos.filter(p => (Number(p.stock) || 0) <= LOW_STOCK_THRESHOLD && p.categoria !== 'Servicios').length === 0 && (
+                {productos.filter(p => (Number(p.stock) || 0) <= (p.stockMinimo ?? 5) && p.categoria !== 'Servicios').length === 0 && (
                   <div className="col-span-full py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No hay alertas de stock</p>
                   </div>

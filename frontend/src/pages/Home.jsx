@@ -42,7 +42,8 @@ const Home = () => {
   );
 
   const totalClientes = clientes.length;
-  const stockCriticoCount = productos.filter(p => Number(p.stock) <= 5).length;
+  // 🌟 CORRECCIÓN: El stock crítico ahora se basa en el `stockMinimo` de cada producto.
+  const stockCriticoCount = productos.filter(p => Number(p.stock) <= Number(p.stockMinimo ?? 5)).length;
   const totalProductos = productos.length;
 
   // Ventas de los últimos 7 días

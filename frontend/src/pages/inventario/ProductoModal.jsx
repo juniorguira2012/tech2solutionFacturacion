@@ -141,6 +141,10 @@ const ProductoModal = ({
               <input type="number" step="0.01" required className="w-full px-5 py-3 rounded-2xl border-indigo-100 border outline-none font-black text-sm" value={formData.precio} onChange={(e) => setFormData({...formData, precio: e.target.value})}/>
             </div>
             <div>
+              <label className="text-[10px] font-black text-red-400 uppercase ml-1">Alerta Stock Mínimo *</label>
+              <input type="number" required className="w-full px-5 py-3 rounded-2xl border-red-100 border outline-none font-black text-sm" value={formData.stockMinimo} onChange={(e) => setFormData({...formData, stockMinimo: e.target.value})}/>
+            </div>
+            <div>
               <label className="text-[10px] font-black text-indigo-400 uppercase ml-1">
                 {formData.isSerialized ? 'Cantidad de Seriales' : 'Stock Inicial *'}
               </label>

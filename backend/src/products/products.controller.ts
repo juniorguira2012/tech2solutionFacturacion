@@ -40,6 +40,12 @@ export class ProductsController {
     return this.productsService.findOne(id);
   }
 
+  // --- NUEVO ENDPOINT PARA EL RESUMEN DE INVENTARIO ---
+  @Get('summary/inventory')
+  getInventorySummary() {
+    return this.productsService.getInventorySummary();
+  }
+
   @Patch(':id')
   @UseGuards(InventoryWriteGuard) // 📊 Evalúa si tiene permiso para editar
   update(

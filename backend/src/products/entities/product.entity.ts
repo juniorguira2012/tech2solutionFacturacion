@@ -39,6 +39,10 @@ export class Product {
   @Column({ default: 0 })
   stock: number;
 
+  // 💡 NUEVO CAMPO: Umbral de stock mínimo para alertas por producto.
+  @Column({ type: 'int', default: 5 })
+  stockMinimo: number;
+
   // ─── Imagen ────────────────────────────────────────────────────────────────
   // Campo dedicado para URL o base64. Antes se guardaba dentro de
   // camposPersonalizados como { nombre: 'imagenProducto', valor: '...' }.

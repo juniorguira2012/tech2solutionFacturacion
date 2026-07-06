@@ -607,12 +607,12 @@ export class MovementsService {
         await queryRunner.manager.save(ProductSerial, serial);
 
         const productId = serial.productoId;
-        if (!productsToUpdate.has(productId)) {
-          const stock = await queryRunner.manager.count(ProductSerial, {
-            where: { productoId: productId, status: SerialStatus.DISPONIBLE },
-          });
-          productsToUpdate.set(productId, stock);
-        }
+        // 💡 CORRECCIÓN: Recalculamos el stock de disponibles DESPUÉS de cambiar el estado
+        const stockDisponible = await queryRunner.manager.count(ProductSerial, {
+          where: { productoId: productId, status: SerialStatus.DISPONIBLE },
+        });
+        productsToUpdate.set(productId, stockDisponible);
+        
 
         // 2. Construir el objeto del movimiento usando casting seguro
         movementsToCreate.push({

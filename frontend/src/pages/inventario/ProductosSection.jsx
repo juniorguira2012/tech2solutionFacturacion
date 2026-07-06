@@ -120,7 +120,7 @@ const ProductosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibim
   // Estado inicial del formulario, definido en un solo lugar para reutilización
   const [formData, setFormData] = useState({
     nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
-    modelo: '', serie: '',
+    modelo: '', serie: '', stockMinimo: '5', // <-- Valor inicial para el nuevo campo
     isSerialized: false, // ... (resto de campos)
     serialsInput: '', // Para nuevos seriales
     serialesExistentes: [], // Para mostrar los que ya están en la DB
@@ -135,6 +135,7 @@ const ProductosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibim
       categoria: prod.categoria || '', // <-- CORRECCIÓN: Usar '' si no hay categoría definida
       precio: prod.precio,
       stock: prod.stock,
+      stockMinimo: prod.stockMinimo ?? '5', // <-- Cargamos el valor existente o un default
       codigo: prod.codigo || '',
       modelo: prod.modelo || '',
       almacen: prod.almacen || 'Principal',
@@ -196,8 +197,6 @@ const ProductosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibim
   useEffect(() => {
     localStorage.setItem('posfactura_inventario_vista', vista);
   }, [vista]);
-
-  const LOW_STOCK_THRESHOLD = 5;
 
   const formatPrice = (value) => {
     const price = Number(value);
@@ -348,6 +347,7 @@ const handleSave = async (e) => {
     almacen: formData.almacen || 'Principal',
     id: isEditing ? Number(formData.id) : undefined, 
     precio: parseFloat(formData.precio) || 0,    
+    stockMinimo: parseInt(formData.stockMinimo, 10) || 0, // <-- AÑADIDO: Convertimos a número entero.
     // Si el producto NO es serializado, enviamos el stock manual.
     // Si ES serializado, el backend calculará el stock basado en la lista de seriales.
     // No enviamos 'stock' para que el backend tenga control total.
@@ -412,15 +412,15 @@ const handleEliminar = (prod) => {
   const cerrarModal = () => {
     setIsModalOpen(false);
     setIsEditing(false);
-    // Reseteamos el formulario. La categoría ahora inicia vacía.
+    // Reseteamos el formulario. La categoría ahora inicia vacía y stockMinimo con su default.
     setFormData({ 
       nombre: '', categoria: '', precio: '', stock: '', codigo: '', modelo: '', serie: '',
       isSerialized: false, serialsInput: '', serialesExistentes: [], almacen: 'Principal', 
-      pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '', movimientoInventario: 'Entrada', 
+      pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '', movimientoInventario: 'Entrada', stockMinimo: '5',
       descripcion: '', imagen: '', camposPersonalizados: [] 
     }); 
   };
-
+  
   const productosFiltrados = useMemo(() => productos.filter(p => {
     const query = searchTerm.toLowerCase();
     const coincideBusqueda = (p.nombre?.toLowerCase() || '').includes(query) || (p.codigo?.toLowerCase() || '').includes(query);
@@ -479,7 +479,7 @@ const handleEliminar = (prod) => {
                 <div className="flex items-baseline gap-2 pt-4 border-t">
                   <span className="text-3xl font-black text-slate-800">RD$ {formatPrice(viewingProduct.precio)}</span>
                 </div>
-                <p className={`text-sm font-bold ${viewingProduct.stock <= LOW_STOCK_THRESHOLD ? 'text-red-500' : 'text-emerald-600'}`}>Stock disponible: {viewingProduct.stock}</p>
+                <p className={`text-sm font-bold ${viewingProduct.stock <= (viewingProduct.stockMinimo ?? 5) ? 'text-red-500' : 'text-emerald-600'}`}>Stock: {viewingProduct.stock} (Mín: {viewingProduct.stockMinimo ?? 5})</p>
               </div>
             </div>
           </div>
@@ -555,9 +555,9 @@ const handleEliminar = (prod) => {
                     <h3 className="font-black text-slate-800 uppercase text-xs truncate">{prod.nombre}</h3>
                     <p className="font-black text-slate-900 text-xs italic whitespace-nowrap">RD$ {formatPrice(prod.precio)}</p>
                   </div>
-                  {prod.proveedor && <p className="text-[8px] font-black text-brand uppercase tracking-widest -mt-1">{prod.proveedor.nombre}</p>}
+                {prod.proveedor && <p className="text-[8px] font-black text-brand uppercase tracking-widest -mt-1">{prod.proveedor.nombre}</p>}                
                   <div className="flex gap-2">
-                    <div className={`w-14 shrink-0 rounded-lg p-1.5 border ${prod.stock <= LOW_STOCK_THRESHOLD ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    <div className={`w-14 shrink-0 rounded-lg p-1.5 border ${prod.stock <= (prod.stockMinimo ?? 5) ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`} title={`Stock Mínimo: ${prod.stockMinimo ?? 5}`}>
                       <p className="text-[8px] font-black uppercase opacity-70">Stock</p>
                       <span className="text-xs font-black">{prod.stock}</span>
                     </div>
