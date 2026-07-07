@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { modulos as listaModulos } from '../pages/RolesManager'; // Importamos la lista de módulos
 
 const AuthContext = createContext();
 
@@ -32,10 +33,24 @@ export const AuthProvider = ({ children }) => {
       
       if (miRol) return miRol.config;
       // Fallback: Si no hay roles en la DB pero es admin, dar permisos full
-      if (rolName === 'admin') {
+      if (rolName === 'admin' && listaModulos) {
+        const adminPermissions = {};
+        listaModulos.forEach(modulo => {
+          const allActions = { view: true, create: true, edit: true, delete: true };
+          const modulePerms = { ...allActions };
+
+          if (modulo.subModulos) {
+            modulePerms.subModulos = {};
+            modulo.subModulos.forEach(sub => {
+              modulePerms.subModulos[sub.id] = { ...allActions };
+            });
+          }
+          adminPermissions[modulo.id] = modulePerms;
+        });
         return {
-          modules: { ventas: 'full', inventario: 'full', reportes: 'full', clientes: 'full', configuracion: 'full' }
-        };
+          modules: adminPermissions,
+          viewScope: 'all'
+        }
       }
       return null;
     } catch (error) {

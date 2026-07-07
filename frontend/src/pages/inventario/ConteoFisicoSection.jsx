@@ -6,9 +6,9 @@ import {
 } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 import { useAuth } from '../../context/AuthContext';
-import { useScanner } from '../../hooks/useScanner';
+import { useScanner } from '../../hooks/useScanner'; // 🛡️ 1. Recibimos los permisos
 
-const ConteoFisicoSection = ({ mostrarToast }) => {
+const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
   const { 
     productos,
     conteos, 
@@ -51,6 +51,12 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
 
   const handleCrearConteo = async (e) => {
     e.preventDefault();
+    // 🛡️ 2. Verificación de permiso de creación
+    if (!permisos?.create) {
+      mostrarToast?.("No tienes permiso para iniciar conteos", "error");
+      return;
+    }
+
     if (!nuevoConteoData.almacen) {
       mostrarToast?.("Seleccione un almacén", "warning");
       return;
@@ -70,6 +76,12 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
   };
 
   const handleEliminar = async (id) => {
+    // 🛡️ 3. Verificación de permiso de eliminación
+    if (!permisos?.delete) {
+      mostrarToast?.("No tienes permiso para eliminar auditorías", "error");
+      return;
+    }
+
     if (window.confirm("¿Estás seguro de que deseas eliminar permanentemente esta auditoría física? Esta acción no se puede deshacer.")) {
       try {
         await eliminarConteo(id);
@@ -109,8 +121,9 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
     return <RegistroCantidades 
       conteo={conteoActivo} 
       onBack={() => { setViewMode('main'); cargarConteos(); }} 
-      onReview={() => setViewMode('review')}
+      onReview={() => setViewMode('review')} // 🛡️ Pasamos permisos a sub-componentes
       mostrarToast={mostrarToast} 
+      permisos={permisos}
     />;
   }
 
@@ -120,6 +133,7 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
       onBack={() => setViewMode('counting')} 
       onFinish={() => { setViewMode('main'); cargarConteos(); }}
       mostrarToast={mostrarToast}
+      permisos={permisos} // 🛡️ Pasamos permisos a sub-componentes
     />;
   }
 
@@ -153,12 +167,14 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
               <List size={16} />
             </button>
           </div>
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all active:scale-95"
-          >
-            <Plus size={16} /> Iniciar Conteo
-          </button>
+          {permisos?.create && ( // 🛡️ 4. Condicionamos el botón de "Iniciar Conteo"
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all active:scale-95"
+            >
+              <Plus size={16} /> Iniciar Conteo
+            </button>
+          )}
         </div>
       </div>
 
@@ -217,7 +233,7 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
                       className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-brand bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-all">
                     Continuar <ArrowRight size={12}/>
                   </button>
-                  {usuario?.rol === 'admin' && (
+                  {permisos?.delete && ( // 🛡️ 5. Condicionamos el botón de eliminar
                     <button 
                       onClick={() => handleEliminar(conteo.id)}
                       className="h-8 w-8 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-all"
@@ -233,9 +249,11 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
             <div className="col-span-full py-10 flex flex-col items-center gap-3">
               <ClipboardList size={32} className="text-slate-400" />
               <p className="text-sm font-black text-slate-400 uppercase tracking-wider">No hay sesiones de conteo iniciadas</p>
-              <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all active:scale-95">
-                <Plus size={16} /> Iniciar Primer Conteo
-              </button>
+              {permisos?.create && (
+                <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all active:scale-95">
+                  <Plus size={16} /> Iniciar Primer Conteo
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -276,7 +294,7 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
                   <td className="px-6 py-4 text-right text-slate-400">
                     <div className="flex justify-end gap-2">
                       <button onClick={() => handleContinuarConteo(conteo)} className="p-2 hover:text-brand transition-all"><ArrowRight size={14}/></button>
-                      {usuario?.rol === 'admin' && (
+                      {permisos?.delete && ( // 🛡️ 6. Condicionamos el botón de eliminar en la lista
                         <button 
                           onClick={() => handleEliminar(conteo.id)}
                           className="p-2 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
@@ -293,7 +311,7 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
       )}
 
       {/* Modal para iniciar auditoría */}
-      {isModalOpen && (
+      {isModalOpen && permisos?.create && ( // 🛡️ 7. Condicionamos el modal completo
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
@@ -345,7 +363,7 @@ const ConteoFisicoSection = ({ mostrarToast }) => {
 };
 
 // Sub-componente para el Registro de Cantidades (Escaneo)
-const RegistroCantidades = ({ conteo, onBack, onReview, mostrarToast }) => {
+const RegistroCantidades = ({ conteo, onBack, onReview, mostrarToast, permisos }) => {
   const { productos, agregarItemAConteo, actualizarItemConteo, obtenerConteo } = useInventario();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -360,6 +378,12 @@ const RegistroCantidades = ({ conteo, onBack, onReview, mostrarToast }) => {
 
   // Función para pre-cargar todos los productos que tienen stock en el almacén seleccionado
   const preCargarInventario = async () => {
+    // 🛡️ 8. Verificación de permiso de creación/edición
+    if (!permisos?.create) {
+      mostrarToast?.("No tienes permiso para modificar la auditoría", "error");
+      return;
+    }
+
     setLoading(true);
     try {
       // Filtramos productos que pertenecen a este almacén o tienen stock registrado en él
@@ -393,6 +417,12 @@ const RegistroCantidades = ({ conteo, onBack, onReview, mostrarToast }) => {
   };
 
   const handleScan = async (code) => {
+    // 🛡️ 9. Verificación de permiso de creación/edición
+    if (!permisos?.create) {
+      mostrarToast?.("No tienes permiso para registrar items", "error");
+      return;
+    }
+
     const prod = productos.find(p => p.codigo === code);
     if (!prod) {
       mostrarToast?.(`Producto con código ${code} no encontrado`, "error");
@@ -423,13 +453,15 @@ const RegistroCantidades = ({ conteo, onBack, onReview, mostrarToast }) => {
         </button>
         <div className="flex gap-2">
           <button 
-            disabled={loading}
+            disabled={loading || !permisos?.create}
             onClick={preCargarInventario}
             className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-sm hover:bg-slate-50 transition-all disabled:opacity-50"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Reflejar Stock Sistema
           </button>
-          <button onClick={onReview} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-brand transition-all">
+          <button onClick={onReview} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-brand transition-all disabled:opacity-50"
+            disabled={!permisos?.create}
+          >
             Revisar Ajustes
           </button>
         </div>
@@ -494,7 +526,7 @@ const RegistroCantidades = ({ conteo, onBack, onReview, mostrarToast }) => {
 };
 
 // Sub-componente para la Revisión de Variaciones Final
-const RevisionVariaciones = ({ conteo, onBack, onFinish, mostrarToast }) => {
+const RevisionVariaciones = ({ conteo, onBack, onFinish, mostrarToast, permisos }) => {
   const { obtenerConteo, publicarConteo } = useInventario();
   const [datos, setDatos] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -504,6 +536,12 @@ const RevisionVariaciones = ({ conteo, onBack, onFinish, mostrarToast }) => {
   }, [conteo.id]);
 
   const handleFinalizar = async () => {
+    // 🛡️ 10. Verificación final antes de la acción más crítica
+    if (!permisos?.create) {
+      mostrarToast?.("No tienes permiso para publicar los ajustes", "error");
+      return;
+    }
+
     if (!window.confirm("¿Confirma que desea aplicar estos ajustes al inventario real? Esta acción no se puede deshacer.")) return;
     setLoading(true);
     try {
@@ -533,7 +571,7 @@ const RevisionVariaciones = ({ conteo, onBack, onFinish, mostrarToast }) => {
           <button onClick={onBack} className="px-6 py-3 rounded-xl border border-slate-200 font-black text-[10px] uppercase hover:bg-slate-50 transition-all">Volver a Contar</button>
           <button 
             onClick={handleFinalizar}
-            disabled={loading}
+            disabled={loading || !permisos?.create} // 🛡️ 11. Deshabilitamos el botón final
             className="bg-emerald-500 text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase shadow-xl hover:bg-emerald-600 transition-all flex items-center gap-2"
           >
             <Save size={16} /> {loading ? 'Procesando...' : 'Aplicar Ajustes Reales'}

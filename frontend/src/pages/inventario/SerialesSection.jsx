@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Tag, Edit, ChevronLeft, ChevronRight, History, X, Package, User, Warehouse } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 
-const SerialesSection = ({ mostrarToast }) => {
+const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
   const { seriales, cargarSeriales, actualizarEstadoSerial, obtenerHistorialSerial } = useInventario();
   const [busqueda, setBusqueda] = useState('');
-  const [editingStatusId, setEditingStatusId] = useState(null); // ID del serial cuyo estado se está editando
+  const [editingStatusId, setEditingStatusId] = useState(null);
   const [loading, setLoading] = useState(false);
   
   // --- Estados para el modal de historial ---
@@ -65,6 +65,12 @@ const SerialesSection = ({ mostrarToast }) => {
   };
 
   const handleStatusChange = async (serialId, nuevoEstado) => {
+    // 🛡️ 2. Verificación de permiso de edición
+    if (!permisos?.edit) {
+      mostrarToast?.('No tienes permiso para modificar el estado de los seriales', 'error');
+      return;
+    }
+
     setLoading(true);
     try {
       await actualizarEstadoSerial(serialId, nuevoEstado);
@@ -139,28 +145,35 @@ const SerialesSection = ({ mostrarToast }) => {
                   <td className="px-6 py-3 font-black text-brand uppercase cursor-pointer hover:underline" onClick={() => abrirModalHistorial(serial)}>{serial.serialNumber}</td>
                   <td className="px-6 py-3 font-bold text-slate-800 uppercase">{serial.producto?.nombre || 'N/A'}</td>
                   <td className="px-6 py-3 relative">
-                    {editingStatusId === serial.id ? (
-                      <select
-                        value={serial.status}
-                        onChange={(e) => handleStatusChange(serial.id, e.target.value)}
-                        onBlur={() => setEditingStatusId(null)}
-                        className="w-full p-1 border rounded-md text-[9px] font-bold uppercase focus:outline-brand"
-                        autoFocus
-                        disabled={loading}
-                      >
-                        {statusOptions.map(opt => (
-                          <option key={opt} value={opt}>{opt.replace('_', ' ')}</option>
-                        ))}
-                      </select>
+                    {permisos?.edit ? ( // 🛡️ 3. Condicionamos la UI de edición
+                      editingStatusId === serial.id ? (
+                        <select
+                          value={serial.status}
+                          onChange={(e) => handleStatusChange(serial.id, e.target.value)}
+                          onBlur={() => setEditingStatusId(null)}
+                          className="w-full p-1 border rounded-md text-[9px] font-bold uppercase focus:outline-brand"
+                          autoFocus
+                          disabled={loading}
+                        >
+                          {statusOptions.map(opt => (
+                            <option key={opt} value={opt}>{opt.replace('_', ' ')}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          onClick={() => setEditingStatusId(serial.id)}
+                          className={`group flex items-center gap-2 px-2 py-0.5 rounded-md text-[8px] font-black uppercase transition-all ${getStatusColor(serial.status)} hover:ring-2 hover:ring-brand`}
+                          disabled={loading}
+                        >
+                          {serial.status.replace('_', ' ')}
+                          <Edit className="opacity-0 group-hover:opacity-100 transition-opacity" size={10} />
+                        </button>
+                      )
                     ) : (
-                      <button
-                        onClick={() => setEditingStatusId(serial.id)}
-                        className={`group flex items-center gap-2 px-2 py-0.5 rounded-md text-[8px] font-black uppercase transition-all ${getStatusColor(serial.status)} hover:ring-2 hover:ring-brand`}
-                        disabled={loading}
-                      >
+                      // Vista de solo lectura si no hay permiso
+                      <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase ${getStatusColor(serial.status)}`}>
                         {serial.status.replace('_', ' ')}
-                        <Edit className="opacity-0 group-hover:opacity-100 transition-opacity" size={10} />
-                      </button>
+                      </span>
                     )}
                   </td>
                   <td className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">{serial.almacen}</td>

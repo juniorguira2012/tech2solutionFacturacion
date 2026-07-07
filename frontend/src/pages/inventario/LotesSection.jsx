@@ -1,14 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import { Layers3, Search, Calendar, AlertTriangle, Package, Warehouse, Info } from 'lucide-react';
+import { Layers3, Search, Calendar, AlertTriangle, Package, Warehouse, Info, Plus, Edit3, Trash2, X, Save } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 
-const LotesSection = () => {
-  const { lotes, cargarLotes, loading } = useInventario();
+const LotesSection = ({ mostrarToast, permisos }) => {
+  // 🛡️ Extraemos los permisos específicos para esta sección
+  const permisosLotes = permisos?.subModulos?.lotes ?? permisos;
+
+  const { 
+    lotes, cargarLotes, loading, productos, almacenesDetallados,
+    agregarLote, actualizarLote, eliminarLote 
+  } = useInventario();
+  
   const [filtro, setFiltro] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    id: null,
+    productoId: '',
+    numeroLote: '',
+    cantidad: '',
+    almacen: '',
+    fechaVencimiento: ''
+  });
 
   useEffect(() => {
+  // 🛡️ Solo cargamos si el permiso no viene explícitamente en falso
+  if (permisosLotes?.view !== false) {
     cargarLotes();
-  }, [cargarLotes]);
+  }
+}, [cargarLotes, permisosLotes?.view]);
 
   const lotesFiltrados = lotes.filter(l => 
     l.numeroLote?.toLowerCase().includes(filtro.toLowerCase()) ||
@@ -27,6 +48,76 @@ const LotesSection = () => {
     return { label: 'Vigente', color: 'bg-emerald-500 text-white' };
   };
 
+  const abrirModalCrear = () => {
+    if (!permisosLotes?.create) return mostrarToast("No tienes permiso para crear lotes", "error");
+    setIsEditing(false);
+    setFormData({ productoId: '', numeroLote: '', cantidad: '', almacen: '', fechaVencimiento: '' });
+    setShowModal(true);
+  };
+
+  const abrirModalEditar = (lote) => {
+    if (!permisosLotes?.edit) return mostrarToast("No tienes permiso para editar lotes", "error");
+    setIsEditing(true);
+    setFormData({
+      id: lote.id,
+      productoId: lote.productoId,
+      numeroLote: lote.numeroLote,
+      cantidad: lote.cantidad,
+      almacen: lote.almacen,
+      fechaVencimiento: lote.fechaVencimiento ? new Date(lote.fechaVencimiento).toISOString().slice(0, 10) : ''
+    });
+    setShowModal(true);
+  };
+
+  const handleGuardar = async (e) => {
+    e.preventDefault();
+    if ((isEditing && !permisosLotes?.edit) || (!isEditing && !permisosLotes?.create)) {
+      return mostrarToast("Acción no permitida", "error");
+    }
+    setIsSaving(true);
+    try {
+      const payload = {
+        ...formData,
+        productoId: Number(formData.productoId),
+        cantidad: Number(formData.cantidad),
+      };
+      if (isEditing) {
+        await actualizarLote(formData.id, payload);
+        mostrarToast("Lote actualizado con éxito", "success");
+      } else {
+        await agregarLote(payload);
+        mostrarToast("Lote creado con éxito", "success");
+      }
+      setShowModal(false);
+    } catch (error) {
+      mostrarToast(error.message || "Error al guardar el lote", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEliminar = async (id) => {
+    if (!permisosLotes?.delete) return mostrarToast("No tienes permiso para eliminar lotes", "error");
+    if (window.confirm("¿Estás seguro de que deseas eliminar este lote?")) {
+      try {
+        await eliminarLote(id);
+        mostrarToast("Lote eliminado con éxito", "success");
+      } catch (error) {
+        mostrarToast(error.message || "Error al eliminar el lote", "error");
+      }
+    }
+  };
+
+  if (permisosLotes && permisosLotes.view === false) {
+    return (
+      <div className="py-20 text-center bg-white border border-slate-200 rounded-2xl shadow-sm animate-in fade-in duration-300">
+        <Layers3 size={40} className="mx-auto mb-4 text-slate-300" />
+        <h2 className="text-xs font-black text-slate-700 uppercase tracking-widest italic">Acceso Restringido</h2>
+        <p className="text-[9px] font-bold text-red-500 uppercase tracking-widest mt-1">No tienes autorización para auditar los lotes de unidades</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
       {/* Cabecera Técnica */}
@@ -41,6 +132,12 @@ const LotesSection = () => {
           </div>
         </div>
         
+        {permisosLotes?.create && (
+          <button onClick={abrirModalCrear} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all active:scale-95">
+            <Plus size={16} /> Nuevo Lote
+          </button>
+        )}
+
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
           <input 
@@ -63,6 +160,7 @@ const LotesSection = () => {
               <th className="px-6 py-4 text-center">Vencimiento</th>
               <th className="px-6 py-4 text-center">Existencia</th>
               <th className="px-6 py-4 text-right">Almacén</th>
+              <th className="px-6 py-4 text-right"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -101,6 +199,16 @@ const LotesSection = () => {
                     <td className="px-6 py-4 text-right font-black text-[10px] text-slate-400 uppercase italic">
                       {lote.almacen || 'Principal'}
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {permisosLotes?.edit && (
+                          <button onClick={() => abrirModalEditar(lote)} className="p-2 text-slate-400 hover:text-brand hover:bg-indigo-50 rounded-lg"><Edit3 size={14}/></button>
+                        )}
+                        {permisosLotes?.delete && (
+                          <button onClick={() => handleEliminar(lote.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })
@@ -115,6 +223,53 @@ const LotesSection = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Modal para Crear/Editar Lote */}
+      {showModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter italic">
+                {isEditing ? 'Editar Lote' : 'Nuevo Lote'}
+              </h2>
+              <button onClick={() => setShowModal(false)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 shadow-sm transition-all"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleGuardar} className="p-8 space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Producto</label>
+                <select required value={formData.productoId} onChange={e => setFormData({...formData, productoId: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-brand font-bold text-sm">
+                  <option value="">Seleccionar producto...</option>
+                  {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Número de Lote</label>
+                <input required value={formData.numeroLote} onChange={e => setFormData({...formData, numeroLote: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-brand font-bold text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Cantidad</label>
+                  <input type="number" required min="1" value={formData.cantidad} onChange={e => setFormData({...formData, cantidad: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-brand font-bold text-sm" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Almacén</label>
+                  <select required value={formData.almacen} onChange={e => setFormData({...formData, almacen: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-brand font-bold text-sm">
+                    <option value="">Seleccionar...</option>
+                    {almacenesDetallados.map(a => <option key={a.id} value={a.nombre}>{a.nombre}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Fecha de Vencimiento</label>
+                <input type="date" value={formData.fechaVencimiento} onChange={e => setFormData({...formData, fechaVencimiento: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-brand font-bold text-sm" />
+              </div>
+              <button type="submit" disabled={isSaving} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-brand transition-all uppercase text-[10px] tracking-widest disabled:opacity-50">
+                {isSaving ? 'Guardando...' : 'Guardar Lote'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

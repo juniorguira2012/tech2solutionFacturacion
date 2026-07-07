@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit3, Trash2, Braces, CheckCircle, X } from 'lucide-react';
 
-const CamposPersonalizadosSection = () => {
+const CamposPersonalizadosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
   const [camposPersonalizadosGlobales, setCamposPersonalizadosGlobales] = useState(() => {
     try {
       const saved = localStorage.getItem('posfactura_campos_personalizados');
@@ -27,8 +27,13 @@ const CamposPersonalizadosSection = () => {
   }, [camposPersonalizadosGlobales]);
 
   const guardarCampo = () => {
+    // 🛡️ 2. Verificación de permisos de creación/edición
+    if ((editingCampoId && !permisos?.edit) || (!editingCampoId && !permisos?.create)) {
+      mostrarToast?.("No tienes permiso para realizar esta acción", "error");
+      return;
+    }
     if (!formularioCampo.etiqueta.trim() || !formularioCampo.clave.trim()) {
-      alert('Etiqueta y Clave son obligatorios');
+      mostrarToast?.('Etiqueta y Clave son obligatorios', 'warning');
       return;
     }
     if (editingCampoId) {
@@ -64,10 +69,20 @@ const CamposPersonalizadosSection = () => {
   };
 
   const eliminarCampo = (id) => {
+    // 🛡️ 3. Verificación de permiso de eliminación
+    if (!permisos?.delete) {
+      mostrarToast?.("No tienes permiso para eliminar campos", "error");
+      return;
+    }
     setCamposPersonalizadosGlobales(prev => prev.filter(c => c.id !== id));
   };
 
   const comenzarEditarCampo = (campo) => {
+    // 🛡️ 4. Verificación de permiso de edición
+    if (!permisos?.edit) {
+      mostrarToast?.("No tienes permiso para editar campos", "error");
+      return;
+    }
     setFormularioCampo(campo);
     setEditingCampoId(campo.id);
     setShowFormularioCampo(true);
@@ -84,13 +99,15 @@ const CamposPersonalizadosSection = () => {
           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Define los atributos que tus productos y servicios necesitan: VIN, año modelo, talla, principio activo, lo que sea relevante para los negocios.</p>
         </div>
         <div className="ml-auto">
-          <button type="button" onClick={() => setShowFormularioCampo(true)} className="h-9 px-3 rounded-lg bg-emerald-500 text-white font-black flex items-center gap-2">
-            <Plus size={14}/> Nuevo Campo
-          </button>
+          {permisos?.create && ( // 🛡️ 5. Condicionamos el botón de "Nuevo Campo"
+            <button type="button" onClick={() => setShowFormularioCampo(true)} className="h-9 px-3 rounded-lg bg-emerald-500 text-white font-black flex items-center gap-2">
+              <Plus size={14}/> Nuevo Campo
+            </button>
+          )}
         </div>
       </div>
 
-      {showFormularioCampo && (
+      {showFormularioCampo && (permisos?.create || permisos?.edit) && ( // 🛡️ 6. Condicionamos el formulario
         <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -172,8 +189,12 @@ const CamposPersonalizadosSection = () => {
               </div>
             </div>
             <div className="flex gap-2 ml-4">
-              <button onClick={() => comenzarEditarCampo(campo)} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg"><Edit3 size={14}/></button>
-              <button onClick={() => eliminarCampo(campo.id)} className="px-3 py-2 bg-red-50 text-red-500 rounded-lg"><Trash2 size={14}/></button>
+              {permisos?.edit && ( // 🛡️ 7. Condicionamos los botones de acción
+                <button onClick={() => comenzarEditarCampo(campo)} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg"><Edit3 size={14}/></button>
+              )}
+              {permisos?.delete && (
+                <button onClick={() => eliminarCampo(campo.id)} className="px-3 py-2 bg-red-50 text-red-500 rounded-lg"><Trash2 size={14}/></button>
+              )}
             </div>
           </div>
         ))}

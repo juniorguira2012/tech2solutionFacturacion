@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Ruler, Plus, CheckCircle, X, Edit3, Trash2 } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 
-const UnidadesSection = ({ mostrarToast }) => {
+const UnidadesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
   const { unidadesMedida, agregarUnidadMedida, actualizarUnidadMedida, cargarUnidadesMedida } = useInventario();
   const [editingUnidadId, setEditingUnidadId] = useState(null);
   const [unidadDraft, setUnidadDraft] = useState({ codigo: '', nombre: '' });
@@ -13,6 +13,11 @@ const UnidadesSection = ({ mostrarToast }) => {
   }, [cargarUnidadesMedida]);
 
   const agregarUnidad = async () => {
+    // 🛡️ 2. Verificación de permiso de creación
+    if (!permisos?.create) {
+      mostrarToast?.("No tienes permiso para crear unidades", "error");
+      return;
+    }
     // Validación básica
     if (!unidadDraft.codigo.trim() || !unidadDraft.nombre.trim()) {
       mostrarToast?.("El código y el nombre son obligatorios", "warning");
@@ -39,11 +44,21 @@ const UnidadesSection = ({ mostrarToast }) => {
   };
 
   const comenzarEditarUnidad = (u) => {
+    // 🛡️ 3. Verificación de permiso de edición
+    if (!permisos?.edit) {
+      mostrarToast?.("No tienes permiso para editar unidades", "error");
+      return;
+    }
     setEditingUnidadId(u.id);
     setUnidadDraft({ codigo: u.codigo, nombre: u.nombre });
   };
 
   const guardarUnidadEditada = async (id) => {
+    // 🛡️ 4. Verificación de permiso de edición
+    if (!permisos?.edit) {
+      mostrarToast?.("No tienes permiso para actualizar unidades", "error");
+      return;
+    }
     setLoading(true);
     try {
       await actualizarUnidadMedida(id, {
@@ -62,6 +77,11 @@ const UnidadesSection = ({ mostrarToast }) => {
   };
 
   const toggleUnidadActivo = async (unidad) => {
+    // 🛡️ 5. Verificación de permiso de eliminación (desactivar es similar)
+    if (!permisos?.delete) {
+      mostrarToast?.("No tienes permiso para cambiar el estado de las unidades", "error");
+      return;
+    }
     setLoading(true);
     try {
       await actualizarUnidadMedida(unidad.id, { activo: !unidad.activo });
@@ -85,15 +105,17 @@ const UnidadesSection = ({ mostrarToast }) => {
           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Gestiona tipos de unidad (editar o desactivar)</p>
         </div>
         <div className="ml-auto">
-          <button type="button" onClick={() => { setEditingUnidadId('new'); setUnidadDraft({codigo:'', nombre:''}); }} className="h-9 px-3 rounded-lg bg-emerald-500 text-white font-black flex items-center gap-2 text-[10px] uppercase" disabled={loading}>
-            <Plus size={14}/> Nueva unidad {/* Este es el botón que el usuario quiere que funcione */}
-          </button>
+          {permisos?.create && ( // 🛡️ 6. Condicionamos el botón de "Nueva unidad"
+            <button type="button" onClick={() => { setEditingUnidadId('new'); setUnidadDraft({codigo:'', nombre:''}); }} className="h-9 px-3 rounded-lg bg-emerald-500 text-white font-black flex items-center gap-2 text-[10px] uppercase" disabled={loading}>
+              <Plus size={14}/> Nueva unidad
+            </button>
+          )}
         </div>
       </div>
 
       <div className="space-y-2 mt-4">
         {/* --- FORMULARIO PARA NUEVA UNIDAD (Fila Dinámica) --- */}
-        {editingUnidadId === 'new' && (
+        {editingUnidadId === 'new' && permisos?.create && ( // 🛡️ 7. Condicionamos el formulario de creación
           <div className="flex items-center gap-3 p-3 bg-emerald-50/50 border border-emerald-200 rounded-xl animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="w-24">
               <input 
@@ -155,10 +177,14 @@ const UnidadesSection = ({ mostrarToast }) => {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 ml-auto">
-                  <button onClick={()=>comenzarEditarUnidad(u)} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" disabled={loading}><Edit3 size={14}/></button> {/* Deshabilitar durante la carga */}
-                  <button onClick={()=>toggleUnidadActivo(u)} className={`px-3 py-2 rounded-lg transition-colors ${u.activo ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`} disabled={loading}> {/* Deshabilitar durante la carga */}
-                    {u.activo ? <Trash2 size={14}/> : <CheckCircle size={14}/>} 
-                  </button>
+                  {permisos?.edit && ( // 🛡️ 8. Condicionamos los botones de acción
+                    <button onClick={()=>comenzarEditarUnidad(u)} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" disabled={loading}><Edit3 size={14}/></button>
+                  )}
+                  {permisos?.delete && (
+                    <button onClick={()=>toggleUnidadActivo(u)} className={`px-3 py-2 rounded-lg transition-colors ${u.activo ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`} disabled={loading}>
+                      {u.activo ? <Trash2 size={14}/> : <CheckCircle size={14}/>} 
+                    </button>
+                  )}
                 </div>
               </>
             )}

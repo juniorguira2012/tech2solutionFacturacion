@@ -10,10 +10,24 @@ const ProveedoresSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recib
   const [serviceSearchTerm, setServiceSearchTerm] = useState("");
   const [formData, setFormData] = useState({ id: null, nombre: '', rnc: '', telefono: '', correo: '', direccion: '', ofrece: '', categoria: 'Estándar' });
 
+  const abrirModalParaCrear = () => {
+    if (!permisos?.create) return mostrarToast('No tienes permiso para crear proveedores', 'error');
+    setIsEditing(false);
+    setFormData({ id: null, nombre: '', rnc: '', telefono: '', correo: '', direccion: '', ofrece: '', categoria: 'Estándar' });
+    setIsModalOpen(true);
+  };
+
+  const abrirModalParaEditar = (proveedor) => {
+    if (!permisos?.edit) return mostrarToast('No tienes permiso para editar proveedores', 'error');
+    setIsEditing(true);
+    setFormData(proveedor);
+    setIsModalOpen(true);
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     // 🛡️ 2. Verificación de permisos de creación/edición
-    if ((isEditing && !permisos.edit) || (!isEditing && !permisos.create)) {
+    if ((isEditing && !permisos?.edit) || (!isEditing && !permisos?.create)) {
       mostrarToast("No tienes permiso para realizar esta acción", "error");
       return;
     }
@@ -36,6 +50,19 @@ const ProveedoresSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recib
     setIsModalOpen(false);
     setIsEditing(false);
     setFormData({ id: null, nombre: '', rnc: '', telefono: '', correo: '', direccion: '', ofrece: '', categoria: 'Estándar' });
+  };
+
+  const handleDelete = (proveedor) => {
+    if (!permisos?.delete) {
+      return mostrarToast("No tienes permiso para eliminar proveedores", "error");
+    }
+    if (window.confirm(`¿Estás seguro de que deseas eliminar al proveedor "${proveedor.nombre}"?`)) {
+      eliminarProveedor(proveedor.id)
+        .then(exito => {
+          if (exito) mostrarToast("Proveedor eliminado con éxito", "success");
+        })
+        .catch(err => mostrarToast(err.message || "No se pudo eliminar el proveedor", "error"));
+    }
   };
 
   const proveedoresFiltrados = proveedores.filter(p => 
@@ -66,8 +93,8 @@ const ProveedoresSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recib
             />
           </div>
         </div>
-        {permisos.create && ( // 🛡️ 3. Condicionamos el botón de "Nuevo Proveedor"
-          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all">
+        {permisos?.create && ( // 🛡️ 3. Condicionamos el botón de "Nuevo Proveedor"
+          <button onClick={abrirModalParaCrear} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all">
             <Plus size={16} /> Nuevo Proveedor
           </button>
         )}
@@ -78,20 +105,13 @@ const ProveedoresSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recib
           <div key={prov.id} className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all group">
             <div className="flex justify-between items-start mb-4">
               <div className="h-12 w-12 bg-indigo-50 text-brand rounded-xl flex items-center justify-center font-black">{prov.nombre.charAt(0)}</div>
-              {(permisos.edit || permisos.delete) && ( // 🛡️ 4. Condicionamos los botones de acción
+              {(permisos?.edit || permisos?.delete) && ( // 🛡️ 4. Condicionamos los botones de acción
                 <div className="flex gap-1">
-                  {permisos.edit && (
-                    <button onClick={() => { setFormData(prov); setIsEditing(true); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
+                  {permisos?.edit && (
+                    <button onClick={() => abrirModalParaEditar(prov)} className="p-2 text-slate-400 hover:text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
                   )}
-                  {permisos.delete && (
-                    <button onClick={() => {
-                      if (!permisos.delete) return mostrarToast("No tienes permiso para eliminar", "error");
-                      if (window.confirm("¿Eliminar este proveedor?")) {
-                        eliminarProveedor(prov.id)
-                          .then(exito => { if (exito) mostrarToast("Proveedor eliminado"); })
-                          .catch(err => mostrarToast(err.message || "No se pudo eliminar", "error"));
-                      }
-                    }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                  {permisos?.delete && (
+                    <button onClick={() => handleDelete(prov)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                       <Trash2 size={16}/>
                     </button>
                   )}
@@ -115,7 +135,7 @@ const ProveedoresSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recib
         ))}
       </div>
 
-      {isModalOpen && (permisos.create || permisos.edit) && ( // 🛡️ 5. El modal se abre si se puede crear o editar
+      {isModalOpen && (permisos?.create || permisos?.edit) && ( // 🛡️ 5. El modal se abre si se puede crear o editar
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
             <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">

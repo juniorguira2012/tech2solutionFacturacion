@@ -55,6 +55,9 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
 
 //Componente Principal 
 const ProductosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos como prop
+  // 🛡️ Extraemos los permisos específicos para esta sección
+  const permisosProductos = permisos?.subModulos?.productos ?? permisos;
+
   const {
     productos,
     loading,
@@ -129,6 +132,10 @@ const ProductosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibim
   });
 
   const abrirEditar = (prod) => {
+    // 🛡️ Verificación de permiso de edición
+    if (!permisosProductos?.edit) {
+      return mostrarToast('No tienes permiso para editar productos', 'error');
+    }
     setFormData({
       id: prod.id,
       nombre: prod.nombre,
@@ -265,6 +272,12 @@ const ProductosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibim
 
 // ─── Guardar / Editar ───────────────────────────────────────────────────────
 const handleSave = async (e) => {
+  // 🛡️ Verificación de permisos de creación/edición
+  if ((isEditing && !permisosProductos?.edit) || (!isEditing && !permisosProductos?.create)) {
+    mostrarToast("No tienes permiso para realizar esta acción", "error");
+    return;
+  }
+
   e.preventDefault();
   setIsSaving(true);
 
@@ -380,6 +393,11 @@ const handleSave = async (e) => {
 
 // ─── Eliminar ───────────────────────────────────────────────────────────────
 const handleEliminar = (prod) => {
+  // 🛡️ Verificación de permiso de eliminación
+  if (!permisosProductos?.delete) {
+    return mostrarToast('No tienes permiso para eliminar productos', 'error');
+  }
+
   // Verificación rápida: si no hay ID, no podemos eliminar
   console.log("ID a eliminar:", prod.id);
   if (!prod.id) {
@@ -408,6 +426,16 @@ const handleEliminar = (prod) => {
     },
   });
 };
+
+  const handleRestaurar = (prod) => {
+    // 🛡️ Restaurar se considera una acción de nivel "delete"
+    if (!permisosProductos?.delete) {
+      return mostrarToast('No tienes permiso para restaurar productos', 'error');
+    }
+    restaurarProducto(prod.id)
+      .then(() => mostrarToast('Producto restaurado con éxito', 'success'))
+      .catch(err => mostrarToast(err.message || 'No se pudo restaurar', 'error'));
+  };
 
   const cerrarModal = () => {
     setIsModalOpen(false);
@@ -505,7 +533,7 @@ const handleEliminar = (prod) => {
             <button onClick={() => setVista('lista')} className={`p-1.5 rounded-md ${vista === 'lista' ? 'bg-white text-brand shadow-sm' : 'text-slate-400'}`}><List size={16}/></button>
           </div>
           <button onClick={exportarAExcel} className="h-9 w-9 flex items-center justify-center bg-emerald-500 text-white rounded-lg shadow-sm hover:bg-emerald-600"><FileText size={16}/></button>
-          {permisos.create && (
+          {permisosProductos?.create && (
             <button onClick={() => setIsModalOpen(true)} className="h-9 w-9 flex items-center justify-center bg-brand text-white rounded-lg shadow-sm hover:bg-indigo-600"><Plus size={18}/></button>
           )}
         </div>
@@ -606,19 +634,19 @@ const handleEliminar = (prod) => {
                   <div className="px-1 py-1 text-right flex items-center justify-end gap-1 border-t border-slate-50 mt-2">
                     {prod.isActive === false ? (
                       <button 
-                        onClick={(e) => { e.stopPropagation(); restaurarProducto(prod.id); }} 
+                        onClick={(e) => { e.stopPropagation(); handleRestaurar(prod); }} 
                         className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
                       >
                         Restaurar
                       </button>
                     ) : (
                       <>
-                        {permisos.edit && (
+                        {permisosProductos?.edit && (
                           <button onClick={(e) => { e.stopPropagation(); abrirEditar(prod); }} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
                             <Edit3 size={16}/>
                           </button>
                         )}
-                        {permisos.delete && (
+                        {permisosProductos?.delete && (
                           <button onClick={(e) => { e.stopPropagation(); handleEliminar(prod); }} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
                             <Trash2 size={16}/>
                           </button>
@@ -684,19 +712,19 @@ const handleEliminar = (prod) => {
                   <td className="px-6 py-3 text-right font-black italic">RD$ {formatPrice(prod.precio)}</td>
                   {/* 🛡️ 4. Condicionamos los botones de acción en la VISTA DE LISTA */}
                   <td className="px-6 py-3 text-right flex items-center justify-end gap-1">
-                    {prod.isActive === false ? (
+                    {prod.isActive === false ? (permisosProductos?.delete &&
                       <button 
-                        onClick={() => restaurarProducto(prod.id)} 
+                        onClick={() => handleRestaurar(prod)} 
                         className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
                       >
                         Restaurar
                       </button>
                     ) : (
                       <>
-                        {permisos.edit && (
+                        {permisosProductos?.edit && (
                           <button onClick={() => abrirEditar(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
                         )}
-                        {permisos.delete && (
+                        {permisosProductos?.delete && (
                           <button onClick={() => handleEliminar(prod)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
                             <Trash2 size={16}/>
                           </button>

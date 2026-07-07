@@ -15,10 +15,9 @@ import { FormAjuste } from '../../components/FormAjuste';
 
 // 1. 🛡️ Recibimos 'permisos' desde el padre (Inventario.jsx)
 const MovimientosSection = ({ mostrarToast, permisos }) => {
-  
-  // 2. 🛡️ Desestructuramos para tener variables limpias y descriptivas
-  const { create: puedeCrear, edit: puedeEditar, delete: puedeEliminar } = permisos || {};
-  
+  // 🛡️ Extraemos los permisos específicos para esta sección
+  const permisosMovimiento = permisos?.subModulos?.movimiento ?? permisos;
+
   const { 
     productos, movimientos, proveedores, tecnicos, seriales, registrarMovimiento, 
     registrarTransferencia, registrarMovimientosMasivos, asignarSerialesTecnico, 
@@ -106,13 +105,13 @@ const MovimientosSection = ({ mostrarToast, permisos }) => {
 
   // Cargar historial al montar el componente
   useEffect(() => {
-    // 🛡️ CONTROL DE PERMISOS: Usamos el prop directamente
-    if (permisos?.view) {
+    // 🛡️ CONTROL DE PERMISOS: Usamos el prop directamente y dependemos del usuario
+    if (permisosMovimiento?.view) {
       cargarMovimientos();
     } else {
       mostrarToast?.("No tienes permisos para visualizar el historial de movimientos", "error");
     }
-  }, [cargarMovimientos, permisos?.view]);
+  }, [permisosMovimiento?.view, usuario, cargarMovimientos]);
 
   // Gestión del carrito masivo (Recibir / Despachar)
   const obtenerStockEnAlmacen = (producto, almacen) => {
@@ -123,7 +122,7 @@ const MovimientosSection = ({ mostrarToast, permisos }) => {
 
   const agregarAlCarritoMovimiento = (producto) => {
     // 🛡️ CONTROL DE PERMISOS: Bloqueo lógico con la propiedad desestructurada
-    if (!puedeCrear) {
+    if (!permisosMovimiento?.create) {
       mostrarToast?.("Acción denegada: No tienes permisos de escritura.", "error");
       return;
     }
@@ -162,7 +161,7 @@ const MovimientosSection = ({ mostrarToast, permisos }) => {
   // Función para cargar automáticamente los items de una factura al carrito
   const cargarItemsDeFactura = (factura) => {
     // 🛡️ CONTROL DE PERMISOS: Una devolución genera un movimiento de entrada (Creación)
-    if (!permisos.create) {
+    if (!permisosMovimiento?.create) {
       mostrarToast?.("No tienes permisos para procesar devoluciones", "error");
       return;
     }
@@ -191,14 +190,8 @@ const MovimientosSection = ({ mostrarToast, permisos }) => {
 
   const abrirModal = (tipo) => {
     // 🛡️ CONTROL DE PERMISOS: Filtramos las operaciones prohibidas antes de levantar el modal
-    if (!permisos.create && ['recibir', 'despachar', 'transferencia', 'devolucion', 'asignacion_tecnico'].includes(tipo)) {
+    if (!permisosMovimiento?.create) {
       mostrarToast?.(`No tienes autorización para realizar la acción: ${tipo.toUpperCase()}`, "error");
-      return;
-    }
-
-    // Si tuvieras un tipo 'ajuste' que requiera permisos de edición especiales:
-    if (!permisos.edit && tipo === 'ajuste') {
-      mostrarToast?.("No tienes permisos para realizar ajustes de inventario", "error");
       return;
     }
 
@@ -490,7 +483,7 @@ return (
         </div>
 
         {/* Mapeo dinámico y limpio de botones controlado por permisos */}
-        {permisos.create && (
+        {permisosMovimiento?.create && (
           <div className="flex flex-wrap gap-2">
             {BOTONES_ACCION.map((btn) => {
               const IconoBtn = btn.icon;
@@ -800,7 +793,7 @@ return (
                   </div>
 
                   <button 
-                    disabled={itemsEnCarritoMovimiento.length === 0}
+                    disabled={itemsEnCarritoMovimiento.length === 0 || !permisosMovimiento?.create}
                     onClick={processarMovimientoMasivo}
                     className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest disabled:opacity-50 transition-colors ${
                       tipoMovimiento === 'despachar' ? 'bg-sky-500 hover:bg-sky-600 text-white' : 'bg-emerald-500 hover:bg-emerald-600 text-white'

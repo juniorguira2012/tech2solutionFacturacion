@@ -2,15 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { 
   Printer, Percent, Database, Save, 
   Download, ArrowRight, Users, 
-  ShieldCheck, Terminal, AlertCircle, FileSpreadsheet, Building2
+  ShieldCheck, Terminal, AlertCircle, FileSpreadsheet, Building2, Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 
 const Configuracion = ({ mostrarToast }) => {
   const navigate = useNavigate();
   const { usuario } = useAuth();
+  const permisos = usePermissions('configuracion'); // 🛡️ Obtenemos permisos para el módulo
   
+  // 🛡️ Determinamos qué sub-módulos puede ver y editar el usuario
+  const puedeVerUsuarios = permisos.subModulos?.usuarios?.view;
+  const puedeVerDatosEmpresa = permisos.subModulos?.datos_empresa?.view;
+  const puedeEditarDatosEmpresa = permisos.subModulos?.datos_empresa?.edit;
+
   const [guardando, setGuardando] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
 
@@ -136,6 +143,21 @@ const Configuracion = ({ mostrarToast }) => {
     }
   };
 
+  // 🛡️ Muro de seguridad si no tiene acceso a ninguna sección de configuración
+  if (!permisos.view) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4 animate-in fade-in duration-300">
+        <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-200 max-w-md">
+          <div className="h-20 w-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+            <Lock size={40} className="text-slate-400" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">Acceso Restringido</h2>
+          <p className="text-slate-500 font-medium mt-2">Tu perfil de usuario no tiene autorización para acceder a la configuración.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10 p-2 animate-in fade-in duration-500">
       
@@ -147,7 +169,7 @@ const Configuracion = ({ mostrarToast }) => {
         </div>
         <button 
           onClick={guardarParametros} 
-          disabled={guardando}
+          disabled={guardando || !puedeEditarDatosEmpresa}
           className="w-full sm:w-auto bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black text-[11px] uppercase shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
         >
           <Save size={14} className={guardando ? "animate-spin" : ""} /> 
@@ -155,8 +177,8 @@ const Configuracion = ({ mostrarToast }) => {
         </button>
       </header>
 
-      {/* SECCIÓN DE SEGURIDAD (Solo Admin / Supervisor) */}
-      {(usuario?.rol === 'admin' || usuario?.rol === 'supervisor') && (
+      {/* SECCIÓN DE SEGURIDAD */}
+      {puedeVerUsuarios && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button 
             onClick={() => navigate('/usuarios')}
@@ -195,10 +217,10 @@ const Configuracion = ({ mostrarToast }) => {
       )}
 
       {/* REJILLA DE CONFIGURACIONES GENERALES */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {puedeVerDatosEmpresa && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* BLOQUE IZQUIERDO: IDENTIDAD Y FACTURACIÓN */}
-        <section className="lg:col-span-8 space-y-6">
+        <section className="lg:col-span-8 space-y-6 animate-in fade-in duration-300">
           
           {/* Identidad de Empresa */}
           <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm space-y-6">
@@ -265,7 +287,7 @@ const Configuracion = ({ mostrarToast }) => {
         </section>
 
         {/* BLOQUE DERECHO: IMPRESIÓN, IMPUESTO Y BACKUP */}
-        <section className="lg:col-span-4 space-y-6">
+        <section className="lg:col-span-4 space-y-6 animate-in fade-in duration-300">
           
           {/* Configuración de Impuesto */}
           <div className="bg-white border border-slate-200 rounded-[2.5rem] p-6 shadow-sm">
@@ -331,7 +353,7 @@ const Configuracion = ({ mostrarToast }) => {
           </div>
 
         </section>
-      </div>
+      </div>}
     </div>
   );
 };

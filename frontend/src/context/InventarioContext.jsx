@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
@@ -120,6 +119,7 @@ export const InventarioProvider = ({ children }) => {
         fetchResource(`${API_BASE_URL}/categories`, setCategorias),
         fetchResource(`${API_BASE_URL}/product-serials`, setSeriales),
         fetchResource(`${API_BASE_URL}/comodatos`, setPrestamos),
+        fetchResource(`${API_BASE_URL}/inventory-batches`, setLotes), 
       ]);
     };
   
@@ -207,11 +207,17 @@ export const InventarioProvider = ({ children }) => {
 
   // 1.1 Cargar Movimientos (Kardex)
   const cargarMovimientos = useCallback(async (productoId = null) => {
+    if (!usuario) return; // Si no hay usuario, no hacemos nada.
     try {
-      const url = productoId 
-        ? `${API_BASE_URL}/movements?productoId=${productoId}`
-        : `${API_BASE_URL}/movements`;
+      let url = `${API_BASE_URL}/movements`;
+      const params = new URLSearchParams();
+      if (productoId) params.append('productoId', productoId);
       
+      // 🛡️ Si el usuario NO es admin, filtramos por su ID.
+      if (usuario.rol !== 'admin') params.append('usuarioId', usuario.id);
+      
+      if (params.toString()) url += `?${params.toString()}`;
+
       const res = await fetch(url, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Error al cargar movimientos');
       const data = await res.json();
@@ -219,7 +225,7 @@ export const InventarioProvider = ({ children }) => {
     } catch (err) {
       console.error("Error Kardex:", err);
     }
-  }, [API_BASE_URL]);
+  }, [API_BASE_URL, getAuthHeaders, usuario]);
 
   // Cargar Seriales
   const cargarSeriales = useCallback(async () => {
@@ -989,19 +995,70 @@ const registrarMovimientosMasivos = async (payload) => {
     } catch (err) { console.error(err); throw err; }
   };
 
-  // --- GESTIÓN DE LOTES ---
+ // --- GESTIÓN DE LOTES ---
   const cargarLotes = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/inventory-batches`, { headers: getAuthHeaders() });
+      
+      // 🛡️ Si el backend responde 404 (no existe aún), salimos en paz sin tirar errores
+      if (res.status === 404) {
+        setLotes([]);
+        return;
+      }
+
+      // Para cualquier otro error (500, 403, etc.), ahí sí vigilamos
       if (!res.ok) throw new Error('Error al cargar lotes');
+      
       const data = await res.json();
       setLotes(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Error cargando lotes:", err);
-      // Fallback a datos vacíos si el endpoint aún no existe en el backend
+      // Cambiamos console.error por un log más limpio e informativo
+      console.warn("⚠️ Nota de desarrollo: El endpoint de lotes no está listo o falló:", err.message);
       setLotes([]);
     }
-  }, [API_BASE_URL]);
+  }, [API_BASE_URL, getAuthHeaders]);
+
+  const agregarLote = async (loteData) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/inventory-batches`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(loteData),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Error al crear el lote');
+      }
+      const nuevoLote = await res.json();
+      setLotes(prev => [nuevoLote, ...prev]);
+      return nuevoLote;
+    } catch (error) {
+      console.error('Error en agregarLote:', error);
+      throw error;
+    }
+  };
+
+  const actualizarLote = async (id, loteData) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/inventory-batches/${id}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(loteData),
+      });
+      if (!res.ok) throw new Error('Error al actualizar el lote');
+      const loteActualizado = await res.json();
+      setLotes(prev => prev.map(l => (l.id === id ? loteActualizado : l)));
+      return loteActualizado;
+    } catch (error) { throw error; }
+  };
+
+  const eliminarLote = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/inventory-batches/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+      if (!res.ok) throw new Error('Error al eliminar el lote');
+      setLotes(prev => prev.filter(l => l.id !== id));
+    } catch (error) { throw error; }
+  };
 
   // --- GESTIÓN DE COMODATO (PRÉSTAMOS) ---
   const cargarPrestamos = useCallback(async () => {
@@ -1096,6 +1153,9 @@ return (
     crearPrestamo,
     devolverPrestamo,
     cargarLotes,
+    agregarLote,
+    actualizarLote,
+    eliminarLote,
     devolverSerialTecnico,
     cargarUnidadesMedida,
     agregarUnidadMedida,

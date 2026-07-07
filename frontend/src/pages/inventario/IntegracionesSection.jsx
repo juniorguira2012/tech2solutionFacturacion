@@ -1,8 +1,8 @@
 import React from 'react';
 import { Plug } from 'lucide-react';
 
-const IntegracionesSection = () => {
-  return (
+const IntegracionesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
+  return ( // La vista general ya está protegida por el padre, aquí solo protegemos las acciones
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4">
       <div className="flex items-center gap-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mb-4">
         <div className="p-2 bg-indigo-600 text-white rounded-lg shadow-sm">
@@ -29,11 +29,16 @@ const IntegracionesSection = () => {
               <h3 className="text-sm font-black text-slate-800">{canal.nombre}</h3>
             </div>
             <p className="text-[9px] text-slate-500">Conecta tu cuenta para sincronizar productos</p>
-            <button className={`px-4 py-2 rounded-lg font-bold text-xs uppercase transition-all ${
-              canal.conectado 
-                ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
-                : 'bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100'
-            }`}>
+            {/* 🛡️ 2. Protegemos el botón de conexión */}
+            <button 
+              className={`px-4 py-2 rounded-lg font-bold text-xs uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                canal.conectado 
+                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
+                  : 'bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100'
+              }`}
+              disabled={!permisos?.edit}
+              title={!permisos?.edit ? 'No tienes permiso para modificar integraciones' : ''}
+            >
               {canal.conectado ? '✓ Conectado' : 'Conectar'}
             </button>
           </div>

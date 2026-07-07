@@ -33,9 +33,9 @@ const PrivateRoute = ({ children, moduloRequerido }) => {
   if (usuario.rol !== 'admin' && moduloRequerido) {
     if (permisos) {
       const nivelPermiso = permisos.modules?.[moduloRequerido];
-      
-      // Si el permiso es 'none', lo rebotamos al Home (o Dashboard)
-      if (nivelPermiso === 'none') {
+
+      // 🛡️ CORRECCIÓN: Si el objeto de permiso no existe o la propiedad 'view' es false, denegamos el acceso.
+      if (!nivelPermiso || !nivelPermiso.view) {
         console.warn(`⚠️ Acceso denegado a ${moduloRequerido} para el rol ${usuario.rol}`);
         return <Navigate to="/" replace />;
       }

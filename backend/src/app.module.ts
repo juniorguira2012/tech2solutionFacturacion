@@ -21,6 +21,7 @@ import { ProductSerialsModule } from './products/product-serials.module';
 import { CategoriesModule } from './categories/categories.module';
 import { DatabaseModule } from './database/database.module'; 
 import { ScheduleModule } from '@nestjs/schedule'; // 🌟 Importado correctamente
+import {InventoryBatchesModule} from './inventory-batches/inventory-batches.module'; // 🌟 Importado correctamente
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { ScheduleModule } from '@nestjs/schedule'; // 🌟 Importado correctamen
     ProductSerialsModule,
     CategoriesModule,
     DatabaseModule, 
+    InventoryBatchesModule,
   ],
 })
 export class AppModule {}

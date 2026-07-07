@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useVentas } from '../context/VentasContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { 
   Search, Calendar, FileText, Table, DollarSign, 
-  Hash, Users, Star, Package, TrendingUp, BarChart2
+  Hash, Users, Star, Package, TrendingUp, BarChart2, Lock
 } from 'lucide-react';
 
 // IMPORTAR LIBRERÍAS DE EXPORTACIÓN Y DATEPICKER
@@ -14,11 +15,22 @@ import 'jspdf-autotable';
 
 const Reportes = () => {
   const { historialVentas } = useVentas();
+  const permisos = usePermissions('reportes'); // 🛡️ Obtenemos permisos para el módulo
+
+  // 🛡️ Determinamos qué sub-módulos puede ver el usuario
+  const puedeVerVentas = permisos.subModulos?.reporte_ventas?.view;
+  const puedeVerClientes = permisos.subModulos?.reporte_clientes?.view;
   
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
   const [busquedaGlobal, setBusquedaGlobal] = useState(""); 
-  const [tabActiva, setTabActiva] = useState('ventas'); // 'ventas' o 'clientes'
+  
+  // 🛡️ La pestaña activa por defecto es la primera a la que tenga acceso
+  const [tabActiva, setTabActiva] = useState(() => {
+    if (puedeVerVentas) return 'ventas';
+    if (puedeVerClientes) return 'clientes';
+    return null;
+  });
   
   // Agrupación de ventas ('transacciones', 'dias', 'meses')
   const [agrupacionVentas, setAgrupacionVentas] = useState('transacciones');
@@ -240,6 +252,21 @@ const Reportes = () => {
     doc.save(`Reporte_${tabActiva}_${new Date().getTime()}.pdf`);
   };
 
+  // 🛡️ Muro de seguridad si no tiene acceso a ningún reporte
+  if (!permisos.view) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4 animate-in fade-in duration-300">
+        <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-200 max-w-md">
+          <div className="h-20 w-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+            <Lock size={40} className="text-slate-400" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">Acceso Restringido</h2>
+          <p className="text-slate-500 font-medium mt-2">Tu perfil de usuario no tiene autorización para ver los reportes.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10 p-2 animate-in fade-in duration-500">
       
@@ -305,8 +332,12 @@ const Reportes = () => {
         {/* NAVEGACIÓN PRINCIPAL ENTRE TABS */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-slate-100 pt-4">
           <div className="flex gap-3">
-            <button onClick={() => setTabActiva('ventas')} className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${tabActiva === 'ventas' ? 'bg-slate-900 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>Ventas Generales</button>
-            <button onClick={() => setTabActiva('clientes')} className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${tabActiva === 'clientes' ? 'bg-slate-900 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>Ranking de Clientes</button>
+            {puedeVerVentas && (
+              <button onClick={() => setTabActiva('ventas')} className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${tabActiva === 'ventas' ? 'bg-slate-900 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>Ventas Generales</button>
+            )}
+            {puedeVerClientes && (
+              <button onClick={() => setTabActiva('clientes')} className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${tabActiva === 'clientes' ? 'bg-slate-900 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>Ranking de Clientes</button>
+            )}
           </div>
 
           {/* SEGMENTACIÓN SUB-REPORTES CRONOLÓGICOS (Solo si estás en la tab Ventas) */}
@@ -321,7 +352,7 @@ const Reportes = () => {
       </header>
 
       {/* RENDER DE LA SECCIÓN DE VENTAS */}
-      {tabActiva === 'ventas' && (
+      {tabActiva === 'ventas' && puedeVerVentas && (
         <div className="space-y-6 animate-in slide-in-from-bottom-4">
           {/* CARDS DE STATS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -399,7 +430,7 @@ const Reportes = () => {
       )}
 
       {/* SECCIÓN RANKING DE CLIENTES (PERMANECE IGUAL, MEJORADO CON EL ESTILO SLATE) */}
-      {tabActiva === 'clientes' && (
+      {tabActiva === 'clientes' && puedeVerClientes && (
         <div className="space-y-6 animate-in slide-in-from-bottom-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 flex items-center gap-6 shadow-sm">

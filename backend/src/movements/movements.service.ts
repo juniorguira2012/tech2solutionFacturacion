@@ -11,6 +11,8 @@ import { ProductWarehouseStock } from '../products/entities/product-warehouse-st
 import { ProductSerial, SerialStatus } from '../products/entities/product-serial.entity';
 import { InventoryBatch } from './entities/inventory-batch.entity';
 import { Technician } from './entities/technician.entity';
+import { CreateInventoryBatchDto } from '../inventory-batches/dto/create-inventory-batch.dto';
+import { UpdateInventoryBatchDto } from '../inventory-batches/dto/update-inventory-batch.dto';
 
 @Injectable()
 export class MovementsService {
@@ -21,6 +23,8 @@ export class MovementsService {
     private productRepository: Repository<Product>,
     @InjectRepository(Technician)
     private technicianRepository: Repository<Technician>,
+    @InjectRepository(InventoryBatch)
+    private inventoryBatchRepository: Repository<InventoryBatch>,
     private dataSource: DataSource,
   ) {}
 
@@ -722,11 +726,17 @@ export class MovementsService {
     }
   }
 
-  async findAll() {
-    return await this.movementRepository.find({
+  async findAll(usuarioId?: string) {
+    const queryOptions: any = {
       relations: ['producto', 'technician', 'usuario'],
       order: { createdAt: 'DESC' },
-    });
+    };
+
+    if (usuarioId) {
+      queryOptions.where = { usuarioId: usuarioId };
+    }
+
+    return await this.movementRepository.find(queryOptions);
   }
 
   async findByProductId(productoId: number) {
@@ -745,5 +755,50 @@ export class MovementsService {
       .where(`movement.serials @> :serial`, { serial: `["${serialNumber}"]` })
       .orderBy('movement.createdAt', 'DESC')
       .getMany();
+  }
+
+  // --- GESTIÓN DE LOTES (INVENTORY BATCHES) ---
+
+  async findAllBatches() {
+    return this.inventoryBatchRepository.find({
+      relations: ['producto'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async createBatch(createDto: CreateInventoryBatchDto) {
+    const producto = await this.productRepository.findOneBy({ id: createDto.productoId });
+    if (!producto) {
+      throw new NotFoundException(`Producto con ID ${createDto.productoId} no encontrado.`);
+    }
+
+    const nuevoLote = this.inventoryBatchRepository.create({
+      ...createDto,
+      producto: producto,
+    });
+
+    return this.inventoryBatchRepository.save(nuevoLote);
+  }
+
+  async updateBatch(id: number, updateDto: UpdateInventoryBatchDto) {
+    const lote = await this.inventoryBatchRepository.preload({
+      id: id,
+      ...updateDto,
+    });
+
+    if (!lote) {
+      throw new NotFoundException(`Lote con ID ${id} no encontrado.`);
+    }
+
+    return this.inventoryBatchRepository.save(lote);
+  }
+
+  async removeBatch(id: number) {
+    const lote = await this.inventoryBatchRepository.findOneBy({ id });
+    if (!lote) {
+      throw new NotFoundException(`Lote con ID ${id} no encontrado.`);
+    }
+    await this.inventoryBatchRepository.remove(lote);
+    return { message: `Lote con ID ${id} eliminado.` };
   }
 }

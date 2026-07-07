@@ -3,6 +3,48 @@ import { Shield, Save, CheckCircle, Lock, Eye, Edit3, RotateCcw, ShieldCheck, Al
 import { useAuth } from '../context/AuthContext';
 import { useUsuarios } from '../context/UsuariosContext';
 
+export const modulos = [
+    { id: 'ventas', nombre: 'Módulo de Ventas', desc: 'Acceso al POS y facturación', actions: ['view', 'create', 'edit', 'delete'] },
+    { 
+      id: 'inventario', 
+      nombre: 'Módulo de Inventario', 
+      desc: 'Control de productos, stock y movimientos', 
+      actions: ['view', 'create', 'edit', 'delete'],
+      subModulos: [
+        { id: 'productos', nombre: 'Productos', desc: 'Gestión del catálogo principal', actions: ['view', 'create', 'edit', 'delete'] },
+        { id: 'categoria', nombre: 'Categorías', desc: 'Organización de productos', actions: ['view', 'create', 'edit', 'delete'] },
+        { id: 'movimiento', nombre: 'Movimientos', desc: 'Kardex y ajustes de stock', actions: ['view', 'create'] },
+        { id: 'proveedores', nombre: 'Proveedores', desc: 'Gestión de suplidores', actions: ['view', 'create', 'edit', 'delete'] },
+        { id: 'almacen', nombre: 'Almacenes', desc: 'Gestión de bodegas físicas', actions: ['view', 'create', 'edit', 'delete'] },
+        { id: 'tecnicos', nombre: 'Técnicos', desc: 'Asignación de equipos', actions: ['view', 'create', 'edit', 'delete'] },
+        { id: 'conteo', nombre: 'Conteo Físico', desc: 'Auditorías de inventario', actions: ['view', 'create', 'delete'] },
+        { id: 'seriales', nombre: 'Seriales', desc: 'Trazabilidad de unidades', actions: ['view', 'edit'] },
+        { id: 'alerta', nombre: 'Alertas de Stock', desc: 'Visualización de stock crítico', actions: ['view'] },
+        { id: 'comodato', nombre: 'Comodato', desc: 'Préstamo de equipos a clientes', actions: ['view', 'create', 'edit'] },
+        { id: 'lotes', nombre: 'Lotes de Unidades', desc: 'Gestión de lotes de productos', actions: ['view', 'create', 'edit', 'delete'] },
+        { id: 'unidades', nombre: 'Unidades de Medida', desc: 'Configuración de unidades (Kg, Lb, etc.)', actions: ['view', 'create', 'edit', 'delete'] },
+        { id: 'campos', nombre: 'Campos Personalizados', desc: 'Añadir campos extra a productos', actions: ['view', 'create', 'edit', 'delete'] },
+        { id: 'integraciones', nombre: 'Integraciones', desc: 'Conexión con sistemas externos', actions: ['view', 'edit'] },
+      ]
+    },
+    { id: 'clientes', nombre: 'Gestión de Clientes', desc: 'Control sobre la cartera de clientes', actions: ['view', 'create', 'edit', 'delete'] },
+    { 
+      id: 'reportes', 
+      nombre: 'Reportes y Analíticas', 
+      desc: 'Visualización de KPIs y datos comerciales', 
+      actions: ['view'],
+      subModulos: [
+        { id: 'reporte_ventas', nombre: 'Reporte de Ventas', desc: 'Análisis de ingresos y transacciones', actions: ['view'] },
+        { id: 'reporte_clientes', nombre: 'Ranking de Clientes', desc: 'Análisis de lealtad y compras', actions: ['view'] },
+      ]
+    },
+    { id: 'historial_ventas', nombre: 'Historial de Ventas', desc: 'Consulta y reimpresión de facturas pasadas', actions: ['view', 'delete'] },
+    { id: 'configuracion', nombre: 'Configuración del Sistema', desc: 'Ajustes globales, seguridad y datos de empresa', actions: ['view'], subModulos: [
+        { id: 'usuarios', nombre: 'Gestión de Usuarios', desc: 'Control de cuentas de acceso del personal', actions: ['view', 'create', 'edit', 'delete'] },
+        { id: 'datos_empresa', nombre: 'Datos de Empresa y Facturación', desc: 'Ajustes de RNC, NCF, ITBIS, etc.', actions: ['view', 'edit'] },
+    ]},
+  ];
+
 const RolesManager = () => {
   const { usuario } = useAuth();
   const { recargarRoles } = useUsuarios();
@@ -12,17 +54,10 @@ const RolesManager = () => {
   const [toast, setToast] = useState(false);
   const [newRoleModal, setNewRoleModal] = useState({ show: false, name: '' });
   const [deleteModal, setDeleteModal] = useState({ show: false, rol: null });
+  const [expandedModule, setExpandedModule] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const defaultPermissions = { view: false, create: false, edit: false, delete: false };
-
-  const modulos = [
-    { id: 'ventas', nombre: 'Módulo de Ventas', desc: 'Acceso al POS y facturación', actions: ['view', 'create', 'edit', 'delete'] },
-    { id: 'inventario', nombre: 'Módulo de Inventario', desc: 'Control de productos, stock y movimientos', actions: ['view', 'create', 'edit', 'delete'] },
-    { id: 'clientes', nombre: 'Gestión de Clientes', desc: 'Control sobre la cartera de clientes', actions: ['view', 'create', 'edit', 'delete'] },
-    { id: 'reportes', nombre: 'Reportes y Analíticas', desc: 'Visualización de KPIs y datos comerciales', actions: ['view'] },
-    { id: 'configuracion', nombre: 'Configuración del Sistema', desc: 'Acceso a Usuarios, Roles y ajustes globales', actions: ['view', 'create', 'edit', 'delete'] },
-  ];
 
   const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
     ? '/api' 
@@ -39,12 +74,22 @@ const RolesManager = () => {
           configMap[r.name] = r.config; 
         });
 
-        if (Object.keys(configMap).length === 0 || !configMap['admin']) {
-          configMap['admin'] = {
-            modules: Object.fromEntries(modulos.map(m => [m.id, { view: true, create: true, edit: true, delete: true }])),
-            viewScope: 'all'
-          };
-        }
+        // Siempre nos aseguramos de que el rol 'admin' tenga todos los permisos.
+        const adminPermissions = {};
+        modulos.forEach(modulo => {
+          const allActions = { view: true, create: true, edit: true, delete: true };
+          const modulePerms = { ...allActions };
+
+          if (modulo.subModulos) {
+            modulePerms.subModulos = {};
+            modulo.subModulos.forEach(sub => {
+              modulePerms.subModulos[sub.id] = { ...allActions };
+            });
+          }
+          adminPermissions[modulo.id] = modulePerms;
+        });
+
+        configMap['admin'] = { modules: adminPermissions, viewScope: 'all' };
         
         setRolesConfig(configMap);
         
@@ -130,15 +175,24 @@ const RolesManager = () => {
     }
   };
 
-  const handlePermissionChange = (moduleId, action, isChecked) => {
-    if (!rolSeleccionado || !rolesConfig[rolSeleccionado]) return;
+  const handlePermissionChange = (moduleId, action, isChecked, subModuleId = null) => {
+    // 🛡️ GUARDA DE SEGURIDAD: El rol 'admin' es intocable.
+    if (rolSeleccionado === 'admin' || !rolSeleccionado || !rolesConfig[rolSeleccionado]) return;
 
     setRolesConfig(prev => {
       const targetRole = prev[rolSeleccionado];
-      const currentModules = targetRole.modules || {};
-      const currentModulePerms = currentModules[moduleId] || { ...defaultPermissions };
+      let currentModules = targetRole.modules || {};
+      let currentModulePerms;
 
-      const updatedPerms = { ...currentModulePerms, [action]: isChecked };
+      if (subModuleId) {
+        const moduleContainer = currentModules[moduleId] || {};
+        const subModules = moduleContainer.subModulos || {};
+        currentModulePerms = subModules[subModuleId] || { ...defaultPermissions };
+      } else {
+        currentModulePerms = currentModules[moduleId] || { ...defaultPermissions };
+      }
+
+      let updatedPerms = { ...currentModulePerms, [action]: isChecked };
 
       if (action === 'view' && !isChecked) {
         updatedPerms.create = false;
@@ -150,12 +204,24 @@ const RolesManager = () => {
         updatedPerms.view = true;
       }
 
+      if (subModuleId) {
+        const moduleContainer = currentModules[moduleId] || {};
+        const subModules = moduleContainer.subModulos || {};
+        const updatedSubModules = { ...subModules, [subModuleId]: updatedPerms };
+        // Si cualquier submódulo tiene vista, el módulo principal debe tener vista.
+        const mainView = Object.values(updatedSubModules).some(p => p.view);
+        currentModules = { ...currentModules, [moduleId]: { ...moduleContainer, subModulos: updatedSubModules, view: mainView } };
+      } else {
+        // Si se quita la vista del módulo principal, se quitan todos los submódulos
+        if (action === 'view' && !isChecked && currentModules[moduleId]?.subModulos) {
+          updatedPerms.subModulos = {};
+        }
+        currentModules = { ...currentModules, [moduleId]: updatedPerms };
+      }
+
       return {
         ...prev,
-        [rolSeleccionado]: {
-          ...targetRole,
-          modules: { ...currentModules, [moduleId]: updatedPerms }
-        }
+        [rolSeleccionado]: { ...targetRole, modules: currentModules }
       };
     });
   };
@@ -263,9 +329,14 @@ const RolesManager = () => {
                   const hasAnyPermission = Object.values(currentPerms).some(p => p === true);
 
                   return (
-                    <div key={modulo.id} className="group flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-slate-50/50 rounded-3xl border border-slate-100 hover:bg-white hover:shadow-sm transition-all">
+                    <div 
+                      key={modulo.id} 
+                      className={`group flex flex-col p-5 bg-slate-50/50 rounded-3xl border border-slate-100 hover:bg-white hover:shadow-sm transition-all ${modulo.subModulos ? 'cursor-pointer' : ''}`}
+                      onClick={() => modulo.subModulos && setExpandedModule(prev => prev === modulo.id ? null : modulo.id)}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between">
                       <div className="flex items-center gap-4 mb-4 sm:mb-0">
-                        <div className={`p-3 rounded-2xl transition-all ${!hasAnyPermission ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                        <div className={`p-3 rounded-2xl transition-all ${!currentPerms.view ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
                           {!hasAnyPermission ? <Lock size={20} /> : <ShieldCheck size={20} />}
                         </div>
                         <div>
@@ -274,23 +345,55 @@ const RolesManager = () => {
                         </div>
                       </div>
                       
-                      <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
-                        {modulo.actions.map(action => (
-                          <label key={action} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-slate-100 transition-colors">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
-                              checked={currentPerms[action] || false}
-                              onChange={(e) => handlePermissionChange(modulo.id, action, e.target.checked)}
-                              disabled={rolSeleccionado === 'admin'}
-                            />
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-slate-500">{actionIcons[action]}</span>
-                              <span className="text-[9px] font-black uppercase text-slate-600">{action}</span>
-                            </div>
-                          </label>
-                        ))}
+                      {/* Acciones para el módulo principal (si no tiene submódulos) */}
+                      {!modulo.subModulos && (
+                        <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+                          {modulo.actions.map(action => (
+                            <label key={action} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand"
+                                checked={currentPerms[action] || false}
+                                onChange={(e) => handlePermissionChange(modulo.id, action, e.target.checked)}
+                                disabled={rolSeleccionado === 'admin'}
+                              />
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-500">{actionIcons[action]}</span>
+                                <span className="text-[9px] font-black uppercase text-slate-600">{action}</span>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )}
                       </div>
+
+                      {/* Renderizar Submódulos si están expandidos */}
+                      {modulo.subModulos && expandedModule === modulo.id && (
+                        <div className="mt-4 space-y-3 pl-6 pt-4 border-t border-slate-100 animate-in fade-in duration-300">
+                          {modulo.subModulos.map(sub => {
+                            const subPerms = { ...defaultPermissions, ...(currentPerms.subModulos?.[sub.id] || {}) };
+                            return (
+                              <div key={sub.id} className="flex items-center justify-between" onClick={e => e.stopPropagation()}>
+                                <p className="font-bold text-slate-600 text-[10px] uppercase">{sub.nombre}</p>
+                                <div className="flex gap-2">
+                                  {sub.actions.map(action => (
+                                    <label key={action} className="flex items-center gap-1.5 cursor-pointer p-1 rounded-md hover:bg-slate-100">
+                                      <input
+                                        type="checkbox"
+                                        className="h-3.5 w-3.5 rounded-sm border-slate-300 text-brand focus:ring-brand"
+                                        checked={subPerms[action] || false}
+                                        onChange={(e) => handlePermissionChange(modulo.id, action, e.target.checked, sub.id)}
+                                        disabled={rolSeleccionado === 'admin'}
+                                      />
+                                      <span className="text-slate-400">{actionIcons[action]}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
