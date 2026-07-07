@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit3, Trash2, Braces, CheckCircle, X } from 'lucide-react';
 
-const CamposPersonalizadosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
+const CamposPersonalizadosSection = ({ mostrarToast, permisos }) => {
+  // 🛡️ Extraemos los permisos específicos para esta sección
+  const permisosCampos = permisos?.subModulos?.campos ?? permisos;
+
   const [camposPersonalizadosGlobales, setCamposPersonalizadosGlobales] = useState(() => {
     try {
       const saved = localStorage.getItem('posfactura_campos_personalizados');
@@ -27,8 +30,7 @@ const CamposPersonalizadosSection = ({ mostrarToast, permisos }) => { // 🛡️
   }, [camposPersonalizadosGlobales]);
 
   const guardarCampo = () => {
-    // 🛡️ 2. Verificación de permisos de creación/edición
-    if ((editingCampoId && !permisos?.edit) || (!editingCampoId && !permisos?.create)) {
+    if ((editingCampoId && !permisosCampos?.edit) || (!editingCampoId && !permisosCampos?.create)) {
       mostrarToast?.("No tienes permiso para realizar esta acción", "error");
       return;
     }
@@ -69,8 +71,7 @@ const CamposPersonalizadosSection = ({ mostrarToast, permisos }) => { // 🛡️
   };
 
   const eliminarCampo = (id) => {
-    // 🛡️ 3. Verificación de permiso de eliminación
-    if (!permisos?.delete) {
+    if (!permisosCampos?.delete) {
       mostrarToast?.("No tienes permiso para eliminar campos", "error");
       return;
     }
@@ -78,8 +79,7 @@ const CamposPersonalizadosSection = ({ mostrarToast, permisos }) => { // 🛡️
   };
 
   const comenzarEditarCampo = (campo) => {
-    // 🛡️ 4. Verificación de permiso de edición
-    if (!permisos?.edit) {
+    if (!permisosCampos?.edit) {
       mostrarToast?.("No tienes permiso para editar campos", "error");
       return;
     }
@@ -99,7 +99,7 @@ const CamposPersonalizadosSection = ({ mostrarToast, permisos }) => { // 🛡️
           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Define los atributos que tus productos y servicios necesitan: VIN, año modelo, talla, principio activo, lo que sea relevante para los negocios.</p>
         </div>
         <div className="ml-auto">
-          {permisos?.create && ( // 🛡️ 5. Condicionamos el botón de "Nuevo Campo"
+          {permisosCampos?.create && (
             <button type="button" onClick={() => setShowFormularioCampo(true)} className="h-9 px-3 rounded-lg bg-emerald-500 text-white font-black flex items-center gap-2">
               <Plus size={14}/> Nuevo Campo
             </button>
@@ -107,7 +107,7 @@ const CamposPersonalizadosSection = ({ mostrarToast, permisos }) => { // 🛡️
         </div>
       </div>
 
-      {showFormularioCampo && (permisos?.create || permisos?.edit) && ( // 🛡️ 6. Condicionamos el formulario
+      {showFormularioCampo && (permisosCampos?.create || permisosCampos?.edit) && (
         <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -189,10 +189,10 @@ const CamposPersonalizadosSection = ({ mostrarToast, permisos }) => { // 🛡️
               </div>
             </div>
             <div className="flex gap-2 ml-4">
-              {permisos?.edit && ( // 🛡️ 7. Condicionamos los botones de acción
+              {permisosCampos?.edit && (
                 <button onClick={() => comenzarEditarCampo(campo)} className="px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg"><Edit3 size={14}/></button>
               )}
-              {permisos?.delete && (
+              {permisosCampos?.delete && (
                 <button onClick={() => eliminarCampo(campo.id)} className="px-3 py-2 bg-red-50 text-red-500 rounded-lg"><Trash2 size={14}/></button>
               )}
             </div>

@@ -128,16 +128,16 @@ const Inventario = () => {
             <MovimientosSection mostrarToast={mostrarToast} permisos={permisos} />
           )}
           {seccionActiva === 'proveedores' && (permisos.subModulos?.proveedores?.view ?? true) && (
-            <ProveedoresSection mostrarToast={mostrarToast} permisos={permisos.subModulos?.proveedores} />
+            <ProveedoresSection mostrarToast={mostrarToast} permisos={permisos} />
           )}
           {seccionActiva === 'almacen' && (permisos.subModulos?.almacen?.view ?? true) && (
-            <AlmacenSection mostrarToast={mostrarToast} permisos={permisos.subModulos?.almacen} />
+            <AlmacenSection mostrarToast={mostrarToast} permisos={permisos} />
           )}
           {seccionActiva === 'tecnicos' && (permisos.subModulos?.tecnicos?.view ?? true) && (
-            <TecnicosSection mostrarToast={mostrarToast} permisos={permisos.subModulos?.tecnicos} />
+            <TecnicosSection mostrarToast={mostrarToast} permisos={permisos} />
           )}
           {seccionActiva === 'conteo' && (permisos.subModulos?.conteo?.view ?? true) && (
-            <ConteoFisicoSection mostrarToast={mostrarToast} permisos={permisos.subModulos?.conteo} />
+            <ConteoFisicoSection mostrarToast={mostrarToast} permisos={permisos} />
           )}
           {seccionActiva === 'seriales' && (permisos.subModulos?.seriales?.view ?? true) && (
             <SerialesSection mostrarToast={mostrarToast} permisos={permisos.subModulos?.seriales} />
@@ -157,7 +157,7 @@ const Inventario = () => {
              </div>
           )}
           {seccionActiva === 'comodato' && (permisos.subModulos?.comodato?.view ?? true) && (
-            <ComodatoSection mostrarToast={mostrarToast} permisos={permisos.subModulos?.comodato} />
+            <ComodatoSection mostrarToast={mostrarToast} permisos={permisos} />
           )}
           {seccionActiva === 'lotes' && (permisos.subModulos?.lotes?.view ?? true) && (
             <LotesSection mostrarToast={mostrarToast} permisos={permisos} />
@@ -166,9 +166,9 @@ const Inventario = () => {
       </section>
 
       {/* Secciones Renderizadas por Fuera de la Tarjeta Estándar */}
-      {seccionActiva === 'unidades' && <UnidadesSection mostrarToast={mostrarToast} permisos={permisos.subModulos?.unidades} />}
-      {seccionActiva === 'campos' && <CamposPersonalizadosSection mostrarToast={mostrarToast} permisos={permisos.subModulos?.campos} />}
-      {seccionActiva === 'integraciones' && <IntegracionesSection mostrarToast={mostrarToast} permisos={permisos.subModulos?.integraciones} />}
+      {seccionActiva === 'unidades' && <UnidadesSection mostrarToast={mostrarToast} permisos={permisos} />}
+      {seccionActiva === 'campos' && <CamposPersonalizadosSection mostrarToast={mostrarToast} permisos={permisos} />}
+      {seccionActiva === 'integraciones' && <IntegracionesSection mostrarToast={mostrarToast} permisos={permisos} />}
 
       {/* TOAST ALERTS */}
       {toast.show && (

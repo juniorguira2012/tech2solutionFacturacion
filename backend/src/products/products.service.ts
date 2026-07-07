@@ -6,6 +6,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Provider } from '../providers/entities/provider.entity';
 import { ProductSerial, SerialStatus } from './entities/product-serial.entity';
+import { Movement } from '../movements/entities/movement.entity';
 
 @Injectable()
 export class ProductsService {
@@ -110,8 +111,17 @@ export class ProductsService {
         throw new NotFoundException(`Producto con ID ${id} no encontrado.`);
       }
 
+      const almacenOriginal = producto.almacen;
+      const almacenNuevo = productData.almacen;
+      const cambioDeAlmacen = almacenNuevo && almacenOriginal !== almacenNuevo;
+
       // Actualiza los datos del producto principal en la entidad cargada
       queryRunner.manager.merge(Product, producto, productData);
+
+      // Si el producto no es serializado y cambia de almacén, transferimos el stock.
+      if (!producto.isSerialized && cambioDeAlmacen && producto.stock > 0) {
+        // Lógica de transferencia de stock que añadiremos
+      }
 
       if (producto.isSerialized) {
         const serialesActuales = producto.seriales || [];
@@ -164,6 +174,32 @@ export class ProductsService {
         const serialesDisponiblesNuevos = serialesACrear.length; // Los nuevos siempre son 'DISPONIBLE'
         const serialesDisponiblesAEliminar = serialesAEliminar.filter(s => s.status === SerialStatus.DISPONIBLE).length;
         producto.stock = serialesDisponiblesActuales + serialesDisponiblesNuevos - serialesDisponiblesAEliminar;
+      }
+
+      // Si hubo cambio de almacén, ajustamos el stock desglosado
+      if (!producto.isSerialized && cambioDeAlmacen && producto.stock > 0) {
+        const stockATransferir = Number(producto.stock);
+        // Restar del origen
+        await queryRunner.manager.query(
+          `UPDATE product_warehouse_stock SET cantidad = cantidad - $1 WHERE "productoId" = $2 AND almacen = $3`,
+          [stockATransferir, id, almacenOriginal]
+        );
+        // Sumar al destino (o crearlo si no existe)
+        await queryRunner.manager.query(
+          `INSERT INTO product_warehouse_stock ("productoId", almacen, cantidad) VALUES ($1, $2, $3)
+           ON CONFLICT ("productoId", almacen) DO UPDATE SET cantidad = product_warehouse_stock.cantidad + $3`,
+          [id, almacenNuevo, stockATransferir]
+        );
+        // Registrar movimiento en Kardex
+        const movementLog = queryRunner.manager.create(Movement, {
+          productoId: id,
+          tipo: 'TRANSFERENCIA',
+          cantidad: stockATransferir,
+          nota: `Cambio de almacén principal de ${almacenOriginal} a ${almacenNuevo}`,
+          almacenOrigen: almacenOriginal,
+          almacenDestino: almacenNuevo,
+        } as any);
+        await queryRunner.manager.save(movementLog);
       }
 
       // 3. Guardamos la entidad 'producto' completa.

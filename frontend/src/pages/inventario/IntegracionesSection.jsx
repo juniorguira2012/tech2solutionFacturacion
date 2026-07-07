@@ -1,7 +1,10 @@
 import React from 'react';
 import { Plug } from 'lucide-react';
 
-const IntegracionesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
+const IntegracionesSection = ({ mostrarToast, permisos }) => {
+  // 🛡️ Extraemos los permisos específicos para esta sección
+  const permisosIntegraciones = permisos?.subModulos?.integraciones ?? permisos;
+
   return ( // La vista general ya está protegida por el padre, aquí solo protegemos las acciones
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4">
       <div className="flex items-center gap-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mb-4">
@@ -36,8 +39,8 @@ const IntegracionesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Rec
                   ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
                   : 'bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100'
               }`}
-              disabled={!permisos?.edit}
-              title={!permisos?.edit ? 'No tienes permiso para modificar integraciones' : ''}
+              disabled={!permisosIntegraciones?.edit}
+              title={!permisosIntegraciones?.edit ? 'No tienes permiso para modificar integraciones' : ''}
             >
               {canal.conectado ? '✓ Conectado' : 'Conectar'}
             </button>

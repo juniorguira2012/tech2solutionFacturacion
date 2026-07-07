@@ -187,7 +187,11 @@ const LotesSection = ({ mostrarToast, permisos }) => {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex flex-col items-center gap-1">
-                        <span className="text-[10px] font-bold text-slate-600">{lote.fechaVencimiento ? new Date(lote.fechaVencimiento).toLocaleDateString() : 'N/A'}</span>
+                        <span className={`text-[10px] font-bold ${
+                          estado.label === 'Vencido' ? 'text-red-500' : 
+                          estado.label === 'Próximo a Vencer' ? 'text-amber-500' : 
+                          'text-slate-600'
+                        }`}>{lote.fechaVencimiento ? new Date(lote.fechaVencimiento).toLocaleDateString() : 'N/A'}</span>
                         <span className={`px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-tighter ${estado.color}`}>
                           {estado.label}
                         </span>

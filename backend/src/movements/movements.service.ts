@@ -767,17 +767,53 @@ export class MovementsService {
   }
 
   async createBatch(createDto: CreateInventoryBatchDto) {
-    const producto = await this.productRepository.findOneBy({ id: createDto.productoId });
-    if (!producto) {
-      throw new NotFoundException(`Producto con ID ${createDto.productoId} no encontrado.`);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const { productoId, cantidad, almacen, numeroLote } = createDto;
+
+      const producto = await queryRunner.manager.findOne(Product, { where: { id: productoId } });
+      if (!producto) {
+        throw new NotFoundException(`Producto con ID ${productoId} no encontrado.`);
+      }
+
+      // 1. Crear y guardar el nuevo lote
+      const nuevoLote = this.inventoryBatchRepository.create({
+        ...createDto,
+        producto: producto,
+      });
+      await queryRunner.manager.save(nuevoLote);
+
+      // 2. Actualizar el stock del producto
+      await this.updateWarehouseStock(queryRunner.manager, producto.id, almacen, cantidad);
+      
+      const allStocks = await queryRunner.manager.find(ProductWarehouseStock, { where: { productoId: producto.id } });
+      const nuevoStockTotal = allStocks.reduce((sum, s) => sum + Number(s.cantidad), 0);
+      
+      await queryRunner.manager.update(Product, producto.id, { stock: nuevoStockTotal });
+
+      // 3. Registrar el movimiento en el Kardex
+      const movement = queryRunner.manager.create(Movement, {
+        productoId: producto.id,
+        tipo: 'ENTRADA',
+        cantidad: cantidad,
+        nuevoStock: nuevoStockTotal,
+        nota: `Ingreso por creación de lote: ${numeroLote}`,
+        almacenDestino: almacen,
+      } as any);
+      await queryRunner.manager.save(movement);
+
+      await queryRunner.commitTransaction();
+      return nuevoLote;
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    const nuevoLote = this.inventoryBatchRepository.create({
-      ...createDto,
-      producto: producto,
-    });
-
-    return this.inventoryBatchRepository.save(nuevoLote);
   }
 
   async updateBatch(id: number, updateDto: UpdateInventoryBatchDto) {

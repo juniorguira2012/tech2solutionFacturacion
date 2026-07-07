@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { HandHelping, User, Clock, Calendar, Search, Plus, CheckCircle, History, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 
-const ComodatoSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
+const ComodatoSection = ({ mostrarToast, permisos }) => {
+  // 🛡️ Extraemos los permisos específicos para esta sección
+  const permisosComodato = permisos?.subModulos?.comodato ?? permisos;
+
   const { productos, prestamos, cargarPrestamos, crearPrestamo, devolverPrestamo } = useInventario();
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -24,8 +27,7 @@ const ComodatoSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
 
   const registrarPrestamo = async (e) => {
     e.preventDefault();
-    // 🛡️ 2. Verificación de permiso de creación
-    if (!permisos?.create) {
+    if (!permisosComodato?.create) {
       mostrarToast('No tienes permiso para registrar préstamos', 'error');
       return;
     }
@@ -52,8 +54,7 @@ const ComodatoSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
   };
 
   const manejarDevolucion = async (comodatoId) => {
-    // 🛡️ 3. Verificación de permiso de edición (devolver modifica un registro)
-    if (!permisos?.edit) {
+    if (!permisosComodato?.edit) {
       mostrarToast('No tienes permiso para procesar devoluciones', 'error');
       return;
     }
@@ -114,7 +115,7 @@ const ComodatoSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Control de herramientas prestadas</p>
           </div>
         </div>
-        {permisos?.create && ( // 🛡️ 4. Condicionamos el botón de "Registrar Entrega"
+        {permisosComodato?.create && (
           <button 
             onClick={() => setShowModal(true)}
             className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-black transition-all active:scale-95 shadow-lg shadow-slate-200"
@@ -229,7 +230,7 @@ const ComodatoSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
                   </span>
                 </td>
                 <td className="px-6 py-4 text-center">
-                  {item.estado === 'activo' && permisos?.edit ? ( // 🛡️ 5. Condicionamos el botón de "Devolver"
+                  {item.estado === 'activo' && permisosComodato?.edit ? (
                     <>
                       <button
                         onClick={() => manejarDevolucion(item.id)}
@@ -251,7 +252,7 @@ const ComodatoSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
       </div>
 
       {/* Modal de Registro */}
-      {showModal && permisos?.create && ( // 🛡️ 6. Condicionamos el modal completo
+      {showModal && permisosComodato?.create && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">

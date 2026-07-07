@@ -9,6 +9,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useScanner } from '../../hooks/useScanner'; // 🛡️ 1. Recibimos los permisos
 
 const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
+  // 🛡️ Extraemos los permisos específicos para esta sección
+  const permisosConteo = permisos?.subModulos?.conteo ?? permisos;
+
   const { 
     productos,
     conteos, 
@@ -51,8 +54,7 @@ const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
 
   const handleCrearConteo = async (e) => {
     e.preventDefault();
-    // 🛡️ 2. Verificación de permiso de creación
-    if (!permisos?.create) {
+    if (!permisosConteo?.create) {
       mostrarToast?.("No tienes permiso para iniciar conteos", "error");
       return;
     }
@@ -77,7 +79,7 @@ const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
 
   const handleEliminar = async (id) => {
     // 🛡️ 3. Verificación de permiso de eliminación
-    if (!permisos?.delete) {
+    if (!permisosConteo?.delete) {
       mostrarToast?.("No tienes permiso para eliminar auditorías", "error");
       return;
     }
@@ -123,7 +125,7 @@ const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
       onBack={() => { setViewMode('main'); cargarConteos(); }} 
       onReview={() => setViewMode('review')} // 🛡️ Pasamos permisos a sub-componentes
       mostrarToast={mostrarToast} 
-      permisos={permisos}
+      permisos={permisosConteo}
     />;
   }
 
@@ -133,7 +135,7 @@ const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
       onBack={() => setViewMode('counting')} 
       onFinish={() => { setViewMode('main'); cargarConteos(); }}
       mostrarToast={mostrarToast}
-      permisos={permisos} // 🛡️ Pasamos permisos a sub-componentes
+      permisos={permisosConteo}
     />;
   }
 
@@ -167,7 +169,7 @@ const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
               <List size={16} />
             </button>
           </div>
-          {permisos?.create && ( // 🛡️ 4. Condicionamos el botón de "Iniciar Conteo"
+          {permisosConteo?.create && (
             <button 
               onClick={() => setIsModalOpen(true)}
               className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all active:scale-95"
@@ -233,7 +235,7 @@ const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
                       className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-brand bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-all">
                     Continuar <ArrowRight size={12}/>
                   </button>
-                  {permisos?.delete && ( // 🛡️ 5. Condicionamos el botón de eliminar
+                  {permisosConteo?.delete && (
                     <button 
                       onClick={() => handleEliminar(conteo.id)}
                       className="h-8 w-8 flex items-center justify-center text-red-500 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-all"
@@ -249,7 +251,7 @@ const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
             <div className="col-span-full py-10 flex flex-col items-center gap-3">
               <ClipboardList size={32} className="text-slate-400" />
               <p className="text-sm font-black text-slate-400 uppercase tracking-wider">No hay sesiones de conteo iniciadas</p>
-              {permisos?.create && (
+              {permisosConteo?.create && (
                 <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all active:scale-95">
                   <Plus size={16} /> Iniciar Primer Conteo
                 </button>
@@ -294,7 +296,7 @@ const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
                   <td className="px-6 py-4 text-right text-slate-400">
                     <div className="flex justify-end gap-2">
                       <button onClick={() => handleContinuarConteo(conteo)} className="p-2 hover:text-brand transition-all"><ArrowRight size={14}/></button>
-                      {permisos?.delete && ( // 🛡️ 6. Condicionamos el botón de eliminar en la lista
+                      {permisosConteo?.delete && (
                         <button 
                           onClick={() => handleEliminar(conteo.id)}
                           className="p-2 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
@@ -311,7 +313,7 @@ const ConteoFisicoSection = ({ mostrarToast, permisos }) => {
       )}
 
       {/* Modal para iniciar auditoría */}
-      {isModalOpen && permisos?.create && ( // 🛡️ 7. Condicionamos el modal completo
+      {isModalOpen && permisosConteo?.create && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
