@@ -133,11 +133,24 @@ const Ventas = () => {
   const [serialesInput, setSerialesInput] = useState('');
 
   // --- CONFIGURACIÓN Y TIEMPO ---
-  const itbisGlobal = Number(localStorage.getItem('posfactura_itbis')) || 18;
   const [fechaHora, setFechaHora] = useState(new Date());
 
-  const taxName = useMemo(() => {
-    return localStorage.getItem('posfactura_nombre_impuesto') || 'ITBIS';
+  const { activeTaxes, totalTaxPercentage } = useMemo(() => {
+    const impuestosActivos = JSON.parse(localStorage.getItem('posfactura_impuestos_activos') || '{"ITBIS":true}');
+    const impuestosConfig = JSON.parse(localStorage.getItem('posfactura_impuestos_config') || '{}');
+    
+    const activeTaxDetails = Object.keys(impuestosActivos)
+      .filter(key => impuestosActivos[key])
+      .map(name => ({
+        name: name,
+        percentage: Number(impuestosConfig[name]) || 0
+      }));
+    const totalPercentage = activeTaxDetails.reduce((sum, tax) => sum + tax.percentage, 0);
+
+    return {
+      activeTaxes: activeTaxDetails,
+      totalTaxPercentage: totalPercentage,
+    };
   }, []);
 
   const impuestoActivo = useMemo(() => {
@@ -167,7 +180,7 @@ const Ventas = () => {
 
     const md = st * (Number(descuentoPorcentaje) / 100);
     const subtotalConDescuento = st - md;
-    const imp = impuestoActivo ? (subtotalConDescuento * (itbisGlobal / 100)) : 0;
+    const imp = impuestoActivo ? (subtotalConDescuento * (totalTaxPercentage / 100)) : 0;
     const tf = subtotalConDescuento + imp;
 
     return {
@@ -176,7 +189,7 @@ const Ventas = () => {
       impuesto: imp,
       totalFinal: tf,
     };
-  }, [carrito, descuentoPorcentaje, itbisGlobal, impuestoActivo]);
+  }, [carrito, descuentoPorcentaje, totalTaxPercentage, impuestoActivo]); // totalTaxPercentage sigue siendo necesario aquí
 
   const formatoMoneda = useCallback((valor) => (
     Number(valor).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -325,7 +338,7 @@ const Ventas = () => {
       title: 'Confirmar venta',
       message: 'Revisa el total antes de procesar e imprimir el ticket.',
       total: formatoMoneda(totalFinal),
-      onConfirm: procesarVenta,
+      onConfirm: procesarVenta, // Esto está bien
     });
   }, [carrito.length, totalFinal, formatoMoneda, procesarVenta, permisos.create]);
 
@@ -681,12 +694,20 @@ const Ventas = () => {
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center text-slate-400">
-                  <span className="text-[9px]">
-                    {impuestoActivo ? `${taxName} (${itbisGlobal}%)` : 'Impuesto (Desactivado)'}
-                  </span>
-                  <span className="text-slate-800">RD$ {impuesto.toLocaleString()}</span>
-                </div>
+                {impuestoActivo ? (
+                  activeTaxes.map(tax => {
+                    const subtotalConDescuento = subtotal - montoDescuento;
+                    const taxAmount = subtotalConDescuento * (tax.percentage / 100);
+                    return (
+                      <div key={tax.name} className="flex justify-between items-center text-slate-400">
+                        <span className="text-[9px]">{tax.name} ({tax.percentage}%)</span>
+                        <span className="text-slate-800">RD$ {taxAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex justify-between items-center text-slate-400"><span className="text-[9px]">Impuesto (Desactivado)</span><span className="text-slate-800">RD$ 0.00</span></div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-dashed border-slate-200 text-center uppercase">

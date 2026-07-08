@@ -29,9 +29,17 @@ const Configuracion = ({ mostrarToast }) => {
 
   // --- ESTADOS GENERALES ---
   const [impuestoActivo, setImpuestoActivo] = useState(() => localStorage.getItem('posfactura_impuesto_activo') !== 'false'); // Default a true
-  const [nombreImpuesto, setNombreImpuesto] = useState(localStorage.getItem('posfactura_nombre_impuesto') || 'ITBIS');
-  const [itbis, setItbis] = useState(localStorage.getItem('posfactura_itbis') || 18);
   const [papel, setPapel] = useState(localStorage.getItem('posfactura_papel') || '80mm');
+  const [impuestosActivos, setImpuestosActivos] = useState(() => {
+    const saved = localStorage.getItem('posfactura_impuestos_activos');
+    return saved ? JSON.parse(saved) : { ITBIS: true }; // Default ITBIS a activo
+  });
+  const [impuestos, setImpuestos] = useState(() => {
+    const saved = localStorage.getItem('posfactura_impuestos_config');
+    return saved ? JSON.parse(saved) : {
+      ITBIS: 18, ISC: 10, CDT: 2, ISR: 10, IPI: 1
+    };
+  });
   const [datosNegocio, setDatosNegocio] = useState(() => {
     const savedConfig = localStorage.getItem('posfactura_config');
     return savedConfig ? JSON.parse(savedConfig) : { 
@@ -87,9 +95,8 @@ const Configuracion = ({ mostrarToast }) => {
     setGuardando(true);
     try {
       localStorage.setItem('posfactura_impuesto_activo', impuestoActivo);
-      // 1. Guardamos de inmediato en LocalStorage como respaldo local rápido
-      localStorage.setItem('posfactura_itbis', itbis);
-      localStorage.setItem('posfactura_nombre_impuesto', nombreImpuesto);
+      localStorage.setItem('posfactura_impuestos_activos', JSON.stringify(impuestosActivos));
+      localStorage.setItem('posfactura_impuestos_config', JSON.stringify(impuestos));
       localStorage.setItem('posfactura_papel', papel);
       localStorage.setItem('posfactura_config', JSON.stringify(datosNegocio));
       localStorage.setItem('posfactura_ncf', JSON.stringify(ncfConfig));
@@ -246,10 +253,10 @@ const Configuracion = ({ mostrarToast }) => {
           <ImpuestoGeneral
             impuestoActivo={impuestoActivo}
             setImpuestoActivo={setImpuestoActivo}
-            nombreImpuesto={nombreImpuesto}
-            setNombreImpuesto={setNombreImpuesto}
-            itbis={itbis}
-            setItbis={setItbis}
+            impuestosActivos={impuestosActivos}
+            setImpuestosActivos={setImpuestosActivos}
+            impuestos={impuestos}
+            setImpuestos={setImpuestos}
           />
 
           {/* Formato de Ticket */}
