@@ -32,14 +32,15 @@ export const modulos = [
       id: 'reportes', 
       nombre: 'Reportes y Analíticas', 
       desc: 'Visualización de KPIs y datos comerciales', 
-      actions: ['view'],
+      actions: ['view', 'create', 'edit', 'delete'],
       subModulos: [
         { id: 'reporte_ventas', nombre: 'Reporte de Ventas', desc: 'Análisis de ingresos y transacciones', actions: ['view'] },
         { id: 'reporte_clientes', nombre: 'Ranking de Clientes', desc: 'Análisis de lealtad y compras', actions: ['view'] },
+        { id: 'auditoria_ingresos', nombre: 'Auditoría de Ingresos', desc: 'Verificación y cuadre de caja', actions: ['view', 'create', 'edit', 'delete'] },
       ]
     },
     { id: 'historial_ventas', nombre: 'Historial de Ventas', desc: 'Consulta y reimpresión de facturas pasadas', actions: ['view', 'delete'] },
-    { id: 'configuracion', nombre: 'Configuración del Sistema', desc: 'Ajustes globales, seguridad y datos de empresa', actions: ['view'], subModulos: [
+    { id: 'configuracion', nombre: 'Configuración del Sistema', desc: 'Ajustes globales, seguridad y datos de empresa', actions: ['view', 'create', 'edit', 'delete'], subModulos: [
         { id: 'usuarios', nombre: 'Gestión de Usuarios', desc: 'Control de cuentas de acceso del personal', actions: ['view', 'create', 'edit', 'delete'] },
         { id: 'datos_empresa', nombre: 'Datos de Empresa y Facturación', desc: 'Ajustes de RNC, NCF, ITBIS, etc.', actions: ['view', 'edit'] },
     ]},
@@ -89,7 +90,12 @@ const RolesManager = () => {
           adminPermissions[modulo.id] = modulePerms;
         });
 
-        configMap['admin'] = { modules: adminPermissions, viewScope: 'all' };
+        // 🚀 CORRECCIÓN: Se alinea la estructura de permisos del admin con la de los demás roles.
+        // En lugar de { modules: {...} }, se asigna directamente el objeto de permisos.
+        // Esto asegura que la UI (checkboxes) refleje correctamente los permisos del admin.
+        // La lógica de `AuthContext` ya maneja la asignación de permisos de forma correcta para el acceso.
+        // Esta corrección es puramente para la consistencia visual en esta pantalla.
+        configMap['admin'] = adminPermissions;
         
         setRolesConfig(configMap);
         
@@ -142,7 +148,12 @@ const RolesManager = () => {
     setRolesConfig(prev => ({
       ...prev,
       [key]: {
-        modules: Object.fromEntries(modulos.map(m => [m.id, {...defaultPermissions}])),
+        // 🚀 CORRECCIÓN: Se inicializa un nuevo rol con la estructura de permisos correcta,
+        // anidando los módulos dentro de una propiedad 'modules'.
+        modules: Object.fromEntries(modulos.map(m => [
+          m.id, 
+          { ...defaultPermissions, ...(m.subModulos && { subModulos: {} }) }
+        ])),
         viewScope: 'own'
       }
     }));

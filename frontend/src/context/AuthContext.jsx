@@ -47,10 +47,8 @@ export const AuthProvider = ({ children }) => {
           }
           adminPermissions[modulo.id] = modulePerms;
         });
-        return {
-          modules: adminPermissions,
-          viewScope: 'all'
-        }
+        // 🚨 CORRECCIÓN: Devolvemos el objeto de permisos directamente, sin anidarlo en 'modules'.
+        return adminPermissions;
       }
       return null;
     } catch (error) {

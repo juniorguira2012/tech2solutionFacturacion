@@ -2,21 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { 
   Printer, Percent, Database, Save, 
   Download, ArrowRight, Users, 
-  ShieldCheck, Terminal, AlertCircle, FileSpreadsheet, Building2, Lock
+  ShieldCheck, Terminal, AlertCircle, FileSpreadsheet, Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
+import DatosEmpresa from '../pages/DatosEmpresa';
 
 const Configuracion = ({ mostrarToast }) => {
   const navigate = useNavigate();
   const { usuario } = useAuth();
+  const esAdmin = usuario?.rol === 'admin';
   const permisos = usePermissions('configuracion'); // 🛡️ Obtenemos permisos para el módulo
   
   // 🛡️ Determinamos qué sub-módulos puede ver y editar el usuario
-  const puedeVerUsuarios = permisos.subModulos?.usuarios?.view;
-  const puedeVerDatosEmpresa = permisos.subModulos?.datos_empresa?.view;
-  const puedeEditarDatosEmpresa = permisos.subModulos?.datos_empresa?.edit;
+  const puedeVerUsuarios = esAdmin || permisos.subModulos?.usuarios?.view;
+  const puedeVerDatosEmpresa = esAdmin || permisos.subModulos?.datos_empresa?.view;
+  const puedeEditarDatosEmpresa = esAdmin || permisos.subModulos?.datos_empresa?.edit;
 
   const [guardando, setGuardando] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
@@ -144,7 +146,7 @@ const Configuracion = ({ mostrarToast }) => {
   };
 
   // 🛡️ Muro de seguridad si no tiene acceso a ninguna sección de configuración
-  if (!permisos.view) {
+  if (!esAdmin && !permisos.view) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4 animate-in fade-in duration-300">
         <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-200 max-w-md">
@@ -223,41 +225,7 @@ const Configuracion = ({ mostrarToast }) => {
         <section className="lg:col-span-8 space-y-6 animate-in fade-in duration-300">
           
           {/* Identidad de Empresa */}
-          <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm space-y-6">
-            <div className="flex items-center gap-3 border-b border-slate-50 pb-4">
-              <Building2 size={18} className="text-slate-900" />
-              <h2 className="font-black text-slate-700 uppercase text-[11px] tracking-widest leading-none">Datos de la Empresa (Encabezado)</h2>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Razón Social</label>
-                <input name="nombre" value={datosNegocio.nombre} onChange={handleInputChange} 
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-slate-900 font-bold text-slate-700 text-xs uppercase" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">RNC / Cédula Comercial</label>
-                <input name="rnc" value={datosNegocio.rnc || ''} onChange={handleInputChange} placeholder="Ej: 131-XXXXX-X"
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-slate-900 font-bold text-slate-700 text-xs" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono Fijo</label>
-                <input name="telefono" value={datosNegocio.telefono || ''} onChange={handleInputChange} placeholder="809-XXX-XXXX"
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-slate-900 font-bold text-slate-700 text-xs" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Dirección Física</label>
-                <input name="direccion" value={datosNegocio.direccion || ''} onChange={handleInputChange} 
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-slate-900 font-bold text-slate-700 text-xs uppercase" />
-              </div>
-            </div>
-            
-            <div className="space-y-1 pt-2">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Mensaje de Cierre (Pie del Ticket)</label>
-              <input name="mensaje" value={datosNegocio.mensaje} onChange={handleInputChange} 
-                className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:bg-white focus:border-slate-900 font-bold text-slate-700 text-xs" />
-            </div>
-          </div>
+          <DatosEmpresa datosNegocio={datosNegocio} handleInputChange={handleInputChange} />
 
           {/* CONTROL DE COMPROBANTES FISCALES (DGII) */}
           <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm space-y-6">

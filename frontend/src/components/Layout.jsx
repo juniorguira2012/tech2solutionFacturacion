@@ -123,7 +123,7 @@ export const Layout = ({ children }) => {
 
         <nav className="flex-1 px-4 space-y-1">
           {menuItems.map((item) => (
-            (item.id === 'inicio' || puedeVer(item.id)) && (
+            (item.id === 'inicio' || puedeVer(item.id) || (item.id === 'configuracion' && usuario?.rol === 'admin')) && (
               <NavLink
                 key={item.path}
                 to={item.path}
@@ -194,7 +194,7 @@ export const Layout = ({ children }) => {
           <div className="flex items-center justify-between px-5 pt-2 text-slate-400 font-bold tracking-wider text-[9px] uppercase">
             <span className="opacity-80">Tec2Solution © 2026</span>
             <span className="bg-white/10 border border-white/5 px-2.5 py-0.5 rounded-full text-slate-200 font-mono text-[10px]">
-              {`v${import.meta.env.VITE_APP_VERSION || '1.5.2'}`}
+              {`v${import.meta.env.VITE_APP_VERSION || '1.6.2'}`}
             </span>
           </div>
         </div>

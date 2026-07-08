@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useVentas } from '../context/VentasContext';
 import { usePermissions } from '../hooks/usePermissions';
-import { 
+import { useAuth } from '../context/AuthContext';
+import {
   Search, Calendar, FileText, Table, DollarSign, 
-  Hash, Users, Star, Package, TrendingUp, BarChart2, Lock
+  Hash, Users, Star, Package, TrendingUp, BarChart2, Lock, Edit, Trash2, Plus, X
 } from 'lucide-react';
 
 // IMPORTAR LIBRERÍAS DE EXPORTACIÓN Y DATEPICKER
@@ -12,23 +13,284 @@ import "react-datepicker/dist/react-datepicker.css";
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+// --- SUB-COMPONENTE PARA LA NUEVA SECCIÓN DE AUDITORÍA ---
+const AuditoriaIngresosSection = ({ permisos }) => {
+  const { usuario, getAuthHeaders } = useAuth();
+  const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+  const [auditorias, setAuditorias] = useState([
+    { id: 1, fecha: '2023-10-27T10:00:00Z', usuario: 'Ana', totalSistema: 15200.50, totalContado: 15200.00, diferencia: -0.50, estado: 'Cerrado' },
+    { id: 2, fecha: '2023-10-26T22:00:00Z', usuario: 'Juan', totalSistema: 25450.00, totalContado: 25450.00, diferencia: 0.00, estado: 'Cerrado' },
+    { id: 3, fecha: '2023-10-26T14:00:00Z', usuario: 'Ana', totalSistema: 12300.00, totalContado: 12350.00, diferencia: 50.00, estado: 'Cerrado con Diferencia' },
+  ]);
+  const [showModal, setShowModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Estado para el formulario del nuevo cuadre
+  const [nuevoCuadre, setNuevoCuadre] = useState({
+    totalSistema: '15200.50', // Este valor debería venir de un cálculo real
+    efectivo: '',
+    tarjeta: '',
+    transferencia: '',
+    otros: '',
+    nota: ''
+  });
+
+  const totalContadoCalculado = useMemo(() => {
+    const { efectivo, tarjeta, transferencia, otros } = nuevoCuadre;
+    return (Number(efectivo) || 0) + (Number(tarjeta) || 0) + (Number(transferencia) || 0) + (Number(otros) || 0);
+  }, [nuevoCuadre]);
+
+  const diferenciaCalculada = useMemo(() => {
+    return totalContadoCalculado - (Number(nuevoCuadre.totalSistema) || 0);
+  }, [totalContadoCalculado, nuevoCuadre.totalSistema]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setNuevoCuadre(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleGuardarCuadre = async (e) => {
+    e.preventDefault();
+    if (!permisos?.create) return;
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        userId: usuario.id,
+        totalSistema: Number(nuevoCuadre.totalSistema),
+        totalContado: totalContadoCalculado,
+        desglose: {
+          efectivo: Number(nuevoCuadre.efectivo) || 0,
+          tarjeta: Number(nuevoCuadre.tarjeta) || 0,
+          transferencia: Number(nuevoCuadre.transferencia) || 0,
+          otros: Number(nuevoCuadre.otros) || 0,
+        },
+        diferencia: diferenciaCalculada,
+        nota: nuevoCuadre.nota,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/audits/cash-closures`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al guardar el cuadre');
+      }
+
+      const cuadreGuardado = await response.json();
+
+      // Simulamos la actualización en el frontend
+      setAuditorias(prev => [{
+        id: cuadreGuardado.id || Date.now(),
+        fecha: cuadreGuardado.createdAt || new Date().toISOString(),
+        usuario: usuario.nombre,
+        totalSistema: payload.totalSistema,
+        totalContado: payload.totalContado,
+        diferencia: payload.diferencia,
+        estado: 'Cerrado'
+      }, ...prev]);
+
+      setShowModal(false);
+      setNuevoCuadre({
+        totalSistema: '15200.50', efectivo: '', tarjeta: '', transferencia: '', otros: '', nota: ''
+      });
+
+    } catch (error) {
+      console.error("Error guardando cuadre:", error);
+      // Aquí podrías usar un toast para mostrar el error
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Cargar auditorías reales desde el backend
+  // useEffect(() => { ... fetch logic ... }, []);
+
+  const totalAuditado = useMemo(() => auditorias.reduce((acc, a) => acc + a.totalSistema, 0), [auditorias]);
+  const totalDiferencia = useMemo(() => auditorias.reduce((acc, a) => acc + a.diferencia, 0), [auditorias]);
+
+  return (
+    <div className="space-y-6 animate-in slide-in-from-bottom-4">
+      {/* KPIs de Auditoría */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase italic">Total Registrado en Sistema</p>
+          <h3 className="text-2xl font-black text-slate-800 italic mt-1">RD$ {totalAuditado.toLocaleString()}</h3>
+        </div>
+        <div className={`p-6 rounded-[2.5rem] border shadow-sm ${totalDiferencia !== 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+          <p className={`text-[10px] font-black uppercase italic ${totalDiferencia !== 0 ? 'text-rose-500' : 'text-emerald-600'}`}>Desajuste Total (Faltante/Sobrante)</p>
+          <h3 className={`text-2xl font-black italic mt-1 ${totalDiferencia !== 0 ? 'text-rose-600' : 'text-emerald-700'}`}>RD$ {totalDiferencia.toLocaleString()}</h3>
+        </div>
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase italic">Cierres de Caja Realizados</p>
+          <h3 className="text-2xl font-black text-slate-800 italic mt-1">{auditorias.length}</h3>
+        </div>
+      </div>
+
+      {/* Tabla de Auditorías */}
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex justify-end">
+          {permisos?.create && (
+            <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-md hover:bg-brand transition-all">
+              <Plus size={14} /> Registrar Nuevo Cuadre
+            </button>
+          )}
+        </div>
+        <table className="w-full text-left text-[11px]">
+          <thead className="bg-slate-50/50 border-b border-slate-100 text-slate-400 text-[9px] uppercase font-black tracking-widest">
+            <tr>
+              <th className="px-6 py-4">Fecha y Hora</th>
+              <th className="px-6 py-4">Usuario</th>
+              <th className="px-6 py-4 text-right">Total Sistema</th>
+              <th className="px-6 py-4 text-right">Total Contado</th>
+              <th className="px-6 py-4 text-right">Diferencia</th>
+              <th className="px-6 py-4 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {auditorias.map(a => (
+              <tr key={a.id} className="hover:bg-slate-50/80 font-bold">
+                <td className="px-6 py-4 text-slate-500">{new Date(a.fecha).toLocaleString()}</td>
+                <td className="px-6 py-4 text-slate-700 uppercase">{a.usuario}</td>
+                <td className="px-6 py-4 text-right text-slate-600">RD$ {a.totalSistema.toLocaleString()}</td>
+                <td className="px-6 py-4 text-right text-slate-800 font-black">RD$ {a.totalContado.toLocaleString()}</td>
+                <td className={`px-6 py-4 text-right font-black ${a.diferencia < 0 ? 'text-red-500' : a.diferencia > 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                  {a.diferencia.toLocaleString()}
+                </td>
+                <td className="px-6 py-4 text-center">
+                  <div className="flex justify-center gap-1">
+                    {permisos?.edit && <button className="p-2 text-slate-400 hover:text-brand rounded-lg"><Edit size={14} /></button>}
+                    {permisos?.delete && <button className="p-2 text-slate-400 hover:text-red-500 rounded-lg"><Trash2 size={14} /></button>}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal para Registrar Nuevo Cuadre */}
+      {showModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter italic">Registrar Cuadre de Caja</h2>
+              <button onClick={() => setShowModal(false)} className="h-10 w-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 shadow-sm transition-all"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleGuardarCuadre} className="p-8 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <label className="text-[9px] font-black text-slate-400 uppercase">Total según Sistema</label>
+                  <input type="number" step="0.01" name="totalSistema" value={nuevoCuadre.totalSistema} onChange={handleInputChange}
+                    className="w-full bg-transparent text-lg font-black text-slate-700 outline-none" />
+                </div>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <label className="text-[9px] font-black text-slate-400 uppercase">Total Contado Físico</label>
+                  <p className="text-lg font-black text-brand">RD$ {totalContadoCalculado.toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-dashed">
+                <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Desglose del Conteo Físico</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400">Efectivo</label>
+                    <input type="number" step="0.01" name="efectivo" value={nuevoCuadre.efectivo} onChange={handleInputChange} placeholder="0.00"
+                      className="w-full p-2 border rounded-lg font-bold text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400">Tarjeta</label>
+                    <input type="number" step="0.01" name="tarjeta" value={nuevoCuadre.tarjeta} onChange={handleInputChange} placeholder="0.00"
+                      className="w-full p-2 border rounded-lg font-bold text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400">Transferencia</label>
+                    <input type="number" step="0.01" name="transferencia" value={nuevoCuadre.transferencia} onChange={handleInputChange} placeholder="0.00"
+                      className="w-full p-2 border rounded-lg font-bold text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400">Otros</label>
+                    <input type="number" step="0.01" name="otros" value={nuevoCuadre.otros} onChange={handleInputChange} placeholder="0.00"
+                      className="w-full p-2 border rounded-lg font-bold text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <label className="text-[10px] font-black text-slate-500 uppercase">Nota Adicional (Opcional)</label>
+                <textarea name="nota" value={nuevoCuadre.nota} onChange={handleInputChange} rows="2"
+                  className="w-full p-3 border rounded-lg mt-1 text-sm" placeholder="Ej: Diferencia por error en devolución..."></textarea>
+              </div>
+
+              <div className={`p-4 rounded-2xl text-center ${diferenciaCalculada !== 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                <p className={`text-[9px] font-black uppercase ${diferenciaCalculada !== 0 ? 'text-rose-500' : 'text-emerald-600'}`}>Diferencia (Faltante/Sobrante)</p>
+                <p className={`text-2xl font-black ${diferenciaCalculada !== 0 ? 'text-rose-600' : 'text-emerald-700'}`}>RD$ {diferenciaCalculada.toLocaleString()}</p>
+              </div>
+
+              <button type="submit" disabled={isSaving} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-brand transition-all uppercase text-[10px] tracking-widest disabled:opacity-50">
+                {isSaving ? 'Guardando...' : 'Confirmar y Cerrar Caja'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- SUB-COMPONENTE PARA EL GRÁFICO DE VENTAS ---
+const VentasChart = ({ data }) => {
+  // Formateamos los datos para que el eje X sea más legible y ordenamos por fecha.
+  const chartData = data
+    .map(item => ({
+      ...item,
+      // Extraemos solo el día y el mes para un eje X más limpio.
+      fechaCorta: new Date(item.periodo.split('/').reverse().join('-')).toLocaleDateString('es-DO', { day: '2-digit', month: 'short' }),
+    }))
+    .sort((a, b) => new Date(a.periodo.split('/').reverse().join('-')) - new Date(b.periodo.split('/').reverse().join('-')));
+
+  return (
+    <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm h-80 animate-in fade-in duration-500">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="fechaCorta" tick={{ fontSize: 10, fill: '#64748b' }} />
+          <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(value) => `RD$${(value/1000)}k`} />
+          <Tooltip formatter={(value) => [`RD$ ${Number(value).toLocaleString()}`, 'Ingresos']} cursor={{ fill: 'rgba(100, 116, 139, 0.05)' }} />
+          <Bar dataKey="total" fill="#4f46e5" name="Ingresos" radius={[8, 8, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
 
 const Reportes = () => {
   const { historialVentas } = useVentas();
+  const { usuario } = useAuth(); // 🚀 Obtenemos el usuario actual
   const permisos = usePermissions('reportes'); // 🛡️ Obtenemos permisos para el módulo
+  const esAdmin = usuario?.rol === 'admin';
 
   // 🛡️ Determinamos qué sub-módulos puede ver el usuario
-  const puedeVerVentas = permisos.subModulos?.reporte_ventas?.view;
-  const puedeVerClientes = permisos.subModulos?.reporte_clientes?.view;
+  const puedeVerVentas = esAdmin || permisos.subModulos?.reporte_ventas?.view;
+  const puedeVerClientes = esAdmin || permisos.subModulos?.reporte_clientes?.view;
+  const puedeVerAuditoria = esAdmin || permisos.subModulos?.auditoria_ingresos?.view;
   
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
   const [busquedaGlobal, setBusquedaGlobal] = useState(""); 
   
   // 🛡️ La pestaña activa por defecto es la primera a la que tenga acceso
+  // 🚀 CORRECCIÓN: Si es admin, siempre empieza en 'ventas'.
   const [tabActiva, setTabActiva] = useState(() => {
-    if (puedeVerVentas) return 'ventas';
+    if (usuario?.rol === 'admin' || puedeVerVentas) return 'ventas';
     if (puedeVerClientes) return 'clientes';
+    if (puedeVerAuditoria) return 'auditoria';
     return null;
   });
   
@@ -253,7 +515,7 @@ const Reportes = () => {
   };
 
   // 🛡️ Muro de seguridad si no tiene acceso a ningún reporte
-  if (!permisos.view) {
+  if (!esAdmin && !permisos.view) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4 animate-in fade-in duration-300">
         <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-200 max-w-md">
@@ -338,6 +600,9 @@ const Reportes = () => {
             {puedeVerClientes && (
               <button onClick={() => setTabActiva('clientes')} className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${tabActiva === 'clientes' ? 'bg-slate-900 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>Ranking de Clientes</button>
             )}
+            {puedeVerAuditoria && (
+              <button onClick={() => setTabActiva('auditoria')} className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${tabActiva === 'auditoria' ? 'bg-slate-900 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>Auditoría de Ingresos</button>
+            )}
           </div>
 
           {/* SEGMENTACIÓN SUB-REPORTES CRONOLÓGICOS (Solo si estás en la tab Ventas) */}
@@ -384,6 +649,11 @@ const Reportes = () => {
               </span>
             </div>
           </div>
+
+          {/* GRÁFICO DE BARRAS (Solo para agrupación por días) */}
+          {agrupacionVentas === 'dias' && ventasAgrupadas.length > 0 && (
+            <VentasChart data={ventasAgrupadas} />
+          )}
 
           {/* TABLA DINÁMICA DE VENTAS (MUTABLE SEGÚN AGRUPACIÓN) */}
           <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
@@ -475,6 +745,11 @@ const Reportes = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {/* RENDER DE LA SECCIÓN DE AUDITORÍA */}
+      {tabActiva === 'auditoria' && puedeVerAuditoria && (
+        <AuditoriaIngresosSection permisos={permisos.subModulos?.auditoria_ingresos} />
       )}
     </div>
   );

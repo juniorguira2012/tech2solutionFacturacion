@@ -99,28 +99,34 @@ export const InventarioProvider = ({ children }) => {
     // 🚀 MEJORA 2: Función para cargar el resto de los datos en segundo plano.
     // Estos datos no bloquean la renderización de la lista de productos.
     const cargarDatosSecundarios = async () => {
-      const fetchResource = async (url, setter) => {
-        try {
-          const response = await fetch(url, { headers });
-          if (!response.ok) throw new Error(`Fallo en ${url}`);
-          const data = await response.json();
-          setter(Array.isArray(data) ? data : []);
-        } catch (error) {
-          console.warn(`Advertencia al cargar recurso secundario ${url}:`, error.message);
-        }
-      };
+      // 🚀 OPTIMIZACIÓN: Usamos Promise.allSettled para asegurar que todas las peticiones
+      // se completen, incluso si alguna falla. Esto evita que un error en una API
+      // secundaria (ej. lotes) impida la carga de otras (ej. categorías).
+      const recursos = [
+        { url: `${API_BASE_URL}/providers`, setter: setProveedores },
+        { url: `${API_BASE_URL}/warehouses`, setter: setAlmacenesDetallados },
+        { url: `${API_BASE_URL}/units-of-measure`, setter: setUnidadesMedida },
+        { url: `${API_BASE_URL}/movements/technicians`, setter: setTecnicos },
+        { url: `${API_BASE_URL}/categories`, setter: setCategorias },
+        { url: `${API_BASE_URL}/product-serials`, setter: setSeriales },
+        { url: `${API_BASE_URL}/comodatos`, setter: setPrestamos },
+        { url: `${API_BASE_URL}/inventory-batches`, setter: setLotes },
+      ];
   
-      // Ejecutamos todas las cargas secundarias en paralelo.
-      Promise.all([
-        fetchResource(`${API_BASE_URL}/providers`, setProveedores),
-        fetchResource(`${API_BASE_URL}/warehouses`, setAlmacenesDetallados),
-        fetchResource(`${API_BASE_URL}/units-of-measure`, setUnidadesMedida),
-        fetchResource(`${API_BASE_URL}/movements/technicians`, setTecnicos),
-        fetchResource(`${API_BASE_URL}/categories`, setCategorias),
-        fetchResource(`${API_BASE_URL}/product-serials`, setSeriales),
-        fetchResource(`${API_BASE_URL}/comodatos`, setPrestamos),
-        fetchResource(`${API_BASE_URL}/inventory-batches`, setLotes), 
-      ]);
+      const promesas = recursos.map(r => fetch(r.url, { headers }).then(res => {
+        if (!res.ok) throw new Error(`Fallo en ${r.url}`);
+        return res.json();
+      }));
+
+      const resultados = await Promise.allSettled(promesas);
+
+      resultados.forEach((resultado, index) => {
+        if (resultado.status === 'fulfilled') {
+          recursos[index].setter(Array.isArray(resultado.value) ? resultado.value : []);
+        } else {
+          console.warn(`Advertencia al cargar ${recursos[index].url}:`, resultado.reason.message);
+        }
+      });
     };
   
     // 🚀 MEJORA 3: Orquestamos la carga.
