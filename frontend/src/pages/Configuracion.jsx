@@ -7,16 +7,20 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
-import DatosEmpresa from '../pages/DatosEmpresa';
+import DatosEmpresa from '../components/configuracion/DatosEmpresa';
+import ImpuestoGeneral from '../components/configuracion/ImpuestoGeneral';
+import FormatoTicket from '../components/configuracion/FormatoTicket';
+import NcfConfig from '../components/configuracion/NcfConfig';
 
 const Configuracion = ({ mostrarToast }) => {
   const navigate = useNavigate();
   const { usuario } = useAuth();
-  const esAdmin = usuario?.rol === 'admin';
+  const esAdmin = usuario?.rol === 'admin'; // 🛡️ Verificación de rol de administrador
   const permisos = usePermissions('configuracion'); // 🛡️ Obtenemos permisos para el módulo
   
   // 🛡️ Determinamos qué sub-módulos puede ver y editar el usuario
   const puedeVerUsuarios = esAdmin || permisos.subModulos?.usuarios?.view;
+  // 🛡️ Permisos para Datos de la Empresa
   const puedeVerDatosEmpresa = esAdmin || permisos.subModulos?.datos_empresa?.view;
   const puedeEditarDatosEmpresa = esAdmin || permisos.subModulos?.datos_empresa?.edit;
 
@@ -24,6 +28,8 @@ const Configuracion = ({ mostrarToast }) => {
   const [backupLoading, setBackupLoading] = useState(false);
 
   // --- ESTADOS GENERALES ---
+  const [impuestoActivo, setImpuestoActivo] = useState(() => localStorage.getItem('posfactura_impuesto_activo') !== 'false'); // Default a true
+  const [nombreImpuesto, setNombreImpuesto] = useState(localStorage.getItem('posfactura_nombre_impuesto') || 'ITBIS');
   const [itbis, setItbis] = useState(localStorage.getItem('posfactura_itbis') || 18);
   const [papel, setPapel] = useState(localStorage.getItem('posfactura_papel') || '80mm');
   const [datosNegocio, setDatosNegocio] = useState(() => {
@@ -80,8 +86,10 @@ const Configuracion = ({ mostrarToast }) => {
   const guardarParametros = async () => {
     setGuardando(true);
     try {
+      localStorage.setItem('posfactura_impuesto_activo', impuestoActivo);
       // 1. Guardamos de inmediato en LocalStorage como respaldo local rápido
       localStorage.setItem('posfactura_itbis', itbis);
+      localStorage.setItem('posfactura_nombre_impuesto', nombreImpuesto);
       localStorage.setItem('posfactura_papel', papel);
       localStorage.setItem('posfactura_config', JSON.stringify(datosNegocio));
       localStorage.setItem('posfactura_ncf', JSON.stringify(ncfConfig));
@@ -228,63 +236,24 @@ const Configuracion = ({ mostrarToast }) => {
           <DatosEmpresa datosNegocio={datosNegocio} handleInputChange={handleInputChange} />
 
           {/* CONTROL DE COMPROBANTES FISCALES (DGII) */}
-          <div className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm space-y-6">
-            <div className="flex items-center gap-3 border-b border-slate-50 pb-4">
-              <FileSpreadsheet size={18} className="text-slate-900" />
-              <h2 className="font-black text-slate-700 uppercase text-[11px] tracking-widest leading-none">Secuencias NCF (DGII)</h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Próximo B01 (Créd. Fiscal)</label>
-                <input name="secuenciaB01" value={ncfConfig.secuenciaB01} onChange={handleNcfChange} 
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-slate-900 font-mono font-bold text-slate-700 text-xs text-center" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Próximo B02 (Consumo)</label>
-                <input name="secuenciaB02" value={ncfConfig.secuenciaB02} onChange={handleNcfChange} 
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-slate-900 font-mono font-bold text-slate-700 text-xs text-center" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Alerta Stock Crítico</label>
-                <input type="number" name="alertaMinima" value={ncfConfig.alertaMinima} onChange={handleNcfChange} 
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-slate-900 font-bold text-slate-700 text-xs text-center" />
-              </div>
-            </div>
-          </div>
+          <NcfConfig ncfConfig={ncfConfig} handleNcfChange={handleNcfChange} />
         </section>
 
         {/* BLOQUE DERECHO: IMPRESIÓN, IMPUESTO Y BACKUP */}
         <section className="lg:col-span-4 space-y-6 animate-in fade-in duration-300">
           
           {/* Configuración de Impuesto */}
-          <div className="bg-white border border-slate-200 rounded-[2.5rem] p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><Percent size={16} /></div>
-              <h2 className="font-black text-slate-700 uppercase text-[10px] tracking-widest">ITBIS General</h2>
-            </div>
-            <div className="relative flex items-center">
-              <input type="number" value={itbis} onChange={(e) => setItbis(e.target.value)}
-                className="w-full py-4 bg-slate-50 border border-slate-100 rounded-2xl font-black text-3xl text-emerald-600 text-center focus:bg-white outline-none focus:border-emerald-500" />
-              <span className="absolute right-6 font-black text-slate-300 text-xl">%</span>
-            </div>
-          </div>
+          <ImpuestoGeneral
+            impuestoActivo={impuestoActivo}
+            setImpuestoActivo={setImpuestoActivo}
+            nombreImpuesto={nombreImpuesto}
+            setNombreImpuesto={setNombreImpuesto}
+            itbis={itbis}
+            setItbis={setItbis}
+          />
 
           {/* Formato de Ticket */}
-          <div className="bg-white border border-slate-200 rounded-[2.5rem] p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-3">
-              <Printer size={18} className="text-slate-400" />
-              <h2 className="font-black text-slate-700 uppercase text-[10px] tracking-widest">Salida de Impresión</h2>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {['58mm', '80mm', 'A4'].map((size) => (
-                <button key={size} onClick={() => setPapel(size)}
-                  className={`py-3.5 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${papel === size ? 'border-slate-900 bg-slate-900 text-white shadow-md shadow-slate-100' : 'border-slate-100 text-slate-400 hover:border-slate-200 bg-transparent'}`}>
-                  {size}
-                </button>
-              ))}
-            </div>
-          </div>
+          <FormatoTicket papel={papel} setPapel={setPapel} />
 
           {/* Backup Corporativo */}
           <div className="bg-slate-900 rounded-[2.5rem] p-7 shadow-xl text-white space-y-5">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from 'react'; // Este archivo fue movido, no cambiado.
 import { Building2 } from 'lucide-react';
 
 const DatosEmpresa = ({ datosNegocio, handleInputChange }) => {

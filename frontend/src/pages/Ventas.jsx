@@ -136,6 +136,14 @@ const Ventas = () => {
   const itbisGlobal = Number(localStorage.getItem('posfactura_itbis')) || 18;
   const [fechaHora, setFechaHora] = useState(new Date());
 
+  const taxName = useMemo(() => {
+    return localStorage.getItem('posfactura_nombre_impuesto') || 'ITBIS';
+  }, []);
+
+  const impuestoActivo = useMemo(() => {
+    return localStorage.getItem('posfactura_impuesto_activo') !== 'false'; // Default a true
+  }, []);
+
   // Al entrar a la pantalla de ventas, forzamos al contexto a ignorar eliminados
   // por si el usuario venía de la sección de inventario con filtros aplicados.
   useEffect(() => {
@@ -159,7 +167,7 @@ const Ventas = () => {
 
     const md = st * (Number(descuentoPorcentaje) / 100);
     const subtotalConDescuento = st - md;
-    const imp = subtotalConDescuento * (itbisGlobal / 100);
+    const imp = impuestoActivo ? (subtotalConDescuento * (itbisGlobal / 100)) : 0;
     const tf = subtotalConDescuento + imp;
 
     return {
@@ -168,7 +176,7 @@ const Ventas = () => {
       impuesto: imp,
       totalFinal: tf,
     };
-  }, [carrito, descuentoPorcentaje, itbisGlobal]);
+  }, [carrito, descuentoPorcentaje, itbisGlobal, impuestoActivo]);
 
   const formatoMoneda = useCallback((valor) => (
     Number(valor).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -331,11 +339,17 @@ const Ventas = () => {
         e.preventDefault();
         inputBusquedaRef.current?.focus();
       }
+      if (e.key === 'F8') {
+        e.preventDefault();
+        if (permisos.edit) {
+          setShowDescuentoModal(true);
+        }
+      }
     };
 
     window.addEventListener('keydown', manejarTeclado);
     return () => window.removeEventListener('keydown', manejarTeclado);
-  }, [finalizarVenta]);
+  }, [finalizarVenta, permisos.edit]);
 
   // --- FILTRADO DE CLIENTES ---
   useEffect(() => {
@@ -668,7 +682,9 @@ const Ventas = () => {
                 </div>
 
                 <div className="flex justify-between items-center text-slate-400">
-                  <span className="text-[9px]">ITBIS ({itbisGlobal}%)</span>
+                  <span className="text-[9px]">
+                    {impuestoActivo ? `${taxName} (${itbisGlobal}%)` : 'Impuesto (Desactivado)'}
+                  </span>
                   <span className="text-slate-800">RD$ {impuesto.toLocaleString()}</span>
                 </div>
               </div>
