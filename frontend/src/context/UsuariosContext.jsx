@@ -16,12 +16,16 @@ export const UsuariosProvider = ({ children }) => {
     : (import.meta.env.VITE_API_URL || '/api');
     
   const API_URL = `${API_BASE_URL}/users`;
-
-  const getAuthHeaders = useCallback(() => ({
-    'Content-Type': 'application/json',
-    'x-user-id': usuario?.id || '',
-    'x-user-role': usuario?.rol || '',
-  }), [usuario]);
+  
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('posfactura_token');
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : '',
+      'x-user-id': usuario?.id || '',
+      'x-user-role': usuario?.rol || '',
+    };
+  }, [usuario]);
 
   // 1. Cargar usuarios desde la base de datos (Backend)
   const cargarUsuarios = useCallback(async () => {

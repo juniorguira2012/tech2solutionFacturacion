@@ -116,6 +116,7 @@ const Home = () => {
       value: totalProductos,
       icon: <Box className="text-indigo-600" size={24} />,
       path: '/inventario',
+      state: { tab: 'productos' }, // Te lleva a la sección de productos
       color: 'bg-indigo-50',
       borderColor: 'border-indigo-100'
     },
@@ -124,8 +125,8 @@ const Home = () => {
       title: 'Stock Crítico',
       value: stockCriticoCount,
       icon: <AlertTriangle className="text-rose-600" size={24} />,
-      path: '/inventario',
-      state: { filter: 'low_stock' },
+      path: '/inventario', // La ruta sigue siendo la misma
+      state: { tab: 'alerta' }, // Cambiamos el estado para que coincida con el ID de la sección
       color: 'bg-rose-50',
       borderColor: 'border-rose-100',
       isAlert: stockCriticoCount > 0

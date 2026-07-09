@@ -5,7 +5,7 @@ import {
   DollarSign as DollarIcon, Ticket as TicketIcon, Clock, Receipt, X, Save, Edit3,
   AlertTriangle, CheckCircle2, Loader2, HelpCircle
 } from 'lucide-react';
-import { usePermissions } from '../hooks/usePermissions'; // 🛡️ Importamos el hook de permisos
+import { usePermissions } from '../hooks/usePermissions';
 import { useInventario } from '../context/InventarioContext';
 import { useClientes } from '../context/ClienteContext';
 import { useVentas } from '../context/VentasContext';
@@ -157,6 +157,11 @@ const Ventas = () => {
     return localStorage.getItem('posfactura_impuesto_activo') !== 'false'; // Default a true
   }, []);
 
+  const metodosPago = useMemo(() => {
+    const saved = localStorage.getItem('posfactura_metodos_pago');
+    return saved ? JSON.parse(saved).filter(m => m.activo) : [];
+  }, []);
+
   // Al entrar a la pantalla de ventas, forzamos al contexto a ignorar eliminados
   // por si el usuario venía de la sección de inventario con filtros aplicados.
   useEffect(() => {
@@ -189,7 +194,7 @@ const Ventas = () => {
       impuesto: imp,
       totalFinal: tf,
     };
-  }, [carrito, descuentoPorcentaje, totalTaxPercentage, impuestoActivo]); // totalTaxPercentage sigue siendo necesario aquí
+  }, [carrito, descuentoPorcentaje, totalTaxPercentage, impuestoActivo]);
 
   const formatoMoneda = useCallback((valor) => (
     Number(valor).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -734,6 +739,23 @@ const Ventas = () => {
               <span className="text-[8px] opacity-70 mt-0.5">[ Presione F10 ]</span>
             </button>
           </div>
+
+          {/* Métodos de Pago */}
+          {metodosPago.length > 0 && (
+            <div className="bg-white p-4 md:p-5 rounded-[1.5rem] border border-slate-200 shadow-md flex flex-col justify-between gap-4 mt-3">
+              <div className="flex justify-between border-b border-slate-100 pb-2 font-black uppercase text-[9px] tracking-widest italic text-slate-600">
+                <h2>Pagar Con</h2>
+                <DollarIcon size={14} className="text-brand" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {metodosPago.map(metodo => (
+                  <button key={metodo.id} className="py-3 rounded-xl border border-slate-200 text-slate-700 font-black text-[10px] uppercase hover:bg-slate-50 transition-colors">
+                    {metodo.nombre}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
       </div>

@@ -54,7 +54,7 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
 };
 
 //Componente Principal 
-const ProductosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos como prop
+const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // 🛡️ 1. Recibimos los permisos y el producto inicial
   // 🛡️ Extraemos los permisos específicos para esta sección
   const permisosProductos = permisos?.subModulos?.productos ?? permisos;
 
@@ -130,6 +130,13 @@ const ProductosSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibim
     almacen: 'Principal', pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '',
     movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
   });
+
+  // Efecto para abrir el modal si se recibe un producto inicial
+  useEffect(() => {
+    if (productoInicial) {
+      abrirEditar(productoInicial);
+    }
+  }, [productoInicial]);
 
   const abrirEditar = (prod) => {
     // 🛡️ Verificación de permiso de edición

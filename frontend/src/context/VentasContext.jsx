@@ -23,6 +23,7 @@ export const VentasProvider = ({ children }) => {
     try {
       const res = await fetch(API_SALES_URL, {
         headers: {
+          'Authorization': `Bearer ${localStorage.getItem('posfactura_token')}`,
           'Content-Type': 'application/json',
           'x-user-id': usuario?.id || '',
         },
@@ -49,6 +50,7 @@ export const VentasProvider = ({ children }) => {
       const res = await fetch(API_SALES_URL, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${localStorage.getItem('posfactura_token')}`,
           'Content-Type': 'application/json',
           'x-user-id': usuario?.id || '',
         },

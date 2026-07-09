@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock, Menu, Bell } from 'lucide-react';
+import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock, Menu, Bell, AlertTriangle, Package } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useInventario } from '../context/InventarioContext';
 
@@ -9,7 +9,7 @@ export const Layout = ({ children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const { usuario, logout } = useAuth();
-  const { prestamos, cargarPrestamos } = useInventario();
+  const { prestamos, productos } = useInventario();
   const hasAlertedRef = useRef(false);
 
   const comodatosVencidos = useMemo(() => {
@@ -24,11 +24,17 @@ export const Layout = ({ children }) => {
     });
   }, [prestamos]);
 
-  const comodatosVencidosCount = comodatosVencidos.length;
+  const productosBajoStock = useMemo(() => {
+    return productos.filter(p => p.isActive !== false && Number(p.stock) <= Number(p.stockMinimo ?? 5));
+  }, [productos]);
+
+  const totalNotificaciones = useMemo(() => {
+    return comodatosVencidos.length + productosBajoStock.length;
+  }, [comodatosVencidos, productosBajoStock]);
 
   // Lógica para la alerta sonora
   useEffect(() => {
-    if (comodatosVencidosCount > 0 && !hasAlertedRef.current) {
+    if (totalNotificaciones > 0 && !hasAlertedRef.current) {
       const playNotification = () => {
         const audio = new Audio('../../public/notificacion.mp3'); // Asegúrate de poner este archivo en la carpeta /public
         audio.play().catch(error => {
@@ -38,10 +44,10 @@ export const Layout = ({ children }) => {
       };
       playNotification();
     }
-    if (comodatosVencidosCount === 0) {
+    if (totalNotificaciones === 0) {
       hasAlertedRef.current = false;
     }
-  }, [comodatosVencidosCount]);
+  }, [totalNotificaciones]);
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -194,7 +200,7 @@ export const Layout = ({ children }) => {
           <div className="flex items-center justify-between px-5 pt-2 text-slate-400 font-bold tracking-wider text-[9px] uppercase">
             <span className="opacity-80">Tec2Solution © 2026</span>
             <span className="bg-white/10 border border-white/5 px-2.5 py-0.5 rounded-full text-slate-200 font-mono text-[10px]">
-              {`v${import.meta.env.VITE_APP_VERSION || '1.6.2'}`}
+              {`v${import.meta.env.VITE_APP_VERSION || '1.6.3'}`}
             </span>
           </div>
         </div>
@@ -227,10 +233,10 @@ export const Layout = ({ children }) => {
               onClick={() => setShowNotifications(!showNotifications)}
               className="relative cursor-pointer p-2 hover:bg-white/10 md:hover:bg-slate-100 rounded-xl transition-all group"
             >
-              <Bell size={22} className={comodatosVencidosCount > 0 ? "text-amber-400 md:text-amber-500 animate-bounce" : "text-white md:text-slate-400"} />
-              {comodatosVencidosCount > 0 && (
+              <Bell size={22} className={totalNotificaciones > 0 ? "text-amber-400 md:text-amber-500 animate-bounce" : "text-white md:text-slate-400"} />
+              {totalNotificaciones > 0 && (
                 <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-black h-4 w-4 rounded-full flex items-center justify-center border-2 border-brand md:border-white">
-                  {comodatosVencidosCount}
+                  {totalNotificaciones}
                 </span>
               )}
             </div>
@@ -245,16 +251,18 @@ export const Layout = ({ children }) => {
                 <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Préstamos Vencidos</h3>
-                    <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{comodatosVencidosCount}</span>
+                    <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{comodatosVencidos.length}</span>
                   </div>
                   
-                  <div className="max-h-80 overflow-y-auto">
+                  <div className="max-h-40 overflow-y-auto">
                     {comodatosVencidos.length > 0 ? (
                       comodatosVencidos.map((item) => (
                         <div 
                           key={item.id}
                           onClick={() => {
+                            // Navega a la sección de comodato dentro de inventario
                             navigate('/inventario', { state: { tab: 'comodato' } });
+                            // Cierra el menú de notificaciones
                             setShowNotifications(false);
                           }}
                           className="p-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
@@ -282,16 +290,59 @@ export const Layout = ({ children }) => {
                       </div>
                     )}
                   </div>
-                  
-                  <button 
-                    onClick={() => {
-                      navigate('/inventario', { state: { tab: 'comodato' } });
-                      setShowNotifications(false);
-                    }}
-                    className="w-full p-3 bg-slate-50 text-brand text-[9px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors border-t border-slate-100"
-                  >
-                    Ver todo en Comodatos
-                  </button>
+
+                  {/* Sección de Productos con Bajo Stock */}
+                  <div className="p-4 bg-slate-50 border-y border-slate-100 flex justify-between items-center">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Bajo Stock</h3>
+                    <span className="bg-amber-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">{productosBajoStock.length}</span>
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto">
+                    {productosBajoStock.length > 0 ? (
+                      productosBajoStock.map((producto) => (
+                        <div
+                          key={producto.id}
+                          onClick={() => {
+                            // Navega a la sección de alertas de inventario
+                            navigate('/inventario', { 
+                              state: { tab: 'alerta' } 
+                            });
+                            setShowNotifications(false);
+                          }}
+                          className="p-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-red-50 flex items-center justify-center text-red-600 shrink-0">
+                              <Package size={16} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-black text-slate-800 uppercase truncate">{producto.nombre}</p>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase truncate">
+                                Stock Actual: <span className="text-red-500">{producto.stock}</span> (Mín: {producto.stockMinimo ?? 5})
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-8 text-center">
+                        <Check size={24} className="mx-auto text-emerald-500 mb-2" />
+                        <p className="text-[10px] font-black text-slate-400 uppercase">Stock saludable</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex border-t border-slate-100">
+                    <button 
+                      onClick={() => {
+                        navigate('/inventario');
+                        setShowNotifications(false);
+                      }}
+                      className="w-full p-3 bg-slate-50 text-brand text-[9px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors"
+                    >
+                      Ir al Inventario
+                    </button>
+                  </div>
                 </div>
               </>
             )}

@@ -14,7 +14,7 @@ import { FormMovimientoSimple } from './FormMovimientoSimple';
 import { FormAjuste } from '../../components/FormAjuste';
 
 // 1. 🛡️ Recibimos 'permisos' desde el padre (Inventario.jsx)
-const MovimientosSection = ({ mostrarToast, permisos }) => {
+const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   // 🛡️ Extraemos los permisos específicos para esta sección
   const permisosMovimiento = permisos?.subModulos?.movimiento ?? permisos;
 
@@ -112,6 +112,21 @@ const MovimientosSection = ({ mostrarToast, permisos }) => {
       mostrarToast?.("No tienes permisos para visualizar el historial de movimientos", "error");
     }
   }, [permisosMovimiento?.view, usuario, cargarMovimientos]);
+
+  // Efecto para ejecutar una acción inicial (ej: desde una notificación)
+  useEffect(() => {
+    if (accionInicial?.tipo && accionInicial?.producto) {
+      const { tipo, producto } = accionInicial;
+      
+      // Abrimos el modal para el tipo de movimiento solicitado
+      abrirModal(tipo);
+      
+      // Si el movimiento es de recibir/despachar, agregamos el producto al carrito
+      if (tipo === 'recibir' || tipo === 'despachar' || tipo === 'multilinea') {
+        agregarAlCarritoMovimiento(producto);
+      }
+    }
+  }, [accionInicial]);
 
   // Gestión del carrito masivo (Recibir / Despachar)
   const obtenerStockEnAlmacen = (producto, almacen) => {

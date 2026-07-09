@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  Package, Tags, ArrowLeftRight, CheckCircle,
+  Package, Tags, ArrowLeftRight, CheckCircle, Edit3,
   ClipboardList, Bell, Layers3, AlertTriangle, RefreshCw, Warehouse,
   Ruler, Braces, Plug, Truck, HandHelping, Wrench, Fingerprint, Lock
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
+import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions'; 
 import AlmacenSection from './inventario/AlmacenSection';
 import CategoriasSection from './inventario/CategoriasSection';
@@ -25,6 +26,7 @@ const Inventario = () => {
   const { productos, categorias, setCategorias } = useInventario();
   const location = useLocation();
   const permisos = usePermissions('inventario'); // 🛡️ Captura: { view, create, edit, delete }
+  const { usuario } = useAuth();
 
   const [toast, setToast] = useState({ show: false, mensaje: '', tipo: 'success' });
   const mostrarToast = (mensaje, tipo = 'success') => {
@@ -51,13 +53,15 @@ const Inventario = () => {
 
   // 🛡️ Filtramos las secciones que el usuario puede ver
   const seccionesVisibles = useMemo(() => {
+    const esAdmin = usuario?.rol === 'admin';
     return seccionesInventario.filter(seccion => {
+      if (esAdmin) return true;
       // Si no hay sub-módulos definidos, se asume acceso (comportamiento anterior)
       if (!permisos.subModulos) return true;
       // Si hay sub-módulos, se requiere el permiso de vista explícito
       return permisos.subModulos[seccion.id]?.view;
     });
-  }, [permisos.subModulos]);
+  }, [permisos.subModulos, usuario?.rol]);
 
   const [seccionActiva, setSeccionActiva] = useState(() => {
     const savedTab = localStorage.getItem('posfactura_inventario_tab');
@@ -68,11 +72,41 @@ const Inventario = () => {
     return seccionesVisibles[0]?.id || null;
   });
 
+  // Estado para pasar un producto a editar desde otra sección
+  const [productoAEditar, setProductoAEditar] = useState(null);
+  // Estado para iniciar una acción en una sección (ej: abrir modal de movimiento)
+  const [accionInicial, setAccionInicial] = useState(null);
+
+
+  const handleEditarProductoDesdeAlerta = (producto) => {
+    setSeccionActiva('productos');
+    setProductoAEditar(producto);
+  };
   useEffect(() => {
     if (seccionActiva) {
       localStorage.setItem('posfactura_inventario_tab', seccionActiva);
     }
   }, [seccionActiva]);
+
+  // Efecto para cambiar de pestaña desde una navegación externa (ej. Home)
+  useEffect(() => {
+    const { tab, accion, producto } = location.state || {};
+    if (tab && seccionesVisibles.some(s => s.id === tab)) {
+      setSeccionActiva(tab);
+      if (accion) {
+        // Preparamos la acción para que la sección correspondiente la ejecute
+        setAccionInicial({ tipo: accion, producto: producto });
+        navigate(location.pathname, { replace: true }); // Limpiamos el state para no repetir la acción
+      }
+    }
+  }, [location.state, seccionesVisibles]);
+
+
+
+  // Memo para productos con bajo stock
+  const productosBajoStock = useMemo(() => {
+    return productos.filter(p => p.isActive !== false && Number(p.stock) <= Number(p.stockMinimo ?? 5));
+  }, [productos]);
 
 
   // 🛡️ Muro de seguridad global para el módulo
@@ -119,13 +153,13 @@ const Inventario = () => {
         <div className="p-3 space-y-3">
           {/* 🛡️ Renderizado condicional del contenido de la sección activa */}
           {seccionActiva === 'productos' && (permisos.subModulos?.productos?.view ?? true) && (
-            <ProductosSection mostrarToast={mostrarToast} permisos={permisos} />
+            <ProductosSection mostrarToast={mostrarToast} permisos={permisos} productoInicial={productoAEditar} />
           )}
           {seccionActiva === 'categoria' && (permisos.subModulos?.categoria?.view ?? true) && (
             <CategoriasSection categorias={categorias} setCategorias={setCategorias} mostrarToast={mostrarToast} permisos={permisos} />
           )}
           {seccionActiva === 'movimiento' && (permisos.subModulos?.movimiento?.view ?? true) && (
-            <MovimientosSection mostrarToast={mostrarToast} permisos={permisos} />
+            <MovimientosSection mostrarToast={mostrarToast} permisos={permisos} accionInicial={accionInicial} />
           )}
           {seccionActiva === 'proveedores' && (permisos.subModulos?.proveedores?.view ?? true) && (
             <ProveedoresSection mostrarToast={mostrarToast} permisos={permisos} />
@@ -153,7 +187,33 @@ const Inventario = () => {
                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Productos con existencias críticas</p>
                  </div>
                </div>
-               {/* ... resto del contenido de alertas ... */}
+               
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                 {productosBajoStock.length > 0 ? (
+                   productosBajoStock.map(prod => (
+                     <div key={prod.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                       <div className="flex justify-between items-start">
+                         <h3 className="font-black text-slate-800 uppercase text-xs leading-tight">{prod.nombre}</h3>
+                         <button onClick={() => handleEditarProductoDesdeAlerta(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold uppercase ml-auto">
+                           <Edit3 size={14}/>
+                         </button>
+                       </div>
+                       <div className="grid grid-cols-2 gap-2 text-center">
+                         <div className="bg-amber-50 border border-amber-100 rounded-lg p-2">
+                           <p className="text-[8px] font-black text-amber-600 uppercase">Mínimo</p>
+                           <p className="text-sm font-black text-amber-700">{prod.stockMinimo ?? 5}</p>
+                         </div>
+                         <div className="bg-red-50 border border-red-100 rounded-lg p-2">
+                           <p className="text-[8px] font-black text-red-600 uppercase">Actual</p>
+                           <p className="text-sm font-black text-red-700">{prod.stock}</p>
+                         </div>
+                       </div>
+                     </div>
+                   ))
+                 ) : (
+                   <div className="py-12 text-center text-xs font-black uppercase text-slate-400">No hay productos con stock crítico.</div>
+                 )}
+               </div>
              </div>
           )}
           {seccionActiva === 'comodato' && (permisos.subModulos?.comodato?.view ?? true) && (

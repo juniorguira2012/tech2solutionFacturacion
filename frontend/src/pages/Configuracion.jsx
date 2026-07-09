@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Printer, Percent, Database, Save, 
+  Printer, Percent, Database, Save, Wallet,
   Download, ArrowRight, Users, 
   ShieldCheck, Terminal, AlertCircle, FileSpreadsheet, Lock
 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import DatosEmpresa from '../components/configuracion/DatosEmpresa';
 import ImpuestoGeneral from '../components/configuracion/ImpuestoGeneral';
 import FormatoTicket from '../components/configuracion/FormatoTicket';
+import MetodosPagoConfig from '../components/configuracion/MetodosPagoConfig';
 import NcfConfig from '../components/configuracion/NcfConfig';
 
 const Configuracion = ({ mostrarToast }) => {
@@ -39,6 +40,15 @@ const Configuracion = ({ mostrarToast }) => {
     return saved ? JSON.parse(saved) : {
       ITBIS: 18, ISC: 10, CDT: 2, ISR: 10, IPI: 1
     };
+  });
+  const [metodosPago, setMetodosPago] = useState(() => {
+    const saved = localStorage.getItem('posfactura_metodos_pago');
+    return saved ? JSON.parse(saved) : [
+      { id: 'efectivo', nombre: 'Efectivo', activo: true },
+      { id: 'tarjeta', nombre: 'Tarjeta', activo: true },
+      { id: 'transferencia', nombre: 'Transferencia', activo: true },
+      { id: 'credito', nombre: 'Crédito', activo: false },
+    ];
   });
   const [datosNegocio, setDatosNegocio] = useState(() => {
     const savedConfig = localStorage.getItem('posfactura_config');
@@ -97,6 +107,7 @@ const Configuracion = ({ mostrarToast }) => {
       localStorage.setItem('posfactura_impuesto_activo', impuestoActivo);
       localStorage.setItem('posfactura_impuestos_activos', JSON.stringify(impuestosActivos));
       localStorage.setItem('posfactura_impuestos_config', JSON.stringify(impuestos));
+      localStorage.setItem('posfactura_metodos_pago', JSON.stringify(metodosPago));
       localStorage.setItem('posfactura_papel', papel);
       localStorage.setItem('posfactura_config', JSON.stringify(datosNegocio));
       localStorage.setItem('posfactura_ncf', JSON.stringify(ncfConfig));
@@ -261,6 +272,12 @@ const Configuracion = ({ mostrarToast }) => {
 
           {/* Formato de Ticket */}
           <FormatoTicket papel={papel} setPapel={setPapel} />
+
+          {/* Métodos de Pago */}
+          <MetodosPagoConfig
+            metodosPago={metodosPago}
+            setMetodosPago={setMetodosPago}
+          />
 
           {/* Backup Corporativo */}
           <div className="bg-slate-900 rounded-[2.5rem] p-7 shadow-xl text-white space-y-5">
