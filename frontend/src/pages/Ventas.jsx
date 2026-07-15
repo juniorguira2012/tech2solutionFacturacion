@@ -411,11 +411,17 @@ const Ventas = () => {
 
   useEffect(() => {
     if (!busqueda.trim()) return setResultados([]);
+    const query = busqueda.toLowerCase();
+
     const filtrados = productos.filter(p => 
       p.isActive !== false && (
-        p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
-        (p.sku && p.sku.toLowerCase().includes(busqueda.toLowerCase())) ||
-        (p.codigo && p.codigo.toLowerCase().includes(busqueda.toLowerCase()))
+        p.nombre.toLowerCase().includes(query) || 
+        (p.sku && p.sku.toLowerCase().includes(query)) ||
+        (p.codigo && p.codigo.toLowerCase().includes(query)) ||
+        // 💡 MEJORA: Buscamos si algún serial disponible coincide con la búsqueda.
+        (p.isSerialized && p.seriales?.some(s => 
+          s.status === 'disponible' && s.serialNumber.toLowerCase().includes(query)
+        ))
       )
     );
     setResultados(filtrados);
@@ -525,10 +531,10 @@ const Ventas = () => {
         <div className="flex flex-col">
           <h1 className="text-base md:text-xl font-black text-slate-800 tracking-tight uppercase italic">Tech2Solution POS</h1>
           <div className="flex flex-wrap items-center gap-2 text-slate-500 mt-1">
-            <span className="text-brand font-black text-[9px] px-2 py-0.5 bg-indigo-50 rounded-lg border border-indigo-100 uppercase italic">
+            <span className="text-brand font-black text-[10px] px-2 py-0.5 bg-indigo-50 rounded-lg border border-indigo-100 uppercase italic">
               Cajero: {usuario?.nombre} {esRangoAlto && `(${usuario?.rol.toUpperCase()})`}
             </span>
-            <span className="text-[9px] font-bold uppercase tracking-tight">{formatoFecha} | {formatoHora}</span>
+            <span className="text-base font-bold uppercase tracking-tight">{formatoFecha} | {formatoHora}</span>
           </div>
         </div>
         

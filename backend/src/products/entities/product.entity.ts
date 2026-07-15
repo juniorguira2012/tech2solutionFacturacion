@@ -107,11 +107,11 @@ export class Product {
   @OneToMany(() => ProductWarehouseStock, (stock) => stock.producto, { cascade: true, eager: true })
   warehouseStocks: ProductWarehouseStock[];
 
-  @Column({ type: 'boolean', default: false })
-  isSerialized: boolean;
-
   @Column({ default: false })
   isComodato: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isSerialized: boolean;
 
   // ─── Serials ──────────────────────────────────────────────────────────────
   @OneToMany(() => ProductSerial, (serial) => serial.producto, { cascade: true, eager: true })

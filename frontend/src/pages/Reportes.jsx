@@ -15,7 +15,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-// --- SUB-COMPONENTE PARA LA NUEVA SECCIÓN DE AUDITORÍA ---
+// 💡 Pasamos `auditorias` como prop para que el padre pueda acceder a los datos
 const AuditoriaIngresosSection = ({ permisos }) => {
   const { usuario, getAuthHeaders } = useAuth();
   const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -27,16 +27,6 @@ const AuditoriaIngresosSection = ({ permisos }) => {
   ]);
   const [showModal, setShowModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Estado para el formulario del nuevo cuadre
-  const [nuevoCuadre, setNuevoCuadre] = useState({
-    totalSistema: '15200.50', // Este valor debería venir de un cálculo real
-    efectivo: '',
-    tarjeta: '',
-    transferencia: '',
-    otros: '',
-    nota: ''
-  });
 
   const totalContadoCalculado = useMemo(() => {
     const { efectivo, tarjeta, transferencia, otros } = nuevoCuadre;
@@ -285,7 +275,15 @@ const Reportes = () => {
   const [endDate, setEndDate] = useState(new Date());
   const [busquedaGlobal, setBusquedaGlobal] = useState(""); 
   
-  // 🛡️ La pestaña activa por defecto es la primera a la que tenga acceso
+  // 💡 Estado para las auditorías, gestionado por el componente padre
+  const [auditorias, setAuditorias] = useState([
+    { id: 1, fecha: '2023-10-27T10:00:00Z', usuario: 'Ana', totalSistema: 15200.50, totalContado: 15200.00, diferencia: -0.50, estado: 'Cerrado' },
+    { id: 2, fecha: '2023-10-26T22:00:00Z', usuario: 'Juan', totalSistema: 25450.00, totalContado: 25450.00, diferencia: 0.00, estado: 'Cerrado' },
+    { id: 3, fecha: '2023-10-26T14:00:00Z', usuario: 'Ana', totalSistema: 12300.00, totalContado: 12350.00, diferencia: 50.00, estado: 'Cerrado con Diferencia' },
+  ]);
+
+
+  // �️ La pestaña activa por defecto es la primera a la que tenga acceso
   // 🚀 CORRECCIÓN: Si es admin, siempre empieza en 'ventas'.
   const [tabActiva, setTabActiva] = useState(() => {
     if (usuario?.rol === 'admin' || puedeVerVentas) return 'ventas';
@@ -446,20 +444,35 @@ const Reportes = () => {
         }));
         nombreArchivo = `Ventas_Agrupadas_por_${agrupacionVentas}`;
       }
-    } else {
+    } else if (tabActiva === 'clientes') {
       data = reporteClientes.map(c => ({ 
         'Cliente': c.nombre, 
         'Facturas Emitidas': c.visitas, 
         'Inversión Total (RD$)': Number(c.total || 0) // 🌟 CORRECCIÓN 5
       }));
       nombreArchivo = "Ranking_Clientes";
+    } else if (tabActiva === 'auditoria') {
+      data = auditorias.map(a => ({
+        'ID': a.id,
+        'Fecha': new Date(a.fecha).toLocaleString(),
+        'Usuario': a.usuario,
+        'Total Sistema (RD$)': a.totalSistema,
+        'Total Contado (RD$)': a.totalContado,
+        'Diferencia (RD$)': a.diferencia,
+        'Estado': a.estado,
+      }));
+      nombreArchivo = "Auditoria_Ingresos";
     }
     
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Reporte Comercial");
-    
-    ws['!cols'] = maxProps = Object.keys(data[0] || {}).map(() => ({ wch: 22 }));
+
+    // 💡 CORRECCIÓN: Se ajusta el ancho de las columnas para una mejor visualización.
+    // Se eliminó la variable 'maxProps' que no estaba definida y causaba un error.
+    if (data.length > 0) {
+      ws['!cols'] = Object.keys(data[0]).map(() => ({ wch: 25 }));
+    }
 
     XLSX.writeFile(wb, `${nombreArchivo}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
@@ -537,10 +550,10 @@ const Reportes = () => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black text-slate-800 tracking-tight uppercase italic leading-none">
-              {tabActiva === 'ventas' ? 'Auditoría de Ingresos' : 'Lealtad y Cartera'}
+              {tabActiva === 'ventas' ? 'Reporte de Ingresos' : 'Cartera de Clientes'}
             </h1>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-2 italic">
-              Dashboard de Control Comercial
+              Control De Ingresos y Auditoría de Caja
             </p>
           </div>
 
@@ -749,7 +762,7 @@ const Reportes = () => {
 
       {/* RENDER DE LA SECCIÓN DE AUDITORÍA */}
       {tabActiva === 'auditoria' && puedeVerAuditoria && (
-        <AuditoriaIngresosSection permisos={permisos.subModulos?.auditoria_ingresos} />
+        <AuditoriaIngresosSection permisos={permisos.subModulos?.auditoria_ingresos} auditorias={auditorias} />
       )}
     </div>
   );

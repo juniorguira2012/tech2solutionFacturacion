@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext'; 
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Layout } from './components/Layout';
+import { InactivityModal } from './components/InactivityModal';
 import { VentasProvider } from './context/VentasContext';
 import { InventarioProvider } from './context/InventarioContext';
 import { ClienteProvider } from './context/ClienteContext';
@@ -31,14 +33,17 @@ const PrivateRoute = ({ children, moduloRequerido }) => {
 
   // VERIFICACIÓN DE ROLES DESDE EL CONTEXTO (DB)
   if (usuario.rol !== 'admin' && moduloRequerido) {
-    if (permisos) {
-      const nivelPermiso = permisos.modules?.[moduloRequerido];
+    // 💡 FIX: Si los permisos aún no se han cargado, no hacemos nada y esperamos.
+    // Esto evita una redirección prematura al login cuando se refresca la página.
+    if (!permisos) {
+      return null; // O un spinner de carga
+    }
 
-      // 🛡️ CORRECCIÓN: Si el objeto de permiso no existe o la propiedad 'view' es false, denegamos el acceso.
-      if (!nivelPermiso || !nivelPermiso.view) {
-        console.warn(`⚠️ Acceso denegado a ${moduloRequerido} para el rol ${usuario.rol}`);
-        return <Navigate to="/" replace />;
-      }
+    // Una vez que los permisos están disponibles, realizamos la verificación.
+    const nivelPermiso = permisos[moduloRequerido];
+    if (!nivelPermiso?.view) {
+      console.warn(`⚠️ Acceso denegado a ${moduloRequerido} para el rol ${usuario.rol}`);
+      return <Navigate to="/" replace />;
     }
   }
 
@@ -48,71 +53,96 @@ const PrivateRoute = ({ children, moduloRequerido }) => {
 
 const PublicRoute = ({ children }) => {
   const { usuario, loading } = useAuth();
-  if (loading) return null;
-  return usuario ? <Navigate to="/" replace /> : children;
+  // 💡 FIX: No retornamos `null` durante la carga.
+  // Dejamos que el componente hijo (Login) decida qué mostrar.
+  // Solo redirigimos si la carga ha finalizado y hay un usuario.
+  if (!loading && usuario) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
 };
 
 // --- 2. COMPONENTE PRINCIPAL ---
 
-function App() {
+const AppContent = () => {
+  const { showIdleModal, countdown, stayActive, handleIdleLogout } = useAuth();
   return (
-    <AuthProvider>
-      <VentasProvider>
-        <UsuariosProvider>
-          <InventarioProvider>
-            <ClienteProvider>
-              <Router>
-                <Routes>
-                  {/* RUTA PÚBLICA */}
-                <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-                <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
-                <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
+    <>
+      <InactivityModal 
+        isOpen={showIdleModal}
+        countdown={countdown}
+        onStay={stayActive}
+        onLogout={handleIdleLogout}
+      />
+      {/* El resto de tu aplicación se renderiza aquí */}
+    </>
+  );
+};
 
-                {/* RUTAS PROTEGIDAS CON "moduloRequerido" */}
-                <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
-                
-                <Route path="/ventas" element={
-                  <PrivateRoute moduloRequerido="ventas"><Ventas /></PrivateRoute>
-                } />
-                
-                <Route path="/historialventas" element={
-                  <PrivateRoute moduloRequerido="ventas"><HistorialVentas /></PrivateRoute>
-                } />
-                
-                <Route path="/inventario" element={
-                  <PrivateRoute moduloRequerido="inventario"><Inventario /></PrivateRoute>
-                } />
-                
-                <Route path="/clientes" element={
-                  <PrivateRoute moduloRequerido="clientes"><Clientes /></PrivateRoute>
-                } />
-                
-                <Route path="/reportes" element={
-                  <PrivateRoute moduloRequerido="reportes"><Reportes /></PrivateRoute>
-                } />
+function App() {
+  // console.log("🔍 ¿Qué ID está leyendo Vite?:", import.meta.env.VITE_GOOGLE_CLIENT_ID);
+  return (
+    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
+      <AuthProvider>
+        <VentasProvider>
+          <UsuariosProvider>
+            <InventarioProvider>
+              <ClienteProvider>
+                <AppContent />
+                <Router>
+                  <Routes>
+                    {/* RUTA PÚBLICA */}
+                  <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+                  <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+                  <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
 
-                {/* SEGURIDAD TOTAL: Solo el Admin suele entrar a estos */}
-                <Route path="/configuracion" element={
-                  <PrivateRoute moduloRequerido="configuracion"><Configuracion /></PrivateRoute>
-                } />
-                
-                <Route path="/usuarios" element={
-                  <PrivateRoute moduloRequerido="configuracion"><Usuarios /></PrivateRoute>
-                } />
-                
-                <Route path="/roles" element={
-                  <PrivateRoute moduloRequerido="configuracion"><RolesManager /></PrivateRoute>
-                } />
-                    
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-              </Router>
-            </ClienteProvider>
-          </InventarioProvider>
-        </UsuariosProvider>
-      </VentasProvider>
-    </AuthProvider>
+                  {/* RUTAS PROTEGIDAS CON "moduloRequerido" */}
+                  <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
+                  
+                  <Route path="/ventas" element={
+                    <PrivateRoute moduloRequerido="ventas"><Ventas /></PrivateRoute>
+                  } />
+                  
+                  <Route path="/historialventas" element={
+                    <PrivateRoute moduloRequerido="ventas"><HistorialVentas /></PrivateRoute>
+                  } />
+                  
+                  <Route path="/inventario" element={
+                    <PrivateRoute moduloRequerido="inventario"><Inventario /></PrivateRoute>
+                  } />
+                  
+                  <Route path="/clientes" element={
+                    <PrivateRoute moduloRequerido="clientes"><Clientes /></PrivateRoute>
+                  } />
+                  
+                  <Route path="/reportes" element={
+                    <PrivateRoute moduloRequerido="reportes"><Reportes /></PrivateRoute>
+                  } />
+
+                  {/* SEGURIDAD TOTAL: Solo el Admin suele entrar a estos */}
+                  <Route path="/configuracion" element={
+                    <PrivateRoute moduloRequerido="configuracion"><Configuracion /></PrivateRoute>
+                  } />
+                  
+                  <Route path="/usuarios" element={
+                    <PrivateRoute moduloRequerido="configuracion"><Usuarios /></PrivateRoute>
+                  } />
+                  
+                  <Route path="/roles" element={
+                    <PrivateRoute moduloRequerido="configuracion"><RolesManager /></PrivateRoute>
+                  } />
+                      
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+                </Router>
+              </ClienteProvider>
+            </InventarioProvider>
+          </UsuariosProvider>
+        </VentasProvider>
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
+
 
 export default App;

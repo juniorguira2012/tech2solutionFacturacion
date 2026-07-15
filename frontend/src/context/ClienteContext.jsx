@@ -17,12 +17,20 @@ export const ClienteProvider = ({ children }) => {
 
   const API_URL = `${API_BASE_URL}/clients`;
 
-  const getAuthHeaders = useCallback(() => ({
-    'Content-Type': 'application/json',
-    'x-user-id': usuario?.id || '',
-    'x-user-role': usuario?.rol || '', // Rol del usuario
-    'x-clients-permission': usuario?.permisos?.modules?.clientes || 'none', // Permiso específico para clientes
-  }), [usuario]);
+  const getAuthHeaders = useCallback(() => {
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    const token = localStorage.getItem('posfactura_token'); // Asumiendo que el token se guarda con esta clave
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    if (usuario && usuario.id) {
+      headers['x-user-id'] = usuario.id;
+      headers['x-user-role'] = usuario.rol;
+    }
+    return headers;
+  }, [usuario]);
 
   // 1. Cargar clientes desde la base de datos al iniciar
   const cargarClientes = useCallback(async () => {

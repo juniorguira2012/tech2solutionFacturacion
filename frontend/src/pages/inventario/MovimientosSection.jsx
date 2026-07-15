@@ -1,6 +1,6 @@
 // components/inventario/MovimientosSection.jsx
 import React, { useState, useMemo, useEffect } from 'react';
-import { ArrowLeftRight, List, Download, Truck, RefreshCw, Trash2, Search, X, UserCheck, Check } from 'lucide-react';
+import { ArrowLeftRight, List, Download, Truck, RefreshCw, Trash2, Search, X, UserCheck, Check, Tag } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 import { useVentas } from '../../context/VentasContext';
 import { useAuth } from '../../context/AuthContext';
@@ -19,7 +19,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   const permisosMovimiento = permisos?.subModulos?.movimiento ?? permisos;
 
   const { 
-    productos, movimientos, proveedores, tecnicos, seriales, registrarMovimiento, 
+    productos, movimientos, proveedores, tecnicos, seriales, registrarMovimiento, loading,
     registrarTransferencia, registrarMovimientosMasivos, asignarSerialesTecnico, 
     cargarMovimientos, recargarInventario, almacenesDetallados 
   } = useInventario();
@@ -29,7 +29,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   const { usuarios } = useUsuarios();
   
   const almacenesNombres = useMemo(() => almacenesDetallados.map(a => a.nombre), [almacenesDetallados]);
-  const [proveedorSeleccionado, setProveedorSeleccionado] = useState('');
+  const [proveedorSeleccionadoId, setProveedorSeleccionadoId] = useState('');
 
   // Estados de control de la UI principal
   const [modalOpen, setModalOpen] = useState(false);
@@ -38,6 +38,12 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   const [busquedaKardex, setBusquedaKardex] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
+  const [filtroTecnico, setFiltroTecnico] = useState('todos'); 
+  const [filtroUsuario, setFiltroUsuario] = useState('todos');
+
+  const [expandedRowId, setExpandedRowId] = useState(null);
+
+  const [modalSeriales, setModalSeriales] = useState({ isOpen: false, movimiento: null });
 
   const cerrarModal = () => { 
     setModalOpen(false);
@@ -50,8 +56,8 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
     setAsignacionIsLoading(false);
     setSerialesSeleccionados([]);
     setBusquedaSerial('');
-    setSerialesDisponibles(seriales.filter(s => s.status === 'disponible'));
-    setProveedorSeleccionado('');
+    setSerialesDisponibles(seriales.filter(s => s.status === 'disponible')); 
+    setProveedorSeleccionadoId('');
   };
 
   // Inicialización de nuestro Custom Hook
@@ -105,7 +111,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
 
   // Cargar historial al montar el componente
   useEffect(() => {
-    // 🛡️ CONTROL DE PERMISOS: Usamos el prop directamente y dependemos del usuario
+    //CONTROL DE PERMISOS: Usamos el prop directamente y dependemos del usuario
     if (permisosMovimiento?.view) {
       cargarMovimientos();
     } else {
@@ -115,18 +121,21 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
 
   // Efecto para ejecutar una acción inicial (ej: desde una notificación)
   useEffect(() => {
-    if (accionInicial?.tipo && accionInicial?.producto) {
+    // 💡 FIX: Nos aseguramos de que los productos no estén cargando antes de procesar la acción.
+    // Esto evita crasheos si el usuario navega muy rápido.
+    if (accionInicial?.tipo && accionInicial?.producto && !loading) {
       const { tipo, producto } = accionInicial;
       
       // Abrimos el modal para el tipo de movimiento solicitado
       abrirModal(tipo);
       
       // Si el movimiento es de recibir/despachar, agregamos el producto al carrito
-      if (tipo === 'recibir' || tipo === 'despachar' || tipo === 'multilinea') {
+      // Usamos un pequeño timeout para dar tiempo a que el modal se renderice completamente.
+      setTimeout(() => {
         agregarAlCarritoMovimiento(producto);
-      }
+      }, 50);
     }
-  }, [accionInicial]);
+  }, [accionInicial, loading]); // 💡 Añadimos `loading` a las dependencias del efecto.
 
   // Gestión del carrito masivo (Recibir / Despachar)
   const obtenerStockEnAlmacen = (producto, almacen) => {
@@ -136,7 +145,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   };
 
   const agregarAlCarritoMovimiento = (producto) => {
-    // 🛡️ CONTROL DE PERMISOS: Bloqueo lógico con la propiedad desestructurada
+    //CONTROL DE PERMISOS: Bloqueo lógico con la propiedad desestructurada
     if (!permisosMovimiento?.create) {
       mostrarToast?.("Acción denegada: No tienes permisos de escritura.", "error");
       return;
@@ -175,7 +184,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
 
   // Función para cargar automáticamente los items de una factura al carrito
   const cargarItemsDeFactura = (factura) => {
-    // 🛡️ CONTROL DE PERMISOS: Una devolución genera un movimiento de entrada (Creación)
+    //CONTROL DE PERMISOS: Una devolución genera un movimiento de entrada (Creación)
     if (!permisosMovimiento?.create) {
       mostrarToast?.("No tienes permisos para procesar devoluciones", "error");
       return;
@@ -204,7 +213,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   };
 
   const abrirModal = (tipo) => {
-    // 🛡️ CONTROL DE PERMISOS: Filtramos las operaciones prohibidas antes de levantar el modal
+    //CONTROL DE PERMISOS: Filtramos las operaciones prohibidas antes de levantar el modal
     if (!permisosMovimiento?.create) {
       mostrarToast?.(`No tienes autorización para realizar la acción: ${tipo.toUpperCase()}`, "error");
       return;
@@ -235,80 +244,70 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   };
 
   // Procesamiento Masivo (Lógica pesada delegada al context)
-  const processarMovimientoMasivo = async () => {
-    if (itemsEnCarritoMovimiento.length === 0) return;
-    
-    // Validación: Asegurar proveedor en entradas
-    if ((tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && !proveedorSeleccionado) {
-      mostrarToast?.("Por favor seleccione el proveedor de la mercancía", "warning");
-      return;
-    }
+const processarMovimientoMasivo = async () => {
+  if (itemsEnCarritoMovimiento.length === 0) return;
+  
+  // 1. Validación: Seleccionar proveedor
+  if ((tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && !proveedorSeleccionadoId) {
+    mostrarToast?.("Por favor, seleccione el proveedor de la mercancía.", "warning");
+    return;
+  }
 
-    const lineaInvalida = itemsEnCarritoMovimiento.find(item => Number(item.cantidadMovimiento) <= 0 || !item.almacen);
-    if (lineaInvalida) {
-      mostrarToast?.(`Revisa cantidad y almacén para ${lineaInvalida.nombre}`, "warning");
-      return;
-    }
+  // 2. Validación: Cantidad y Almacén
+  const lineaInvalida = itemsEnCarritoMovimiento.find(item => Number(item.cantidadMovimiento) <= 0 || !item.almacen);
+  if (lineaInvalida) {
+    mostrarToast?.(`Revisa cantidad y almacén para ${lineaInvalida.nombre}`, "warning");
+    return;
+  }
 
-    try {
-      const tipo = tipoMovimiento === 'despachar' ? 'DESPACHAR' : 'RECIBIR';
-      const prefijoNota = tipo === 'RECIBIR' ? 'Recibo de Inventario' : 'Despacho de Inventario';
+  try {
+    const tipo = tipoMovimiento === 'despachar' ? 'DESPACHAR' : 'RECIBIR';
+    const prefijoNota = tipo === 'RECIBIR' ? 'Recibo de Inventario' : 'Despacho de Inventario';
 
-      if (tipo === 'DESPACHAR') {
-        for (const item of itemsEnCarritoMovimiento) {
-          const stockDisponible = obtenerStockEnAlmacen(item, item.almacen || 'Principal');
-          if (Number(item.cantidadMovimiento) > stockDisponible) {
-            throw new Error(`Stock insuficiente en ${item.almacen} para ${item.nombre}. Disponible: ${stockDisponible}`);
-          }
+    if (tipo === 'DESPACHAR') {
+      for (const item of itemsEnCarritoMovimiento) {
+        const stockDisponible = obtenerStockEnAlmacen(item, item.almacen || 'Principal');
+        if (Number(item.cantidadMovimiento) > stockDisponible) {
+          throw new Error(`Stock insuficiente en ${item.almacen} para ${item.nombre}. Disponible: ${stockDisponible}`);
         }
       }
-
-      const payload = {
-        tipo: tipo, 
-        nota: `${prefijoNota} ${proveedorSeleccionado ? `(Prov: ${proveedorSeleccionado})` : ''} - ${new Date().toLocaleDateString()}`,
-        items: itemsEnCarritoMovimiento.map(item => {
-          const baseItem = {
-            productoId: item.id,
-            almacen: item.almacen || 'Principal',
-          };
-          if (item.isSerialized) {
-            return { ...baseItem, serials: item.serials };
-          }
-          return { 
-            ...baseItem, 
-            cantidad: Number(item.cantidadMovimiento),
-            lote: item.lote 
-          };
-        }),
-        referencia: facturaEncontrada?.id || undefined,
-        usuarioId: Number(usuario?.id)
-      };
-
-      // Ejecutamos la petición al backend
-      const resultado = await registrarMovimientosMasivos(payload); 
-
-      // 🚨 CORRECCIÓN CRÍTICA: Validamos si retornó datos (si no hay error, es exitoso)
-      if (resultado) {
-        // Si tu backend devuelve un array, contamos los elementos; si no, usamos el largo del carrito
-        const totalLineas = Array.isArray(resultado) ? resultado.length : (resultado.count || itemsEnCarritoMovimiento.length);
-        
-        // 1. Mostramos la notificación verde de éxito
-        mostrarToast?.(`${totalLineas} línea${totalLineas === 1 ? '' : 's'} de inventario procesada${totalLineas === 1 ? '' : 's'} correctamente`, "success");
-        
-        // 2. Limpiamos el carrito multi-línea para que no se dupliquen datos
-        setItemsEnCarritoMovimiento([]); 
-        
-        // 3. Cerramos el modal de una vez por todas
-        cerrarModal();
-        
-        // 4. Refrescamos el inventario de la pantalla principal para ver el stock actualizado
-        recargarInventario();
-      }
-    } catch (error) {
-      console.error("Error en flujo masivo:", error);
-      mostrarToast?.(error.message || "Error crítico: No se pudo procesar el ingreso", "error");
     }
-  };
+
+    //Armamos el payload con la propiedad exacta del DTO (batchNumber)
+    const payload = {
+      tipo: tipo, 
+      nota: `${prefijoNota} - ${new Date().toLocaleDateString()}`,
+      items: itemsEnCarritoMovimiento.map(item => {
+        const baseItem = {
+          productoId: item.id,
+          almacen: item.almacen || 'Principal',
+        };
+
+        if (item.isSerialized) {
+          return { ...baseItem, serials: item.serials };
+        }
+
+        // Flujo para productos normales (sin seriales)
+        return { 
+          ...baseItem, 
+          cantidad: Number(item.cantidadMovimiento),
+        };
+      }),
+      referencia: facturaEncontrada?.id || undefined,
+      usuarioId: Number(usuario?.id)
+    };
+
+    // Enviamos a la API de forma segura
+    await registrarMovimientosMasivos(payload);
+    
+    mostrarToast?.("Movimiento masivo procesado con éxito.", "success");
+    cerrarModal();
+
+  } catch (error) {
+    console.error("Error en flujo masivo:", error);
+    mostrarToast?.(error.message || "Error al procesar el movimiento masivo", "error");
+  }
+};
 
   const procesarDevolucionFactura = async () => {
     setModalOpen(false);
@@ -342,14 +341,20 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
       const fin = fechaFin ? new Date(fechaFin + 'T23:59:59') : null;
       
       const matchFecha = (!inicio || fechaMov >= inicio) && (!fin || fechaMov <= fin);
+      
+      // Condición de filtrado por técnico
+      const matchTecnico = filtroTecnico === 'todos' || String(m.technicianId) === filtroTecnico;
 
-      return matchBusqueda && matchTipo && matchFecha;
+      // 💡 NUEVO: Condición de filtrado por usuario
+      const matchUsuario = filtroUsuario === 'todos' || String(m.usuarioId) === filtroUsuario;
+
+      return matchBusqueda && matchTipo && matchFecha && matchTecnico && matchUsuario;
     });
-  }, [movimientos, busquedaKardex, filtroTipo, fechaInicio, fechaFin]);
+  }, [movimientos, busquedaKardex, filtroTipo, fechaInicio, fechaFin, filtroTecnico, filtroUsuario]);
 
 const exportarKardexCSV = () => {
     if (movimientosFiltrados.length === 0) {
-      mostrarToast?.("No hay movimientos para exportar", "warning");
+      mostrarToast?.("No hay datos en la tabla para exportar.", "warning");
       return;
     }
 
@@ -419,7 +424,7 @@ const exportarKardexCSV = () => {
     // 1. Obtenemos los números de serie de los objetos seleccionados
     const listaSeriales = serialesSeleccionados.map(s => s.serialNumber);
 
-    // 🚨 CONTROL DE SEGURIDAD PARA EL USUARIO ACTIVO
+    //CONTROL DE SEGURIDAD PARA EL USUARIO ACTIVO
     // Validamos que el usuario activo tenga un ID antes de continuar.
     if (!usuario?.id) {
       mostrarToast?.("No se ha detectado una sesión de usuario activa.", "error");
@@ -559,6 +564,30 @@ return (
           <option value="DESCARTAR">Descartes</option>
         </select>
 
+        {/* 💡 2. Nuevo dropdown para filtrar por técnico */}
+        <select
+          value={filtroTecnico}
+          onChange={(e) => setFiltroTecnico(e.target.value)}
+          className="h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-black text-[10px] uppercase text-slate-600 bg-white shadow-sm cursor-pointer lg:w-48"
+        >
+          <option value="todos">Todos los técnicos</option>
+          {tecnicos.map(t => (
+            <option key={t.id} value={t.id}>{t.nombre}</option>
+          ))}
+        </select>
+
+        {/* 💡 NUEVO: Dropdown para filtrar por usuario */}
+        <select
+          value={filtroUsuario}
+          onChange={(e) => setFiltroUsuario(e.target.value)}
+          className="h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-black text-[10px] uppercase text-slate-600 bg-white shadow-sm cursor-pointer lg:w-48"
+        >
+          <option value="todos">Todos los usuarios</option>
+          {usuarios.map(u => (
+            <option key={u.id} value={u.id}>{u.nombre}</option>
+          ))}
+        </select>
+
         <button onClick={exportarKardexCSV} className="h-11 px-6 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase shadow-sm hover:bg-emerald-600 transition-all flex items-center gap-2">
           <Download size={16} /> Exportar
         </button>
@@ -568,7 +597,7 @@ return (
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[300px]">
         {movimientosFiltrados.length > 0 ? (
           <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-50 border-b text-[9px] font-black uppercase text-slate-400">
+            <thead className="bg-slate-50 border-b text-[9px] font-black uppercase text-slate-400 sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-4">Fecha</th>
                 <th className="px-6 py-4">Producto</th>
@@ -583,25 +612,53 @@ return (
             </thead>
             <tbody className="divide-y text-[11px]">
               {movimientosFiltrados.map((mov) => (
-                <tr key={mov.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-3 font-bold text-slate-500">{new Date(mov.createdAt).toLocaleString()}</td>
-                  <td className="px-6 py-3 font-black text-slate-800 uppercase">{mov.producto?.nombre}</td>
-                  <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">{mov.almacenOrigen || 'N/A'}</td>
-                  <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">{mov.almacenDestino || 'N/A'}</td>
-                  <td className="px-6 py-3 text-[10px] font-black text-brand uppercase">{mov.technician?.nombre || 'N/A'}</td>
-                  <td className="px-6 py-3 font-bold text-slate-400 uppercase italic">
+                <React.Fragment key={mov.id}>
+                <tr 
+                  className={`hover:bg-slate-50 transition-colors ${mov.serials?.length > 0 ? 'cursor-pointer' : ''}`}
+                  onClick={() => mov.serials?.length > 0 && setExpandedRowId(prevId => prevId === mov.id ? null : mov.id)}
+                >
+                  <td className="px-6 py-3 font-bold text-slate-500 align-top">{new Date(mov.createdAt).toLocaleString()}</td>
+                  <td 
+                    className="px-6 py-3 font-black text-slate-800 uppercase align-top"
+                  >
+                    <span className={mov.serials?.length > 0 ? 'group-hover:text-brand transition-colors' : ''}>{mov.producto?.nombre}</span>
+                    {mov.proveedor && <p className="text-[9px] text-brand font-bold normal-case italic">de {mov.proveedor.nombre}</p>} 
+                  </td>
+                  <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase align-top">{mov.almacenOrigen || 'N/A'}</td>
+                  <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase align-top">{mov.almacenDestino || 'N/A'}</td>
+                  <td className="px-6 py-3 text-[10px] font-black text-brand uppercase align-top">{mov.technician?.nombre || 'N/A'}</td>
+                  <td className="px-6 py-3 font-bold text-slate-400 uppercase italic align-top">
                     {mov.usuario?.nombre || mov.usuarioId || 'Sistema'}
                   </td>
-                  <td className="px-6 py-3">
+                  <td className="px-6 py-3 align-top">
                     <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${
                       mov.tipo.includes('RECIBIR') || mov.tipo.includes('DEVOLUCION') ? 'bg-emerald-500' : 'bg-slate-500'
                     }`}>
                       {mov.tipo}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-center font-black">{mov.cantidad}</td>
-                  <td className="px-6 py-3 text-right font-black text-brand">{mov.nuevoStock ?? mov.producto?.stock ?? '---'}</td>
+                  <td className="px-6 py-3 text-center font-black align-top">{mov.cantidad}</td>
+                  <td className="px-6 py-3 text-right font-black text-brand align-top">{mov.nuevoStock ?? mov.producto?.stock ?? '---'}</td>
                 </tr>
+                {/* 💡 NUEVO: Fila expandible para mostrar seriales */}
+                {expandedRowId === mov.id && (
+                  <tr className="bg-slate-50 animate-in fade-in duration-200">
+                    <td colSpan="9" className="p-3">
+                      <div className="p-3 bg-white border-2 border-dashed border-slate-200 rounded-xl">
+                        <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Seriales Involucrados ({mov.serials.length})</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {mov.serials.map((serial, idx) => (
+                            <div key={idx} className="flex items-center gap-2 px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg">
+                              <Tag size={12} className="text-slate-400" />
+                              <span className="text-[10px] font-mono font-bold text-slate-700">{serial}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
@@ -612,6 +669,41 @@ return (
           </div>
         )}
       </div>
+
+      {/* 💡 NUEVO: Modal para mostrar los seriales de un movimiento */}
+      {modalSeriales.isOpen && modalSeriales.movimiento && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setModalSeriales({ isOpen: false, movimiento: null })}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <div>
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Seriales del Movimiento</h3>
+                <p className="text-[10px] font-bold text-brand uppercase">{modalSeriales.movimiento.producto?.nombre}</p>
+              </div>
+              <button onClick={() => setModalSeriales({ isOpen: false, movimiento: null })} className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-white text-slate-400 shadow-sm">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 max-h-80 overflow-y-auto">
+              <div className="space-y-2">
+                {modalSeriales.movimiento.serials.map((serial, index) => (
+                  <div key={index} className="flex items-center gap-3 p-3 bg-slate-100 border border-slate-200 rounded-xl">
+                    <Tag size={14} className="text-slate-400" />
+                    <span className="text-xs font-mono font-bold text-slate-700">{serial}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 bg-slate-50/50 border-t border-slate-100 text-right">
+              <button
+                onClick={() => setModalSeriales({ isOpen: false, movimiento: null })}
+                className="px-5 py-2 bg-slate-900 text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-brand transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL ÚNICO DE FLUJOS DINÁMICOS */}
       {modalOpen && (
@@ -646,12 +738,12 @@ return (
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Proveedor de Mercancía</label>
                       <select 
-                        className="w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white"
-                        value={proveedorSeleccionado}
-                        onChange={(e) => setProveedorSeleccionado(e.target.value)}
+                        className="w-full h-11 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white shadow-sm"
+                        value={proveedorSeleccionadoId}
+                        onChange={(e) => setProveedorSeleccionadoId(e.target.value)}
                       >
                         <option value="">Seleccionar Proveedor...</option>
-                        {proveedores.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                        {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                       </select>
                     </div>
                   )}
@@ -764,33 +856,15 @@ return (
                                     </span>
                                   </div>
                                 ) : (
-                                  <input 
-                                    type="number" min="1"
-                                    max={tipoMovimiento === 'despachar' ? obtenerStockEnAlmacen(item, item.almacen || 'Principal') : undefined}
-                                    className="w-full p-1.5 border rounded-lg font-black text-center text-[10px]"
-                                    value={item.cantidadMovimiento}
-                                    onChange={(e) => {
-                                      const nuevaLista = [...itemsEnCarritoMovimiento];
-                                      nuevaLista[idx].cantidadMovimiento = parseInt(e.target.value) || 0;
-                                      setItemsEnCarritoMovimiento(nuevaLista);
-                                    }}
-                                  />
+                                  <input type="number" min="1" max={tipoMovimiento === 'despachar' ? obtenerStockEnAlmacen(item, item.almacen || 'Principal') : undefined} className="w-full p-1.5 border rounded-lg font-black text-center text-[10px]" value={item.cantidadMovimiento} onChange={(e) => {
+                                    const nuevaLista = [...itemsEnCarritoMovimiento];
+                                    nuevaLista[idx].cantidadMovimiento = parseInt(e.target.value) || 0;
+                                    setItemsEnCarritoMovimiento(nuevaLista);
+                                  }} />
                                 )}
                               </td>
                               {(tipoMovimiento === 'recibir' || tipoMovimiento === 'multilinea') && (
-                                <td className="px-4 py-2">
-                                  <input 
-                                    type="text"
-                                    placeholder="Nº Lote"
-                                    className="w-full p-1.5 border rounded-lg font-bold text-[10px] uppercase"
-                                    value={item.lote || ''}
-                                    onChange={(e) => {
-                                      const nuevaLista = [...itemsEnCarritoMovimiento];
-                                      nuevaLista[idx].lote = e.target.value;
-                                      setItemsEnCarritoMovimiento(nuevaLista);
-                                    }}
-                                  />
-                                </td>
+                                <td className="px-4 py-2"></td>
                               )}
                               <td className="px-4 py-2 text-right">
                                 <button onClick={() => setItemsEnCarritoMovimiento(itemsEnCarritoMovimiento.filter(i => i.id !== item.id))} className="text-red-400 hover:text-red-600">

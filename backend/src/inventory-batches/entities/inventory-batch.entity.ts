@@ -7,6 +7,7 @@ import {
   CreateDateColumn, 
   UpdateDateColumn 
 } from 'typeorm';
+import { Expose } from 'class-transformer';
 import { Product } from '../../products/entities/product.entity'; // ⚠️ Revisa que la ruta a tu entidad de Producto sea correcta
 
 @Entity('inventory_batches') // Nombre de la tabla en PostgreSQL
@@ -15,7 +16,9 @@ export class InventoryBatch {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'numero_lote', type: 'varchar', length: 100 })
+  // 💡 MEJORA: Aceptamos 'lote' como alias para 'numeroLote' desde el DTO.
+  @Expose({ name: 'lote' }) 
+  @Column({ name: 'numero_lote', type: 'varchar', length: 100, nullable: true, default: 'Sin Lote' })
   numeroLote: string;
 
   @Column({ type: 'int', default: 0 })
@@ -27,15 +30,14 @@ export class InventoryBatch {
   @Column({ name: 'fecha_vencimiento', type: 'date', nullable: true })
   fechaVencimiento: Date;
 
-  // 🌟 RELACIÓN: Muchos lotes pertenecen a un solo producto
-  @ManyToOne(() => Product, (product) => product.id, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'producto_id' }) // Nombre de la llave foránea en la BD
-  producto: Product;
+ @ManyToOne(() => Product, { onDelete: 'CASCADE' })
+ @JoinColumn({ name: 'producto_id' }) 
+ producto: Product;
 
-  // Guardamos también el ID numérico directo para facilitar las validaciones en los DTOs
-  @Column({ name: 'producto_id' })
-  productoId: number;
-
+  // Se queda exactamente igual, apuntando al mismo nombre físico
+  // @Column({ name: 'producto_id' })
+  // productoId: number;
+  
   // Métricas de auditoría automáticas
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;

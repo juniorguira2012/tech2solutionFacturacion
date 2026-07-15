@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectRepository } from '@nestjs/typeorm'; 
 import { Repository, DataSource } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Provider } from '../providers/entities/provider.entity';
-import { ProductSerial, SerialStatus } from './entities/product-serial.entity';
+import { ProductSerial, SerialStatus } from './entities/product-serial.entity'; 
 import { Movement } from '../movements/entities/movement.entity';
 
 @Injectable()
@@ -37,16 +37,29 @@ export class ProductsService {
       // 💡 CORRECCIÓN: Aseguramos que siempre haya un almacén por defecto.
       const datosConAlmacen = {
         ...productData,
+        isSerialized: productData.isSerialized || false,
         almacen: productData.almacen || 'Principal',
         nota: nota, // <-- Añadimos la nota al objeto del producto
       };
       const nuevoProducto = queryRunner.manager.create(Product, datosConAlmacen);
+
 
       if (nuevoProducto.isSerialized && serials && serials.length > 0) {
         // Validar duplicados dentro de la misma lista antes de crear
         const uniqueSerials = [...new Set(serials)];
         if (uniqueSerials.length !== serials.length) {
           throw new BadRequestException('La lista contiene números de serie duplicados.');
+        }
+
+        // 💡 ALERTA DE DUPLICADOS: Verificamos si alguno de los seriales ya existe en la DB
+        const serialesExistentes = await queryRunner.manager
+          .getRepository(ProductSerial)
+          .createQueryBuilder('serial')
+          .where('serial.serialNumber IN (:...serials)', { serials: uniqueSerials })
+          .getMany();
+
+        if (serialesExistentes.length > 0) {
+          throw new BadRequestException(`Los siguientes seriales ya existen: ${serialesExistentes.map(s => s.serialNumber).join(', ')}`);
         }
 
         nuevoProducto.seriales = uniqueSerials.map(serialNumber => { 
@@ -77,11 +90,15 @@ export class ProductsService {
   async findAll(isActive: boolean | 'all' = true) {
     if (isActive === 'all') {
       return await this.productRepository.find({
+        // 💡 MEJORA: Incluimos la relación con seriales para que el POS pueda buscar por ellos.
+        relations: ['seriales', 'proveedor'],
         order: { createdAt: 'DESC' }, // Ordenar por fecha de creación descendente
       });
     }
     return await this.productRepository.find({
       where: { isActive }, // Usar el parámetro recibido
+      // 💡 MEJORA: También la incluimos en la búsqueda de productos activos.
+      relations: ['seriales', 'proveedor'],
       order: { createdAt: 'DESC' }, // Los más nuevos primero
     });
   }
@@ -161,6 +178,19 @@ export class ProductsService {
             // Usamos el almacén que viene en la actualización, o el que ya tenía el producto.
             almacen: productData.almacen ?? producto.almacen ?? 'Principal',
           }));
+
+        // 💡 ALERTA DE DUPLICADOS (ACTUALIZACIÓN): Verificamos si los nuevos seriales ya existen en OTRO producto.
+        if (serialesACrear.length > 0) {
+          const numerosDeSerialesACrear = serialesACrear.map(s => s.serialNumber);
+          const serialesExistentesEnDB = await queryRunner.manager
+            .getRepository(ProductSerial)
+            .createQueryBuilder('serial')
+            .where('serial.serialNumber IN (:...serials)', { serials: numerosDeSerialesACrear })
+            .getMany();
+          if (serialesExistentesEnDB.length > 0) {
+            throw new BadRequestException(`No se puede añadir, los seriales ya existen: ${serialesExistentesEnDB.map(s => s.serialNumber).join(', ')}`);
+          }
+        }
 
         // Solo intentamos guardar si realmente hay seriales nuevos que añadir.
         if (serialesACrear.length > 0) {

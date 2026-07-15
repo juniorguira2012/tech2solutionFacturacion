@@ -58,16 +58,20 @@ export const InventarioProvider = ({ children }) => {
   }, [usuario?.rol]);
 
   const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('posfactura_token');
-
-    return {
+    const headers = {
       'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '', 
-      'x-user-id': usuario?.id || '', 
-      'x-user-role': usuario?.rol || '',
-      'x-inventory-permission': getInventoryPermission(),
     };
-  }, [usuario?.id, usuario?.rol, getInventoryPermission]);
+    const token = localStorage.getItem('posfactura_token');
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    if (usuario && usuario.id) {
+      headers['x-user-id'] = usuario.id;
+      headers['x-user-role'] = usuario.rol;
+      headers['x-inventory-permission'] = getInventoryPermission();
+    }
+    return headers;
+  }, [usuario, getInventoryPermission]);
 
   // --- EFECTO PRINCIPAL DE CARGA DE DATOS ---
   // Este efecto centraliza todas las peticiones iniciales para optimizar el rendimiento.
@@ -110,7 +114,7 @@ export const InventarioProvider = ({ children }) => {
         { url: `${API_BASE_URL}/categories`, setter: setCategorias },
         { url: `${API_BASE_URL}/product-serials`, setter: setSeriales },
         { url: `${API_BASE_URL}/comodatos`, setter: setPrestamos },
-        { url: `${API_BASE_URL}/inventory-batches`, setter: setLotes },
+        // { url: `${API_BASE_URL}/inventory-batches`, setter: setLotes }, // Lotes deshabilitados
       ];
   
       const promesas = recursos.map(r => fetch(r.url, { headers }).then(res => {
@@ -506,11 +510,23 @@ export const InventarioProvider = ({ children }) => {
 const registrarMovimientosMasivos = async (payload) => {
   try {
     const url = `${API_BASE_URL}/movements/bulk-receive`;
-    // 1. Apuntamos a la ruta exacta de tu controlador de NestJS
+    
+    // 🌟 DEPURADOR ULTRAESTRICTO: Eliminamos cualquier rastro de lotes del payload
+    let payloadLimpio = JSON.parse(JSON.stringify(payload)); // Clonamos para no romper el estado de la UI
+
+    if (Array.isArray(payloadLimpio)) {
+      // Si el payload es un array directo: [ { ... }, { ... } ]
+      payloadLimpio = payloadLimpio.map(({ numeroLote, lote, loteId, ...resto }) => resto);
+    } else if (payloadLimpio && Array.isArray(payloadLimpio.items)) {
+      // Si el payload viene envuelto en un objeto con la propiedad 'items' (Tu caso actual 🎯)
+      payloadLimpio.items = payloadLimpio.items.map(({ numeroLote, lote, loteId, ...resto }) => resto);
+    }
+
+    // 1. Apuntamos a la ruta exacta de tu controlador de NestJS pasándole el payload limpio
     const res = await fetch(url, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payloadLimpio) 
     });
     
     if (!res.ok) {
@@ -1157,11 +1173,11 @@ return (
     lotes,
     cargarPrestamos,
     crearPrestamo,
-    devolverPrestamo,
-    cargarLotes,
-    agregarLote,
-    actualizarLote,
-    eliminarLote,
+    devolverPrestamo, 
+    cargarLotes: () => {}, // Función vacía para no romper llamadas
+    agregarLote: async () => {},
+    actualizarLote: async () => {},
+    eliminarLote: async () => {},
     devolverSerialTecnico,
     cargarUnidadesMedida,
     agregarUnidadMedida,

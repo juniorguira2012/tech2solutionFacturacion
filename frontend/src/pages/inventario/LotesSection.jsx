@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Layers3, Search, Calendar, AlertTriangle, Package, Warehouse, Info, Plus, Edit3, Trash2, X, Save } from 'lucide-react';
+import { Layers3, Search, Calendar, AlertTriangle, Package, Warehouse, Info, Plus, Edit3, Trash2, X, Save, Ban } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 
 const LotesSection = ({ mostrarToast, permisos }) => {
@@ -71,16 +71,38 @@ const LotesSection = ({ mostrarToast, permisos }) => {
 
   const handleGuardar = async (e) => {
     e.preventDefault();
+    
+    // 🛡️ Verificación de permisos intacta
     if ((isEditing && !permisosLotes?.edit) || (!isEditing && !permisosLotes?.create)) {
       return mostrarToast("Acción no permitida", "error");
     }
+    
     setIsSaving(true);
+    
     try {
+      // 🚀 CONSTRUCCIÓN EXPLÍCITA DEL PAYLOAD
+      // Eliminamos el "...formData" para no enviar propiedades basura al backend
       const payload = {
-        ...formData,
         productoId: Number(formData.productoId),
         cantidad: Number(formData.cantidad),
+        
+        // 🌟 SOLUCIÓN: Mapeamos 'lote' o 'numeroLote' al nombre exacto de tu entidad NestJS
+        numeroLote: (formData.numeroLote || formData.lote || '').trim(),
+        
+        // Enviamos el almacén (puedes adaptarlo si tu formulario maneja múltiples almacenes)
+        almacen: formData.almacen || 'Principal',
+        
+        // Si maneja fecha de vencimiento la incluimos, si no, enviamos null limpiamente
+        fechaVencimiento: formData.fechaVencimiento || null
       };
+
+      // 🛑 Validación preventiva: Si el lote quedó vacío en el input, detenemos el proceso
+      if (!payload.numeroLote) {
+        setIsSaving(false);
+        return mostrarToast("El número de lote es obligatorio", "warning");
+      }
+
+      // Ejecución de servicios original
       if (isEditing) {
         await actualizarLote(formData.id, payload);
         mostrarToast("Lote actualizado con éxito", "success");
@@ -88,6 +110,7 @@ const LotesSection = ({ mostrarToast, permisos }) => {
         await agregarLote(payload);
         mostrarToast("Lote creado con éxito", "success");
       }
+      
       setShowModal(false);
     } catch (error) {
       mostrarToast(error.message || "Error al guardar el lote", "error");
@@ -117,6 +140,21 @@ const LotesSection = ({ mostrarToast, permisos }) => {
       </div>
     );
   }
+
+  // 💡 DESHABILITADO: Módulo de lotes desactivado temporalmente.
+  return (
+    <div className="space-y-4 animate-in fade-in duration-300">
+      <div className="flex flex-col items-center justify-center gap-4 bg-slate-50/50 p-10 rounded-2xl border-2 border-dashed border-slate-200 text-center">
+        <div className="p-3 bg-slate-100 text-slate-400 rounded-full">
+          <Ban size={24} />
+        </div>
+        <div>
+          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest italic">Módulo de Lotes Deshabilitado</h2>
+          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Esta funcionalidad no está activa en la versión actual del sistema.</p>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300">

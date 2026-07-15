@@ -317,8 +317,8 @@ const handleSave = async (e) => {
     updatedAt, 
     countItems, 
     vendidos, 
-    serialsInput, // <- Sacamos el string del textarea aquí
-    serialesExistentes, // <- Lo sacamos también para que no vaya en el payload
+    serialsInput, 
+    serialesExistentes, 
     ...datosBase 
   } = formData;
 
@@ -330,30 +330,32 @@ const handleSave = async (e) => {
       .map(s => s.trim().toUpperCase())
       .filter(Boolean);
 
-    // --- VALIDACIÓN DE SERIALES EXISTENTES ---
-    // Verificamos si alguno de los seriales que se están intentando agregar
-    // ya existe en el sistema, excluyendo los que ya pertenecen a este producto en edición.
+    // --- VALIDACIÓN DE SERIALES DUPLICADOS ---
     if (serialesDelInput.length > 0) {
+      // 1. Validar duplicados en la misma lista que se está ingresando
+      if (new Set(serialesDelInput).size !== serialesDelInput.length) {
+        mostrarToast?.('La lista que estás ingresando contiene seriales repetidos.', 'error');
+        setIsSaving(false);
+        return;
+      }
+
+      // 2. Validar contra la base de datos global
       const serialesGlobales = new Set(seriales.map(s => s.serialNumber));
-      const serialesPropios = new Set(serialesExistentes.map(s => s.serialNumber));
-      
       for (const serial of serialesDelInput) {
-        if (serialesGlobales.has(serial) && !serialesPropios.has(serial)) {
+        // Si el serial ya existe en el sistema Y no pertenece a este mismo producto (en modo edición)
+        const esPropio = isEditing && serialesExistentes.some(s => s.serialNumber === serial);
+        if (serialesGlobales.has(serial) && !esPropio) {
           mostrarToast?.(`El serial "${serial}" ya está registrado en el sistema.`, 'error');
           setIsSaving(false);
-          return; // Detenemos el guardado
+          return;
         }
       }
     }
 
     if (isEditing) {
-      // En modo edición, combinamos los seriales existentes con los nuevos, eliminando duplicados.
-      // Usamos los seriales que quedaron en el estado del formulario (ya filtrados si se eliminó alguno).
       const serialesExistentesStr = serialesExistentes.map(s => s.serialNumber);
       listaSeriales = [...new Set([...serialesExistentesStr, ...serialesDelInput])];
     } else {
-      // En modo creación, solo usamos los del input.
-      // Si no hay seriales en el input, la lista será un array vacío.
       listaSeriales = serialesDelInput.length > 0 ? serialesDelInput : [];
     }
   }
@@ -367,13 +369,14 @@ const handleSave = async (e) => {
     almacen: formData.almacen || 'Principal',
     id: isEditing ? Number(formData.id) : undefined, 
     precio: parseFloat(formData.precio) || 0,    
-    stockMinimo: parseInt(formData.stockMinimo, 10) || 0, // <-- AÑADIDO: Convertimos a número entero.
-    // Si el producto NO es serializado, enviamos el stock manual.
-    // Si ES serializado, el backend calculará el stock basado en la lista de seriales.
-    // No enviamos 'stock' para que el backend tenga control total.
-    ...(!formData.isSerialized && { stock: parseInt(formData.stock) || 0 }),
+    stockMinimo: parseInt(formData.stockMinimo, 10) || 0, 
 
-    // Enviamos el array de strings nativo que tu Backend espera en el DTO
+    // 🚀 ¡AQUÍ ESTÁ EL FIX PARA EL PROVEEDOR!
+    // Forzamos que sea un número real, y si viene vacío (""), lo enviamos como undefined
+    // para que NestJS lo ignore por completo y no falle el ValidationPipe.
+    proveedorId: datosBase.proveedorId ? Number(datosBase.proveedorId) : undefined,
+
+    ...(!formData.isSerialized && { stock: parseInt(formData.stock) || 0 }),
     serials: listaSeriales
   };
 

@@ -85,6 +85,8 @@ const Inventario = () => {
   useEffect(() => {
     if (seccionActiva) {
       localStorage.setItem('posfactura_inventario_tab', seccionActiva);
+      if (seccionActiva !== 'productos' && productoAEditar) setProductoAEditar(null);
+      if (seccionActiva !== 'movimiento' && accionInicial) setAccionInicial(null);
     }
   }, [seccionActiva]);
 
@@ -98,6 +100,12 @@ const Inventario = () => {
         setAccionInicial({ tipo: accion, producto: producto });
         navigate(location.pathname, { replace: true }); // Limpiamos el state para no repetir la acción
       }
+    }
+
+    // 💡 FIX: Limpiamos el producto a editar cuando el componente se desmonte
+    // o cuando el `location.state` cambie, para evitar re-renderizados indeseados.
+    return () => {
+      setProductoAEditar(null);
     }
   }, [location.state, seccionesVisibles]);
 
@@ -191,24 +199,23 @@ const Inventario = () => {
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                  {productosBajoStock.length > 0 ? (
                    productosBajoStock.map(prod => (
-                     <div key={prod.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
-                       <div className="flex justify-between items-start">
-                         <h3 className="font-black text-slate-800 uppercase text-xs leading-tight">{prod.nombre}</h3>
-                         <button onClick={() => handleEditarProductoDesdeAlerta(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold uppercase ml-auto">
-                           <Edit3 size={14}/>
-                         </button>
-                       </div>
-                       <div className="grid grid-cols-2 gap-2 text-center">
-                         <div className="bg-amber-50 border border-amber-100 rounded-lg p-2">
+                     <div 
+                       key={prod.id} 
+                       onClick={() => handleEditarProductoDesdeAlerta(prod)}
+                       className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3 hover:shadow-lg hover:border-brand/50 transition-all cursor-pointer group"
+                     >
+                       <h3 className="font-black text-slate-800 uppercase text-xs leading-tight group-hover:text-brand transition-colors">{prod.nombre}</h3>
+                       <div className="grid grid-cols-2 gap-2 text-center pt-2 border-t border-slate-100">
+                         <div className="bg-amber-50/50 border border-amber-100/50 rounded-lg p-2">
                            <p className="text-[8px] font-black text-amber-600 uppercase">Mínimo</p>
                            <p className="text-sm font-black text-amber-700">{prod.stockMinimo ?? 5}</p>
                          </div>
-                         <div className="bg-red-50 border border-red-100 rounded-lg p-2">
+                         <div className="bg-red-50/50 border border-red-100/50 rounded-lg p-2">
                            <p className="text-[8px] font-black text-red-600 uppercase">Actual</p>
                            <p className="text-sm font-black text-red-700">{prod.stock}</p>
                          </div>
-                       </div>
                      </div>
+                  </div>
                    ))
                  ) : (
                    <div className="py-12 text-center text-xs font-black uppercase text-slate-400">No hay productos con stock crítico.</div>

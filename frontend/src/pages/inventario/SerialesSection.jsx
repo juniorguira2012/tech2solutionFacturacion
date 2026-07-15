@@ -3,9 +3,10 @@ import { Search, Tag, Edit, ChevronLeft, ChevronRight, History, X, Package, User
 import { useInventario } from '../../context/InventarioContext';
 
 const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
-  const { seriales, cargarSeriales, actualizarEstadoSerial, obtenerHistorialSerial } = useInventario();
+  const { seriales, tecnicos, cargarSeriales, actualizarEstadoSerial, obtenerHistorialSerial } = useInventario();
   const [busqueda, setBusqueda] = useState('');
   const [editingStatusId, setEditingStatusId] = useState(null);
+  const [filtroTecnicoId, setFiltroTecnicoId] = useState(null);
   const [loading, setLoading] = useState(false);
   
   // --- Estados para el modal de historial ---
@@ -27,16 +28,23 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
   const statusOptions = ['disponible', 'vendido', 'en_reparacion', 'descartado', 'en_comodato'];
 
   const serialesFiltrados = useMemo(() => {
-    if (!busqueda.trim()) {
-      return seriales;
+    let resultados = seriales;
+
+    // 💡 1. Primero, filtramos por técnico si hay uno seleccionado.
+    if (filtroTecnicoId) {
+      resultados = resultados.filter(s => s.technicianId === filtroTecnicoId);
     }
+
+    // 💡 2. Luego, aplicamos la búsqueda de texto sobre los resultados ya filtrados.
+    if (!busqueda.trim()) return resultados;
+
     const busquedaLower = busqueda.toLowerCase();
-    return seriales.filter(s =>
+    return resultados.filter(s =>
       s.serialNumber.toLowerCase().includes(busquedaLower) ||
       s.producto?.nombre.toLowerCase().includes(busquedaLower) ||
       s.producto?.codigo?.toLowerCase().includes(busquedaLower)
     );
-  }, [seriales, busqueda]);
+  }, [seriales, busqueda, filtroTecnicoId]);
 
   // --- Lógica de paginación ---
   const totalPages = useMemo(() => {
@@ -50,8 +58,8 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
 
   // Resetear a la página 1 cuando se realiza una búsqueda
   useEffect(() => {
-    setCurrentPage(1);
-  }, [busqueda, itemsPerPage]);
+    setCurrentPage(1); // Se resetea si cambia la búsqueda o el filtro de técnico
+  }, [busqueda, itemsPerPage, filtroTecnicoId]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -103,7 +111,7 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
+    <><div className="space-y-5 animate-in fade-in duration-300">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-brand text-white rounded-xl shadow-lg shadow-indigo-100">
@@ -121,12 +129,24 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por serial, nombre o código de producto..."
-            className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white shadow-sm transition-all"
-          />
+            className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white shadow-sm transition-all" />
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
+      {/* 💡 Indicador de Filtro Activo */}
+      {filtroTecnicoId && (
+        <div className="flex items-center justify-center gap-2 p-2 bg-indigo-50 border-2 border-dashed border-indigo-100 rounded-xl animate-in fade-in duration-200">
+          <span className="text-[10px] font-black text-brand uppercase">
+            Filtrando por técnico: {tecnicos.find(t => t.id === filtroTecnicoId)?.nombre || 'Desconocido'}
+          </span>
+          <button
+            onClick={() => setFiltroTecnicoId(null)}
+            className="h-6 w-6 flex items-center justify-center rounded-full bg-white text-slate-400 hover:bg-brand hover:text-white transition-colors shadow-sm"
+          >
+            <X size={14} />
+          </button>
+        </div>)}
+    </div><div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
         {paginatedSeriales.length > 0 ? (
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b text-[9px] font-black uppercase text-slate-400">
@@ -135,6 +155,7 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
                 <th className="px-6 py-4">Producto</th>
                 <th className="px-6 py-4">Estado</th>
                 <th className="px-6 py-4">Almacén</th>
+                <th className="px-6 py-4">Técnico Asignado</th>
                 <th className="px-6 py-4">Fecha de Ingreso</th>
                 <th className="px-6 py-4"></th>
               </tr>
@@ -177,6 +198,18 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
                     )}
                   </td>
                   <td className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">{serial.almacen}</td>
+                  <td className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">
+                    {serial.status === 'asignado_tecnico' && serial.technicianId ? (
+                      <button
+                        onClick={() => setFiltroTecnicoId(Number(serial.technicianId))}
+                        className="font-black text-brand hover:underline"
+                      >
+                        {tecnicos.find(t => Number(t.id) === Number(serial.technicianId))?.nombre || `ID: ${serial.technicianId}`}
+                      </button>
+                    ) : (
+                      'N/A'
+                    )}
+                  </td>
                   <td className="px-6 py-3 font-bold text-slate-500">{new Date(serial.createdAt).toLocaleString()}</td>
                   <td className="px-6 py-3 text-right">
                     <button onClick={() => abrirModalHistorial(serial)} className="p-1.5 text-slate-400 hover:text-brand hover:bg-indigo-50 rounded-lg transition-colors">
@@ -218,7 +251,6 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
           </div>
         )}
       </div>
-
       {/* Modal de Historial */}
       {historialModalOpen && serialSeleccionado && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={cerrarModalHistorial}>
@@ -237,8 +269,7 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
-
 export default SerialesSection;

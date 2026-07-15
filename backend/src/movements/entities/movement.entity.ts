@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { Technician } from './technician.entity';
-import { User } from '../../providers/entities/user.entity';
+import { User } from '../../user/dto/entities/user.entity';
 
 @Entity('movements')
 export class Movement {

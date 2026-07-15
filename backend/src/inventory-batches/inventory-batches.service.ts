@@ -2,20 +2,17 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-// ⚠️ REVISA ESTAS RUTAS: Asegúrate de que apunten a tus entidades y DTOs reales
 import { InventoryBatch } from './entities/inventory-batch.entity'; 
-import { Product } from '../products/entities/product.entity'; // O donde tengas tu entidad de Producto
+import { Product } from '../products/entities/product.entity'; 
 import { CreateInventoryBatchDto } from './dto/create-inventory-batch.dto';
 import { UpdateInventoryBatchDto } from './dto/update-inventory-batch.dto';
 
 @Injectable()
 export class InventoryBatchesService {
   constructor(
-    // 🚀 Inyectamos el repositorio de Lotes
     @InjectRepository(InventoryBatch)
     private readonly inventoryBatchRepository: Repository<InventoryBatch>,
 
-    // 🚀 Inyectamos el repositorio de Productos (necesario para validar al crear el lote)
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
   ) {}
@@ -24,20 +21,24 @@ export class InventoryBatchesService {
 
   async findAllBatches() {
     return this.inventoryBatchRepository.find({
-      relations: ['producto'], // Esto hace el JOIN automático con la tabla de productos
+      relations: ['producto'], // Mantiene el JOIN automático impecable
       order: { createdAt: 'DESC' },
     });
   }
 
   async createBatch(createDto: CreateInventoryBatchDto) {
-    // Validamos que el producto realmente exista en la BD antes de asignarle un lote
-    const producto = await this.productRepository.findOneBy({ id: createDto.productoId });
+    // 🌟 SEPARACIÓN LIMPIA: Sacamos productoId y agrupamos el resto de propiedades
+    const { productoId, ...datosLote } = createDto;
+
+    // Validamos que el producto realmente exista
+    const producto = await this.productRepository.findOneBy({ id: productoId });
     if (!producto) {
-      throw new NotFoundException(`Producto con ID ${createDto.productoId} no encontrado.`);
+      throw new NotFoundException(`Producto con ID ${productoId} no encontrado.`);
     }
 
+    // Creamos el lote asignando la entidad producto completa a la relación
     const nuevoLote = this.inventoryBatchRepository.create({
-      ...createDto,
+      ...datosLote,
       producto: producto,
     });
 
@@ -45,14 +46,26 @@ export class InventoryBatchesService {
   }
 
   async updateBatch(id: number, updateDto: UpdateInventoryBatchDto) {
-    // El preload busca el ID y mapea los cambios del DTO de forma segura
+    // 🌟 SEPARACIÓN LIMPIA: Evitamos pasar el id numérico suelto al preload
+    const { productoId, ...datosActualizar } = updateDto;
+
+    // El preload mapea de forma segura los campos planos del lote (cantidad, almacén, etc.)
     const lote = await this.inventoryBatchRepository.preload({
       id: id,
-      ...updateDto,
+      ...datosActualizar,
     });
 
     if (!lote) {
       throw new NotFoundException(`Lote con ID ${id} no encontrado.`);
+    }
+
+    // Si el usuario envió un nuevo productoId en la actualización, lo validamos y asignamos
+    if (productoId) {
+      const producto = await this.productRepository.findOneBy({ id: productoId });
+      if (!producto) {
+        throw new NotFoundException(`Producto con ID ${productoId} no encontrado.`);
+      }
+      lote.producto = producto; // Actualizamos la relación de forma segura
     }
 
     return this.inventoryBatchRepository.save(lote);

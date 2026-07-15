@@ -640,6 +640,7 @@ export class MovementsService {
 
       // 4. Guardar los logs de movimientos de forma masiva
       await queryRunner.manager.save(Movement, movementsToCreate);
+
       await queryRunner.commitTransaction();
 
       return { message: `${uniqueSerials.length} serial(es) asignado(s) a ${technician.nombre} con éxito.` };

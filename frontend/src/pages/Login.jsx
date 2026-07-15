@@ -1,15 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { useGoogleLogin } from '@react-oauth/google';
 import { LogIn, ShieldCheck, UserCircle, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [form, setForm] = useState({ username: '', password: '' });
+  // 💡 Refs para controlar el foco en los campos
+  const usernameRef = useRef(null);
+  const passwordRef = useRef(null);
+
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithGoogle, loading: isLoadingAuth } = useAuth();
   const navigate = useNavigate();
+
+ // Cargar el usuario recordado al montar el componente
+  useEffect(() => {
+    const savedUsername = localStorage.getItem('posfactura_remember_user');
+    if (savedUsername) {
+      setForm(prev => ({ ...prev, username: savedUsername }));
+      setRememberMe(true);
+    }
+  }, []);
 
  const handleSubmit = async (e) => {
   e.preventDefault();
@@ -19,6 +34,12 @@ const Login = () => {
   try {
     const res = await login(form.username, form.password);
     if (res && res.success) {
+      // Guardar o borrar el usuario según la selección
+      if (rememberMe) {
+        localStorage.setItem('posfactura_remember_user', form.username);
+      } else {
+        localStorage.removeItem('posfactura_remember_user');
+      }
       navigate('/home', { replace: true }); 
     } else {
       setError(res ? res.message : 'Error de conexión');
@@ -27,6 +48,52 @@ const Login = () => {
     setIsLoading(false);
   }
 };
+
+  // 💡 Lógica para el login con Google
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setIsLoading(true);
+      setError('');
+      try {
+        const res = await loginWithGoogle(tokenResponse.access_token);
+        if (res && res.success) {
+          navigate('/home', { replace: true });
+        } else {
+          setError(res ? res.message : 'Error de autenticación con Google');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    onError: () => {
+      setError('El inicio de sesión con Google falló. Inténtalo de nuevo.');
+    },
+  });
+
+  // 💡 Función para manejar la tecla "Enter"
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevenimos el envío del formulario
+      // Si estamos en el campo de usuario, pasamos al de contraseña
+      if (e.target === usernameRef.current) {
+        passwordRef.current?.focus();
+      }
+    }
+  };
+
+  // 💡 Si el AuthContext está validando el token, mostramos un spinner a pantalla completa.
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
+        <div className="flex items-center gap-4 text-slate-500">
+          <div className="h-6 w-6 border-4 border-slate-300 border-t-brand rounded-full animate-spin" />
+          <span className="text-sm font-bold uppercase tracking-widest">
+            Verificando sesión...
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans selection:bg-indigo-100">
@@ -46,12 +113,14 @@ const Login = () => {
             <label className="block text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest italic">Identificación</label>
             <div className="relative group">
               <input 
+                ref={usernameRef} // 💡 Asignamos la ref
                 type="text" 
                 required
                 className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] outline-none focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/5 transition-all font-bold text-slate-700 placeholder:text-slate-300 text-sm"
                 placeholder="Usuario o Email"
                 value={form.username}
                 onChange={e => setForm({...form, username: e.target.value})}
+                onKeyDown={handleKeyDown} // 💡 Añadimos el manejador de tecla
               />
               <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-brand transition-colors" size={20} />
             </div>
@@ -61,18 +130,28 @@ const Login = () => {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest italic">Clave de Acceso</label>
-              <Link to="/forgot-password" className="text-[10px] font-black uppercase tracking-widest italic text-indigo-600 hover:text-indigo-800">
-                Olvidaste la contraseña?
-              </Link>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded-sm border-slate-300 text-brand focus:ring-brand"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
+                  <span className="text-[9px] font-bold text-slate-500">Recordarme</span>
+                </label>
+              </div>
             </div>
             <div className="relative group">
               <input 
+                ref={passwordRef} // 💡 Asignamos la ref
                 type={showPassword ? 'text' : 'password'} 
                 required
                 className="w-full pl-12 pr-14 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] outline-none focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/5 transition-all font-bold text-slate-700 placeholder:text-slate-300 text-sm"
                 placeholder="••••••••"
                 value={form.password}
                 onChange={e => setForm({...form, password: e.target.value})}
+                // No necesita onKeyDown, el form se encarga de enviar al presionar Enter aquí
               />
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-brand transition-colors" size={20} />
               <button
@@ -100,6 +179,11 @@ const Login = () => {
             </div>
           )}
 
+          {/* Enlace para recuperar contraseña */}
+          <div className="text-center pt-2">
+            <Link to="/forgot-password" className="text-[10px] font-black uppercase tracking-widest italic text-indigo-600 hover:text-indigo-800">¿Olvidaste la contraseña?</Link>
+          </div>
+
           <button 
             type="submit" 
             disabled={isLoading}
@@ -108,6 +192,21 @@ const Login = () => {
             {isLoading ? <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Validar Identidad'}
           </button>
         </form>
+
+        {/* Divisor "O" */}
+        <div className="flex items-center gap-4 my-6">
+          <div className="flex-1 h-px bg-slate-200"></div>
+          <span className="text-xs font-bold text-slate-400">O</span>
+          <div className="flex-1 h-px bg-slate-200"></div>
+        </div>
+
+        {/* Botón de Google */}
+        <button
+          onClick={() => handleGoogleLogin()}
+          className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 py-4 rounded-[1.8rem] font-bold text-slate-600 text-sm hover:bg-slate-50 transition-colors"
+        >
+          <img src="/google-icon.svg" alt="Google" className="h-5 w-5" /> Iniciar sesión con Google
+        </button>
       </div>
     </div>
   );

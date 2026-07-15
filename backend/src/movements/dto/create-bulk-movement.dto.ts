@@ -53,3 +53,4 @@ export class CreateBulkMovementDto {
   @IsString()
   referencia?: string;
 }
+
