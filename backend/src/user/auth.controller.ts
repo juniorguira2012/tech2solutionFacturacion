@@ -5,8 +5,7 @@ import { UsersService } from '../user/users.service';
 import { EmailService } from './email.service';
 import { ResetPasswordDto } from '../user/dto/user.dto';
 import * as bcrypt from 'bcryptjs';
-import { AuthGuard } from '@nestjs/passport';
-import * as jwt from 'jsonwebtoken'; // 👈 1. ¡IMPORTAMOS LA LIBRERÍA NATIVA DIRECTA!
+import * as jwt from 'jsonwebtoken';
 
 
 @Controller('auth')
