@@ -47,7 +47,7 @@ services:
       EMAIL_USER: "techtwosolution2@gmail.com"
       EMAIL_PASS: "qsxi qkmw naeo cpyh"
       EMAIL_FROM: '"Tec2Solution Production" <techtwosolution2@gmail.com>'
-      EMAIL_TLS_REJECT_UNAUTHORIZED: "true"
+      EMAIL_TLS_REJECT_UNAUTHORIZED: "false"
     networks:
       - network_public
     depends_on:

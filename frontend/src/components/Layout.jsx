@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock, Menu, Bell, AlertTriangle, Package, KeyRound, ArrowLeftRight, Trash2, ShieldCheck } from 'lucide-react';
+import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock, Menu, Bell, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useInventario } from '../context/InventarioContext';
 import NotificationDropdown from './NotificationDropdown';
 
 export const Layout = ({ children }) => {
   const [confirmarSalir, setConfirmarSalir] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const { usuario, logout } = useAuth();
@@ -36,6 +37,7 @@ export const Layout = ({ children }) => {
     navigate('/login');
   }
 
+  const toggleSidebar = () => setIsSidebarCollapsed(prev => !prev);
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
   const closeMobileMenu = () => {
     setMobileMenuOpen(false);
@@ -86,22 +88,22 @@ export const Layout = ({ children }) => {
   
   return (
     <div className="flex h-screen bg-slate-50 font-sans">
-      <aside className="hidden md:flex w-64 bg-brand text-white flex-col shadow-2xl z-20 shrink-0">
-        <div className="p-8">
-          <div className="flex items-center gap-2">
+      <aside className={`hidden md:flex ${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-brand text-white flex-col shadow-2xl z-20 shrink-0 transition-all duration-300 relative`}>
+        <div className={`p-6 ${isSidebarCollapsed ? 'py-8' : 'p-8'}`}>
+          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-2'}`}>
             <div className="h-8 w-8 bg-white rounded-lg flex items-center justify-center">
               <div className="h-4 w-4 bg-brand rounded-sm"></div>
             </div>
-            <span className="text-2xl font-black tracking-tighter italic ">Tech2Solution</span>
+            <span className={`text-2xl font-black tracking-tighter italic ${isSidebarCollapsed ? 'hidden' : 'block'}`}>Tech2Solution</span>
           </div>
         </div>
 
-        <div className="px-4 mb-6">
-          <div className="flex items-center gap-3 px-4 py-3 bg-white/5 rounded-2xl border border-white/5">
+        <div className={`px-4 mb-6 ${isSidebarCollapsed ? 'hidden' : 'block'}`}>
+          <div className="flex items-center gap-3 px-4 py-3 bg-white/5 rounded-2xl border border-white/5 ">
             <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
                <UserCircle size={20} className="text-white" />
             </div>
-            <div className="overflow-hidden">
+            <div className={`overflow-hidden ${isSidebarCollapsed ? 'hidden' : 'block'}`}>
               <p className="text-[11px] font-black truncate uppercase tracking-tight">{usuario?.nombre || 'Usuario'}</p>
               <p className="text-[9px] font-bold text-white/40 uppercase tracking-[0.2em]">{usuario?.rol}</p>
             </div>
@@ -115,14 +117,14 @@ export const Layout = ({ children }) => {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 font-bold text-sm ${
+                  `flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} px-4 py-3 rounded-xl transition-all duration-200 font-bold text-sm ${
                     isActive ? 'bg-white text-brand shadow-lg scale-[1.02]' : 'hover:bg-white/10 text-white/70'
                   }`
                 }
               >
                 <div className="flex items-center gap-3">
                   {item.icon}
-                  {item.name}
+                  <span className={isSidebarCollapsed ? 'hidden' : 'block'}>{item.name}</span>
                 </div>
                 {esSoloLectura(item.id) && <Lock size={12} className="opacity-40" />}
               </NavLink>
@@ -133,12 +135,12 @@ export const Layout = ({ children }) => {
             {!confirmarSalir ? (
               <button 
                 onClick={() => setConfirmarSalir(true)}
-                className="w-full flex items-center justify-start gap-3 py-3 px-4 rounded-xl hover:bg-red-500/10 text-white/50 hover:text-red-400 text-[10px] font-black uppercase tracking-widest transition-all"
+                className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-start'} gap-3 py-3 px-4 rounded-xl hover:bg-red-500/10 text-white/50 hover:text-red-400 text-[10px] font-black uppercase tracking-widest transition-all`}
               >
-                <LogOut size={16} />
-                Cerrar Sesión
+                <LogOut size={18} />
+                <span className={isSidebarCollapsed ? 'hidden' : 'block'}>Cerrar Sesión</span>
               </button>
-            ) : (
+            ) : !isSidebarCollapsed && (
               <div className="flex items-center justify-center gap-2 p-2 bg-black/10 rounded-xl">
                 <button
                   onClick={handleLogout}
@@ -156,23 +158,31 @@ export const Layout = ({ children }) => {
             )}
           </div>
         </nav>
+        {/* Botón para colapsar */}
+        <button 
+          onClick={toggleSidebar}
+          className="absolute top-1/2 -right-3 transform -translate-y-1/2 h-7 w-7 bg-slate-800 rounded-full flex items-center justify-center text-white border-4 border-brand hover:bg-slate-900 transition-all"
+          title={isSidebarCollapsed ? 'Expandir menú' : 'Minimizar menú'}
+        >
+          {isSidebarCollapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+        </button>
+
         {/* Bloque Inferior: Configuración + Créditos */}
-          <div className="p-4 mt-auto border-t border-white/5 pt-6 space-y-3">
+        <div className="p-4 mt-auto border-t border-white/5 pt-6 space-y-3">
           {puedeVer('configuracion') && (
             <NavLink
               to="/configuracion"
               className={({ isActive }) =>
-                `flex items-center justify-between px-5 py-4 rounded-2xl transition-all duration-300 font-black text-[10px] uppercase tracking-[0.15em] ${
+                `flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} px-5 py-4 rounded-2xl transition-all duration-300 font-black text-[10px] uppercase tracking-[0.15em] ${
                   isActive 
                     ? 'bg-white text-slate-900 shadow-xl shadow-slate-950/20 scale-[1.02]' 
                     : 'hover:bg-white/5 text-white/40 hover:text-white'
                 }`
               }
             >
-              {/* Contenedor Izquierdo: Icono + Texto */}
               <div className="flex items-center gap-3.5">
-                <Settings size={16} className="opacity-80" /> 
-                <span>Configuración</span>
+                <Settings size={18} className="opacity-80" /> 
+                <span className={isSidebarCollapsed ? 'hidden' : 'block'}>Configuración</span>
               </div>
             </NavLink>
           )}
@@ -180,7 +190,7 @@ export const Layout = ({ children }) => {
           {/* Bloque de Créditos y Versión del Sistema */}
           <div className="flex items-center justify-between px-5 pt-2 text-slate-400 font-bold tracking-wider text-[9px] uppercase">
             <span className="opacity-80">Tec2Solution © 2026</span>
-            <span className="bg-white/10 border border-white/5 px-2.5 py-0.5 rounded-full text-slate-200 font-mono text-[10px]">
+            <span className={`bg-white/10 border border-white/5 px-2.5 py-0.5 rounded-full text-slate-200 font-mono text-[10px] ${isSidebarCollapsed ? 'hidden' : 'block'}`}>
               {`v${import.meta.env.VITE_APP_VERSION || '1.9.7'}`}
             </span>
           </div>
