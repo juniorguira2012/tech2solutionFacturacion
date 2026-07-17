@@ -7,12 +7,20 @@ import NotificationDropdown from './NotificationDropdown';
 
 export const Layout = ({ children }) => {
   const [confirmarSalir, setConfirmarSalir] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Lee el estado inicial del localStorage o usa 'false' (expandido) por defecto.
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    () => JSON.parse(localStorage.getItem('sidebarCollapsed')) || false
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const { usuario, logout } = useAuth();
   const hasAlertedRef = useRef(false);
   const [notificationCount, setNotificationCount] = useState(0);
+
+  // Guarda el estado del menú en localStorage cada vez que cambia.
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
 
   // Lógica para la alerta sonora
   useEffect(() => {
@@ -188,9 +196,11 @@ export const Layout = ({ children }) => {
           )}
 
           {/* Bloque de Créditos y Versión del Sistema */}
-          <div className="flex items-center justify-between px-5 pt-2 text-slate-400 font-bold tracking-wider text-[9px] uppercase">
-            <span className="opacity-80">Tec2Solution © 2026</span>
-            <span className={`bg-white/10 border border-white/5 px-2.5 py-0.5 rounded-full text-slate-200 font-mono text-[10px] ${isSidebarCollapsed ? 'hidden' : 'block'}`}>
+          <div className={`flex items-center pt-2 text-slate-400 font-bold tracking-wider text-[9px] uppercase ${isSidebarCollapsed ? 'justify-center' : 'justify-between px-5'}`}>
+            <span className={`opacity-80 ${isSidebarCollapsed ? 'hidden' : 'block'}`}>
+              Tec2Solution © 2026
+            </span>
+            <span className={`bg-white/10 border border-white/5 px-2.5 py-0.5 rounded-full text-slate-200 font-mono text-[10px]`}>
               {`v${import.meta.env.VITE_APP_VERSION || '1.9.7'}`}
             </span>
           </div>

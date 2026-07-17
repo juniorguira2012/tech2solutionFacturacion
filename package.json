@@ -1,7 +1,7 @@
 
 {
   "name": "tech2-solution-root",
-  "version": "1.0.0",
+  "version": "1.10.7",
   "private": true,
   "scripts": {
     "backend:dev": "npm run start:dev --prefix backend",
