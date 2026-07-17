@@ -26,7 +26,7 @@ services:
         condition: any
 
   backend_test:
-    image: juniordone/tech2-backend:test
+    image: juniordone/tech2-backend:testv1.9.6
     environment:
       NODE_ENV: test           
       DATABASE_HOST: postgres_test     
@@ -34,12 +34,13 @@ services:
       DATABASE_USER: postgres
       DATABASE_PASSWORD: tech2_pass_2024
       DATABASE_NAME: tech_two_solution_db_test
-      DATABASE_SYNCHRONIZE: "false"
+      DATABASE_SYNCHRONIZE: "true"
+      JWT_SECRET: "TodoLoPuedoEnCritoQueMeFortaleceFilipenses4:13"
       CORS_ORIGIN: "https://inventariotest.oneredrd.com"
       FRONTEND_URL: "https://inventariotest.oneredrd.com"
 
-      NEXTCLOUD_USER: "juniorguira2012@gmail.com"
-      NEXTCLOUD_APP_PASSWORD: "Mamatingo271990"
+      #NEXTCLOUD_USER: "juniorguira2012@gmail.com"
+      #NEXTCLOUD_APP_PASSWORD: "Mamatingo271990"
       # Configuración de Gmail
       EMAIL_HOST: "smtp.gmail.com"
       EMAIL_PORT: "587"
@@ -68,7 +69,7 @@ services:
         - "traefik.http.routers.tech2-backend-test.priority=100"
 
   frontend_test:
-    image: juniordone/tech2-frontend:test
+    image: juniordone/tech2-frontend:testv1.9.6
     networks:
       - network_public
     deploy:

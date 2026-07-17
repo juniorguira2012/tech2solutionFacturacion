@@ -34,7 +34,8 @@ services:
       DATABASE_NAME: tech_two_solution_db
       CORS_ORIGIN: "https://inventario.oneredrd.com"
       FRONTEND_URL: "https://inventario.oneredrd.com"
-      DATABASE_SYNCHRONIZE: "false" # Deshabilitado a favor de migraciones
+      DATABASE_SYNCHRONIZE: "true" # Deshabilitado a favor de migraciones
+      JWT_SECRET: "TodoLoPuedoEnCritoQueMeFortaleceFilipenses4:13"
 
       NEXTCLOUD_USER: "juniorguira2012@gmail.com"
       NEXTCLOUD_APP_PASSWORD: "Mamatingo271990"

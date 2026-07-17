@@ -7,6 +7,7 @@ RUN apk add --no-cache postgresql-client
 
 # Argumento para la URL de la API (necesario en build time para Vite)
 ARG VITE_API_URL=https://inventario.oneredrd.com/api
+
 ENV VITE_API_URL=$VITE_API_URL
 
 COPY package*.json ./

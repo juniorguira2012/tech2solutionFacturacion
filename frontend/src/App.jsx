@@ -33,14 +33,13 @@ const PrivateRoute = ({ children, moduloRequerido }) => {
 
   // VERIFICACIÓN DE ROLES DESDE EL CONTEXTO (DB)
   if (usuario.rol !== 'admin' && moduloRequerido) {
-    // 💡 FIX: Si los permisos aún no se han cargado, no hacemos nada y esperamos.
-    // Esto evita una redirección prematura al login cuando se refresca la página.
     if (!permisos) {
-      return null; // O un spinner de carga
+      return null; 
     }
 
-    // Una vez que los permisos están disponibles, realizamos la verificación.
-    const nivelPermiso = permisos[moduloRequerido];
+    // 🚀 CORRECCIÓN AQUÍ: Agregamos ".modules" antes de buscar el módulo requerido
+    const nivelPermiso = permisos.modules?.[moduloRequerido];
+    
     if (!nivelPermiso?.view) {
       console.warn(`⚠️ Acceso denegado a ${moduloRequerido} para el rol ${usuario.rol}`);
       return <Navigate to="/" replace />;

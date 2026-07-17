@@ -1,22 +1,24 @@
-FROM node:20-alpine AS builder
+# Etapa 1: Construcción
+FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
+# Instalamos dependencias y el CLI de NestJS para compilar
 RUN npm install && npm install -g @nestjs/cli
 COPY . .
 RUN npm run build
 
 # Etapa 2: Imagen final (Producción)
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 
-# 🚀 SOLUCIÓN: Instalamos el cliente de postgresql para que pg_dump esté disponible en producción
-RUN apk add --no-cache postgresql-client
+# 🚀 Aquí SÍ es correcto tener el cliente de Postgres para backups y scripts del backend
+RUN apk add --no-cache postgresql18-client
 
-# Copiamos solo lo necesario para ejecutar
+# Copiamos solo lo necesario para ejecutar y ahorrar espacio
 COPY --from=builder /app/package*.json ./
-# Instalamos dependencias primero para cachear capas
 RUN npm install --omit=dev
-# Luego copiamos el build
+
+# Copiamos el build generado
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000

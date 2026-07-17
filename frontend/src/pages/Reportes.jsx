@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useVentas } from '../context/VentasContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useAuth } from '../context/AuthContext';
@@ -20,13 +20,14 @@ const AuditoriaIngresosSection = ({ permisos }) => {
   const { usuario, getAuthHeaders } = useAuth();
   const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-  const [auditorias, setAuditorias] = useState([
-    { id: 1, fecha: '2023-10-27T10:00:00Z', usuario: 'Ana', totalSistema: 15200.50, totalContado: 15200.00, diferencia: -0.50, estado: 'Cerrado' },
-    { id: 2, fecha: '2023-10-26T22:00:00Z', usuario: 'Juan', totalSistema: 25450.00, totalContado: 25450.00, diferencia: 0.00, estado: 'Cerrado' },
-    { id: 3, fecha: '2023-10-26T14:00:00Z', usuario: 'Ana', totalSistema: 12300.00, totalContado: 12350.00, diferencia: 50.00, estado: 'Cerrado con Diferencia' },
-  ]);
+  const [auditorias, setAuditorias] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // 💡 CORRECCIÓN: Se define el estado para el formulario del nuevo cuadre.
+  const [nuevoCuadre, setNuevoCuadre] = useState({
+    totalSistema: '15200.50', efectivo: '', tarjeta: '', transferencia: '', otros: '', nota: ''
+  });
 
   const totalContadoCalculado = useMemo(() => {
     const { efectivo, tarjeta, transferencia, otros } = nuevoCuadre;
@@ -41,6 +42,22 @@ const AuditoriaIngresosSection = ({ permisos }) => {
     const { name, value } = e.target;
     setNuevoCuadre(prev => ({ ...prev, [name]: value }));
   };
+
+  // 💡 FUNCIÓN PARA CARGAR AUDITORÍAS DESDE EL BACKEND
+  const cargarAuditorias = useCallback(async () => {
+    if (!permisos?.view) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/audits/cash-closures`, {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) throw new Error('Error al cargar auditorías');
+      const data = await response.json();
+      // 💡 Asumimos que el backend devuelve el nombre del usuario en la consulta
+      setAuditorias(data);
+    } catch (error) {
+      console.error("Error cargando auditorías:", error);
+    }
+  }, [API_BASE_URL, getAuthHeaders, permisos?.view]);
 
   const handleGuardarCuadre = async (e) => {
     e.preventDefault();
@@ -73,18 +90,8 @@ const AuditoriaIngresosSection = ({ permisos }) => {
         throw new Error(errorData.message || 'Error al guardar el cuadre');
       }
 
-      const cuadreGuardado = await response.json();
-
-      // Simulamos la actualización en el frontend
-      setAuditorias(prev => [{
-        id: cuadreGuardado.id || Date.now(),
-        fecha: cuadreGuardado.createdAt || new Date().toISOString(),
-        usuario: usuario.nombre,
-        totalSistema: payload.totalSistema,
-        totalContado: payload.totalContado,
-        diferencia: payload.diferencia,
-        estado: 'Cerrado'
-      }, ...prev]);
+      // 💡 CORRECCIÓN: En lugar de simular, recargamos los datos reales desde la DB.
+      await cargarAuditorias();
 
       setShowModal(false);
       setNuevoCuadre({
@@ -99,8 +106,10 @@ const AuditoriaIngresosSection = ({ permisos }) => {
     }
   };
 
-  // Cargar auditorías reales desde el backend
-  // useEffect(() => { ... fetch logic ... }, []);
+  // 💡 Cargar auditorías reales desde el backend al montar el componente
+  useEffect(() => {
+    cargarAuditorias();
+  }, [cargarAuditorias]);
 
   const totalAuditado = useMemo(() => auditorias.reduce((acc, a) => acc + a.totalSistema, 0), [auditorias]);
   const totalDiferencia = useMemo(() => auditorias.reduce((acc, a) => acc + a.diferencia, 0), [auditorias]);
@@ -146,7 +155,7 @@ const AuditoriaIngresosSection = ({ permisos }) => {
           <tbody className="divide-y divide-slate-50">
             {auditorias.map(a => (
               <tr key={a.id} className="hover:bg-slate-50/80 font-bold">
-                <td className="px-6 py-4 text-slate-500">{new Date(a.fecha).toLocaleString()}</td>
+                <td className="px-6 py-4 text-slate-500">{new Date(a.fecha || a.createdAt).toLocaleString()}</td>
                 <td className="px-6 py-4 text-slate-700 uppercase">{a.usuario}</td>
                 <td className="px-6 py-4 text-right text-slate-600">RD$ {a.totalSistema.toLocaleString()}</td>
                 <td className="px-6 py-4 text-right text-slate-800 font-black">RD$ {a.totalContado.toLocaleString()}</td>
