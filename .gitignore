@@ -5,6 +5,18 @@ dist/
 
 # Variables de entorno (Seguridad)
 .env
+.env.production
+.env.test
+.env.*
+!.env.example
+
+# Configuracion de Docker Compose
+docker-compose*.yml
+docker-compose*.yaml
+docker-compose.local.yml
+docker-compose.test.yml
+docker-compose.yml
+
 
 # Base de datos local (si Docker crea una carpeta de datos)
 pgdata/
