@@ -28,6 +28,7 @@ import {InventoryBatchesModule} from './inventory-batches/inventory-batches.modu
     ConfigModule.forRoot({
       envFilePath: [
         path.resolve(__dirname, `../../.env.${process.env.NODE_ENV}`),
+            path.resolve(__dirname, '../.env'),
         path.resolve(__dirname, '../../.env'),
       ],
       isGlobal: true,

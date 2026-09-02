@@ -1,117 +1,267 @@
 "use strict";
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
 };
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+    function accept(f) { if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected"); return f; }
+    var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
+    var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
+    var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
+    var _, done = false;
+    for (var i = decorators.length - 1; i >= 0; i--) {
+        var context = {};
+        for (var p in contextIn) context[p] = p === "access" ? {} : contextIn[p];
+        for (var p in contextIn.access) context.access[p] = contextIn.access[p];
+        context.addInitializer = function (f) { if (done) throw new TypeError("Cannot add initializers after decoration has completed"); extraInitializers.push(accept(f || null)); };
+        var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context);
+        if (kind === "accessor") {
+            if (result === void 0) continue;
+            if (result === null || typeof result !== "object") throw new TypeError("Object expected");
+            if (_ = accept(result.get)) descriptor.get = _;
+            if (_ = accept(result.set)) descriptor.set = _;
+            if (_ = accept(result.init)) initializers.unshift(_);
+        }
+        else if (_ = accept(result)) {
+            if (kind === "field") initializers.unshift(_);
+            else descriptor[key] = _;
+        }
+    }
+    if (target) Object.defineProperty(target, contextIn.name, descriptor);
+    done = true;
 };
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
+var __runInitializers = (this && this.__runInitializers) || function (thisArg, initializers, value) {
+    var useValue = arguments.length > 2;
+    for (var i = 0; i < initializers.length; i++) {
+        value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
+    }
+    return useValue ? value : void 0;
+};
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __generator = (this && this.__generator) || function (thisArg, body) {
+    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
+    return g.next = verb(0), g["throw"] = verb(1), g["return"] = verb(2), typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+    function verb(n) { return function (v) { return step([n, v]); }; }
+    function step(op) {
+        if (f) throw new TypeError("Generator is already executing.");
+        while (g && (g = 0, op[0] && (_ = 0)), _) try {
+            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] & 2, t.value];
+            switch (op[0]) {
+                case 0: case 1: t = op; break;
+                case 4: _.label++; return { value: op[1], done: false };
+                case 5: _.label++; y = op[1]; op = [0]; continue;
+                case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                default:
+                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                    if (t[2]) _.ops.pop();
+                    _.trys.pop(); continue;
+            }
+            op = body.call(thisArg, _);
+        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+    }
+};
+var __setFunctionName = (this && this.__setFunctionName) || function (f, name, prefix) {
+    if (typeof name === "symbol") name = name.description ? "[".concat(name.description, "]") : "";
+    return Object.defineProperty(f, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ComodatosService = void 0;
-const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
-const typeorm_2 = require("typeorm");
-const comodato_entity_1 = require("./entities/comodato.entity");
-const product_entity_1 = require("../products/entities/product.entity");
-let ComodatosService = class ComodatosService {
-    comodatosRepository;
-    productsRepository;
-    constructor(comodatosRepository, productsRepository) {
-        this.comodatosRepository = comodatosRepository;
-        this.productsRepository = productsRepository;
-    }
-    async create(createComodatoDto) {
-        const producto = await this.productsRepository.findOne({
-            where: { id: createComodatoDto.productoId },
-        });
-        if (!producto) {
-            throw new common_1.NotFoundException(`Producto con id ${createComodatoDto.productoId} no encontrado`);
+var common_1 = require("@nestjs/common");
+var ComodatosService = function () {
+    var _classDecorators = [(0, common_1.Injectable)()];
+    var _classDescriptor;
+    var _classExtraInitializers = [];
+    var _classThis;
+    var ComodatosService = _classThis = /** @class */ (function () {
+        function ComodatosService_1(comodatosRepository, productsRepository) {
+            this.comodatosRepository = comodatosRepository;
+            this.productsRepository = productsRepository;
         }
-        if (producto.stock < 1) {
-            throw new common_1.BadRequestException(`No hay stock disponible del producto ${producto.nombre}`);
-        }
-        producto.stock -= 1;
-        await this.productsRepository.save(producto);
-        const comodato = this.comodatosRepository.create({
-            ...createComodatoDto,
-            estado: createComodatoDto.estado || 'activo',
-        });
-        const saved = await this.comodatosRepository.save(comodato);
-        return await this.findOne(saved.id);
-    }
-    async findAll() {
-        return await this.comodatosRepository.find({
-            relations: ['producto', 'usuario'],
-            order: { fechaCreacion: 'DESC' }
-        });
-    }
-    async findOne(id) {
-        const comodato = await this.comodatosRepository.findOne({
-            where: { id },
-            relations: ['producto', 'usuario'],
-        });
-        if (!comodato) {
-            throw new common_1.NotFoundException(`Comodato con id ${id} no encontrado`);
-        }
-        return comodato;
-    }
-    async update(id, updateComodatoDto) {
-        const comodato = await this.findOne(id);
-        if (updateComodatoDto.estado === 'devuelto' && comodato.estado !== 'devuelto') {
-            const producto = await this.productsRepository.findOne({
-                where: { id: comodato.productoId },
+        ComodatosService_1.prototype.create = function (createComodatoDto) {
+            return __awaiter(this, void 0, void 0, function () {
+                var producto, comodato, saved;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0: return [4 /*yield*/, this.productsRepository.findOne({
+                                where: { id: createComodatoDto.productoId },
+                            })];
+                        case 1:
+                            producto = _a.sent();
+                            if (!producto) {
+                                throw new common_1.NotFoundException("Producto con id ".concat(createComodatoDto.productoId, " no encontrado"));
+                            }
+                            if (producto.stock < 1) {
+                                throw new common_1.BadRequestException("No hay stock disponible del producto ".concat(producto.nombre));
+                            }
+                            // Decrementar el stock (el producto está siendo prestado)
+                            producto.stock -= 1;
+                            return [4 /*yield*/, this.productsRepository.save(producto)];
+                        case 2:
+                            _a.sent();
+                            comodato = this.comodatosRepository.create(__assign(__assign({}, createComodatoDto), { estado: createComodatoDto.estado || 'activo' }));
+                            return [4 /*yield*/, this.comodatosRepository.save(comodato)];
+                        case 3:
+                            saved = _a.sent();
+                            return [4 /*yield*/, this.findOne(saved.id)];
+                        case 4: return [2 /*return*/, _a.sent()];
+                    }
+                });
             });
-            if (producto) {
-                producto.stock += 1;
-                await this.productsRepository.save(producto);
-            }
-        }
-        await this.comodatosRepository.update(id, updateComodatoDto);
-        return this.findOne(id);
-    }
-    async devolverComodato(id) {
-        const comodato = await this.findOne(id);
-        if (comodato.estado === 'devuelto') {
-            throw new common_1.BadRequestException('El comodato ya ha sido devuelto');
-        }
-        const producto = await this.productsRepository.findOne({
-            where: { id: comodato.productoId },
-        });
-        if (producto) {
-            producto.stock += 1;
-            await this.productsRepository.save(producto);
-        }
-        await this.comodatosRepository.update(id, {
-            estado: 'devuelto',
-            fechaDevolucion: new Date()
-        });
-        return this.findOne(id);
-    }
-    async remove(id) {
-        const comodato = await this.findOne(id);
-        if (comodato.estado !== 'devuelto') {
-            const producto = await this.productsRepository.findOne({
-                where: { id: comodato.productoId },
+        };
+        ComodatosService_1.prototype.findAll = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0: return [4 /*yield*/, this.comodatosRepository.find({
+                                relations: ['producto', 'usuario'],
+                                order: { fechaCreacion: 'DESC' }
+                            })];
+                        case 1: return [2 /*return*/, _a.sent()];
+                    }
+                });
             });
-            if (producto) {
-                producto.stock += 1;
-                await this.productsRepository.save(producto);
-            }
-        }
-        await this.comodatosRepository.delete(id);
-    }
-};
+        };
+        ComodatosService_1.prototype.findOne = function (id) {
+            return __awaiter(this, void 0, void 0, function () {
+                var comodato;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0: return [4 /*yield*/, this.comodatosRepository.findOne({
+                                where: { id: id },
+                                relations: ['producto', 'usuario'],
+                            })];
+                        case 1:
+                            comodato = _a.sent();
+                            if (!comodato) {
+                                throw new common_1.NotFoundException("Comodato con id ".concat(id, " no encontrado"));
+                            }
+                            return [2 /*return*/, comodato];
+                    }
+                });
+            });
+        };
+        ComodatosService_1.prototype.update = function (id, updateComodatoDto) {
+            return __awaiter(this, void 0, void 0, function () {
+                var comodato, producto;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0: return [4 /*yield*/, this.findOne(id)];
+                        case 1:
+                            comodato = _a.sent();
+                            if (!(updateComodatoDto.estado === 'devuelto' && comodato.estado !== 'devuelto')) return [3 /*break*/, 4];
+                            return [4 /*yield*/, this.productsRepository.findOne({
+                                    where: { id: comodato.productoId },
+                                })];
+                        case 2:
+                            producto = _a.sent();
+                            if (!producto) return [3 /*break*/, 4];
+                            producto.stock += 1;
+                            return [4 /*yield*/, this.productsRepository.save(producto)];
+                        case 3:
+                            _a.sent();
+                            _a.label = 4;
+                        case 4: return [4 /*yield*/, this.comodatosRepository.update(id, updateComodatoDto)];
+                        case 5:
+                            _a.sent();
+                            return [2 /*return*/, this.findOne(id)];
+                    }
+                });
+            });
+        };
+        ComodatosService_1.prototype.devolverComodato = function (id) {
+            return __awaiter(this, void 0, void 0, function () {
+                var comodato, producto;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0: return [4 /*yield*/, this.findOne(id)];
+                        case 1:
+                            comodato = _a.sent();
+                            if (comodato.estado === 'devuelto') {
+                                throw new common_1.BadRequestException('El comodato ya ha sido devuelto');
+                            }
+                            return [4 /*yield*/, this.productsRepository.findOne({
+                                    where: { id: comodato.productoId },
+                                })];
+                        case 2:
+                            producto = _a.sent();
+                            if (!producto) return [3 /*break*/, 4];
+                            producto.stock += 1;
+                            return [4 /*yield*/, this.productsRepository.save(producto)];
+                        case 3:
+                            _a.sent();
+                            _a.label = 4;
+                        case 4: 
+                        // Marcar comodato como devuelto
+                        return [4 /*yield*/, this.comodatosRepository.update(id, {
+                                estado: 'devuelto',
+                                fechaDevolucion: new Date()
+                            })];
+                        case 5:
+                            // Marcar comodato como devuelto
+                            _a.sent();
+                            return [2 /*return*/, this.findOne(id)];
+                    }
+                });
+            });
+        };
+        ComodatosService_1.prototype.remove = function (id) {
+            return __awaiter(this, void 0, void 0, function () {
+                var comodato, producto;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0: return [4 /*yield*/, this.findOne(id)];
+                        case 1:
+                            comodato = _a.sent();
+                            if (!(comodato.estado !== 'devuelto')) return [3 /*break*/, 4];
+                            return [4 /*yield*/, this.productsRepository.findOne({
+                                    where: { id: comodato.productoId },
+                                })];
+                        case 2:
+                            producto = _a.sent();
+                            if (!producto) return [3 /*break*/, 4];
+                            producto.stock += 1;
+                            return [4 /*yield*/, this.productsRepository.save(producto)];
+                        case 3:
+                            _a.sent();
+                            _a.label = 4;
+                        case 4: return [4 /*yield*/, this.comodatosRepository.delete(id)];
+                        case 5:
+                            _a.sent();
+                            return [2 /*return*/];
+                    }
+                });
+            });
+        };
+        return ComodatosService_1;
+    }());
+    __setFunctionName(_classThis, "ComodatosService");
+    (function () {
+        var _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        ComodatosService = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return ComodatosService = _classThis;
+}();
 exports.ComodatosService = ComodatosService;
-exports.ComodatosService = ComodatosService = __decorate([
-    (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(comodato_entity_1.Comodato)),
-    __param(1, (0, typeorm_1.InjectRepository)(product_entity_1.Product)),
-    __metadata("design:paramtypes", [typeorm_2.Repository,
-        typeorm_2.Repository])
-], ComodatosService);
-//# sourceMappingURL=comodatos.service.js.map

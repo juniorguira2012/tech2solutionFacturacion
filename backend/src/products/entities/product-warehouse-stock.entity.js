@@ -1,48 +1,95 @@
 "use strict";
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
+var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+    function accept(f) { if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected"); return f; }
+    var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
+    var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
+    var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
+    var _, done = false;
+    for (var i = decorators.length - 1; i >= 0; i--) {
+        var context = {};
+        for (var p in contextIn) context[p] = p === "access" ? {} : contextIn[p];
+        for (var p in contextIn.access) context.access[p] = contextIn.access[p];
+        context.addInitializer = function (f) { if (done) throw new TypeError("Cannot add initializers after decoration has completed"); extraInitializers.push(accept(f || null)); };
+        var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context);
+        if (kind === "accessor") {
+            if (result === void 0) continue;
+            if (result === null || typeof result !== "object") throw new TypeError("Object expected");
+            if (_ = accept(result.get)) descriptor.get = _;
+            if (_ = accept(result.set)) descriptor.set = _;
+            if (_ = accept(result.init)) initializers.unshift(_);
+        }
+        else if (_ = accept(result)) {
+            if (kind === "field") initializers.unshift(_);
+            else descriptor[key] = _;
+        }
+    }
+    if (target) Object.defineProperty(target, contextIn.name, descriptor);
+    done = true;
 };
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+var __runInitializers = (this && this.__runInitializers) || function (thisArg, initializers, value) {
+    var useValue = arguments.length > 2;
+    for (var i = 0; i < initializers.length; i++) {
+        value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
+    }
+    return useValue ? value : void 0;
+};
+var __setFunctionName = (this && this.__setFunctionName) || function (f, name, prefix) {
+    if (typeof name === "symbol") name = name.description ? "[".concat(name.description, "]") : "";
+    return Object.defineProperty(f, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProductWarehouseStock = void 0;
-const typeorm_1 = require("typeorm");
-const product_entity_1 = require("./product.entity");
-let ProductWarehouseStock = class ProductWarehouseStock {
-    id;
-    productoId;
-    almacen;
-    cantidad;
-    producto;
-};
+var typeorm_1 = require("typeorm");
+var product_entity_1 = require("./product.entity");
+var ProductWarehouseStock = function () {
+    var _classDecorators = [(0, typeorm_1.Entity)('product_warehouse_stock'), (0, typeorm_1.Unique)(['productoId', 'almacen'])];
+    var _classDescriptor;
+    var _classExtraInitializers = [];
+    var _classThis;
+    var _id_decorators;
+    var _id_initializers = [];
+    var _id_extraInitializers = [];
+    var _productoId_decorators;
+    var _productoId_initializers = [];
+    var _productoId_extraInitializers = [];
+    var _almacen_decorators;
+    var _almacen_initializers = [];
+    var _almacen_extraInitializers = [];
+    var _cantidad_decorators;
+    var _cantidad_initializers = [];
+    var _cantidad_extraInitializers = [];
+    var _producto_decorators;
+    var _producto_initializers = [];
+    var _producto_extraInitializers = [];
+    var ProductWarehouseStock = _classThis = /** @class */ (function () {
+        function ProductWarehouseStock_1() {
+            this.id = __runInitializers(this, _id_initializers, void 0);
+            this.productoId = (__runInitializers(this, _id_extraInitializers), __runInitializers(this, _productoId_initializers, void 0));
+            this.almacen = (__runInitializers(this, _productoId_extraInitializers), __runInitializers(this, _almacen_initializers, void 0));
+            this.cantidad = (__runInitializers(this, _almacen_extraInitializers), __runInitializers(this, _cantidad_initializers, void 0));
+            this.producto = (__runInitializers(this, _cantidad_extraInitializers), __runInitializers(this, _producto_initializers, void 0));
+            __runInitializers(this, _producto_extraInitializers);
+        }
+        return ProductWarehouseStock_1;
+    }());
+    __setFunctionName(_classThis, "ProductWarehouseStock");
+    (function () {
+        var _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        _id_decorators = [(0, typeorm_1.PrimaryGeneratedColumn)()];
+        _productoId_decorators = [(0, typeorm_1.Column)()];
+        _almacen_decorators = [(0, typeorm_1.Column)()];
+        _cantidad_decorators = [(0, typeorm_1.Column)('int', { default: 0 })];
+        _producto_decorators = [(0, typeorm_1.ManyToOne)(function () { return product_entity_1.Product; }, function (product) { return product.warehouseStocks; }, { onDelete: 'CASCADE' }), (0, typeorm_1.JoinColumn)({ name: 'productoId' })];
+        __esDecorate(null, null, _id_decorators, { kind: "field", name: "id", static: false, private: false, access: { has: function (obj) { return "id" in obj; }, get: function (obj) { return obj.id; }, set: function (obj, value) { obj.id = value; } }, metadata: _metadata }, _id_initializers, _id_extraInitializers);
+        __esDecorate(null, null, _productoId_decorators, { kind: "field", name: "productoId", static: false, private: false, access: { has: function (obj) { return "productoId" in obj; }, get: function (obj) { return obj.productoId; }, set: function (obj, value) { obj.productoId = value; } }, metadata: _metadata }, _productoId_initializers, _productoId_extraInitializers);
+        __esDecorate(null, null, _almacen_decorators, { kind: "field", name: "almacen", static: false, private: false, access: { has: function (obj) { return "almacen" in obj; }, get: function (obj) { return obj.almacen; }, set: function (obj, value) { obj.almacen = value; } }, metadata: _metadata }, _almacen_initializers, _almacen_extraInitializers);
+        __esDecorate(null, null, _cantidad_decorators, { kind: "field", name: "cantidad", static: false, private: false, access: { has: function (obj) { return "cantidad" in obj; }, get: function (obj) { return obj.cantidad; }, set: function (obj, value) { obj.cantidad = value; } }, metadata: _metadata }, _cantidad_initializers, _cantidad_extraInitializers);
+        __esDecorate(null, null, _producto_decorators, { kind: "field", name: "producto", static: false, private: false, access: { has: function (obj) { return "producto" in obj; }, get: function (obj) { return obj.producto; }, set: function (obj, value) { obj.producto = value; } }, metadata: _metadata }, _producto_initializers, _producto_extraInitializers);
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        ProductWarehouseStock = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return ProductWarehouseStock = _classThis;
+}();
 exports.ProductWarehouseStock = ProductWarehouseStock;
-__decorate([
-    (0, typeorm_1.PrimaryGeneratedColumn)(),
-    __metadata("design:type", Number)
-], ProductWarehouseStock.prototype, "id", void 0);
-__decorate([
-    (0, typeorm_1.Column)(),
-    __metadata("design:type", Number)
-], ProductWarehouseStock.prototype, "productoId", void 0);
-__decorate([
-    (0, typeorm_1.Column)(),
-    __metadata("design:type", String)
-], ProductWarehouseStock.prototype, "almacen", void 0);
-__decorate([
-    (0, typeorm_1.Column)('int', { default: 0 }),
-    __metadata("design:type", Number)
-], ProductWarehouseStock.prototype, "cantidad", void 0);
-__decorate([
-    (0, typeorm_1.ManyToOne)(() => product_entity_1.Product, (product) => product.warehouseStocks, { onDelete: 'CASCADE' }),
-    (0, typeorm_1.JoinColumn)({ name: 'productoId' }),
-    __metadata("design:type", product_entity_1.Product)
-], ProductWarehouseStock.prototype, "producto", void 0);
-exports.ProductWarehouseStock = ProductWarehouseStock = __decorate([
-    (0, typeorm_1.Entity)('product_warehouse_stock'),
-    (0, typeorm_1.Unique)(['productoId', 'almacen'])
-], ProductWarehouseStock);
-//# sourceMappingURL=product-warehouse-stock.entity.js.map

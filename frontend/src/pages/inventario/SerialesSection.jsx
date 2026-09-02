@@ -3,11 +3,7 @@ import { Search, Tag, Edit, ChevronLeft, ChevronRight, History, X, Package, User
 import { useInventario } from '../../context/InventarioContext';
 
 const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
-<<<<<<< HEAD
-  const { seriales, tecnicos, cargarSeriales, actualizarEstadoSerial, obtenerHistorialSerial } = useInventario();
-=======
   const { seriales, tecnicos, cargarSeriales, usuario, actualizarEstadoSerial, obtenerHistorialSerial } = useInventario();
->>>>>>> f8b858b (Carga de Serials correctaente)
   const [busqueda, setBusqueda] = useState('');
   const [editingStatusId, setEditingStatusId] = useState(null);
   const [filtroTecnicoId, setFiltroTecnicoId] = useState(null);
@@ -23,40 +19,14 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
 
-<<<<<<< HEAD
-  useEffect(() => {
-    cargarSeriales();
-  }, [cargarSeriales]);
-=======
  useEffect(() => {
   cargarSeriales();
 }, [cargarSeriales]);
->>>>>>> f8b858b (Carga de Serials correctaente)
 
   // Lista de estados posibles para el dropdown.
   // Coincide con el Enum del backend.
   const statusOptions = ['disponible', 'vendido', 'en_reparacion', 'descartado', 'en_comodato'];
 
-<<<<<<< HEAD
-  const serialesFiltrados = useMemo(() => {
-    let resultados = seriales;
-
-    // 💡 1. Primero, filtramos por técnico si hay uno seleccionado.
-    if (filtroTecnicoId) {
-      resultados = resultados.filter(s => s.technicianId === filtroTecnicoId);
-    }
-
-    // 💡 2. Luego, aplicamos la búsqueda de texto sobre los resultados ya filtrados.
-    if (!busqueda.trim()) return resultados;
-
-    const busquedaLower = busqueda.toLowerCase();
-    return resultados.filter(s =>
-      s.serialNumber.toLowerCase().includes(busquedaLower) ||
-      s.producto?.nombre.toLowerCase().includes(busquedaLower) ||
-      s.producto?.codigo?.toLowerCase().includes(busquedaLower)
-    );
-  }, [seriales, busqueda, filtroTecnicoId]);
-=======
 const serialesFiltrados = useMemo(() => {
   let resultados = Array.isArray(seriales) ? seriales : [];
 
@@ -73,7 +43,6 @@ const serialesFiltrados = useMemo(() => {
     s.producto?.codigo?.toLowerCase().includes(busquedaLower)    // 👈 Agregado ?. en codigo
   );
 }, [seriales, busqueda, filtroTecnicoId]);
->>>>>>> f8b858b (Carga de Serials correctaente)
 
   // --- Lógica de paginación ---
   const totalPages = useMemo(() => {
@@ -176,86 +145,6 @@ const serialesFiltrados = useMemo(() => {
           </button>
         </div>)}
     </div><div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
-<<<<<<< HEAD
-        {paginatedSeriales.length > 0 ? (
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-50 border-b text-[9px] font-black uppercase text-slate-400">
-              <tr>
-                <th className="px-6 py-4">Serial</th>
-                <th className="px-6 py-4">Producto</th>
-                <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4">Almacén</th>
-                <th className="px-6 py-4">Técnico Asignado</th>
-                <th className="px-6 py-4">Fecha de Ingreso</th>
-                <th className="px-6 py-4"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y text-[11px]">
-              {paginatedSeriales.map((serial) => (
-                <tr key={serial.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-3 font-black text-brand uppercase cursor-pointer hover:underline" onClick={() => abrirModalHistorial(serial)}>{serial.serialNumber}</td>
-                  <td className="px-6 py-3 font-bold text-slate-800 uppercase">{serial.producto?.nombre || 'N/A'}</td>
-                  <td className="px-6 py-3 relative">
-                    {permisos?.edit ? ( // 🛡️ 3. Condicionamos la UI de edición
-                      editingStatusId === serial.id ? (
-                        <select
-                          value={serial.status}
-                          onChange={(e) => handleStatusChange(serial.id, e.target.value)}
-                          onBlur={() => setEditingStatusId(null)}
-                          className="w-full p-1 border rounded-md text-[9px] font-bold uppercase focus:outline-brand"
-                          autoFocus
-                          disabled={loading}
-                        >
-                          {statusOptions.map(opt => (
-                            <option key={opt} value={opt}>{opt.replace('_', ' ')}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <button
-                          onClick={() => setEditingStatusId(serial.id)}
-                          className={`group flex items-center gap-2 px-2 py-0.5 rounded-md text-[8px] font-black uppercase transition-all ${getStatusColor(serial.status)} hover:ring-2 hover:ring-brand`}
-                          disabled={loading}
-                        >
-                          {serial.status.replace('_', ' ')}
-                          <Edit className="opacity-0 group-hover:opacity-100 transition-opacity" size={10} />
-                        </button>
-                      )
-                    ) : (
-                      // Vista de solo lectura si no hay permiso
-                      <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase ${getStatusColor(serial.status)}`}>
-                        {serial.status.replace('_', ' ')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">{serial.almacen}</td>
-                  <td className="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase">
-                    {serial.status === 'asignado_tecnico' && serial.technicianId ? (
-                      <button
-                        onClick={() => setFiltroTecnicoId(Number(serial.technicianId))}
-                        className="font-black text-brand hover:underline"
-                      >
-                        {tecnicos.find(t => Number(t.id) === Number(serial.technicianId))?.nombre || `ID: ${serial.technicianId}`}
-                      </button>
-                    ) : (
-                      'N/A'
-                    )}
-                  </td>
-                  <td className="px-6 py-3 font-bold text-slate-500">{new Date(serial.createdAt).toLocaleString()}</td>
-                  <td className="px-6 py-3 text-right">
-                    <button onClick={() => abrirModalHistorial(serial)} className="p-1.5 text-slate-400 hover:text-brand hover:bg-indigo-50 rounded-lg transition-colors">
-                      <History size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="py-20 text-center space-y-3">
-            <Tag className="mx-auto text-slate-200" size={40} />
-            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">No se encontraron seriales</p>
-          </div>
-=======
   {/* 1. Si no hay seriales aún pero el arreglo se está poblando */}
       {seriales.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-12 text-slate-400">
@@ -339,7 +228,6 @@ const serialesFiltrados = useMemo(() => {
     <div className="flex flex-col items-center justify-center p-12 text-slate-400">
       <p className="text-xs font-bold uppercase tracking-wider">No se encontraron seriales que coincidan con la búsqueda.</p>
     </div>
->>>>>>> f8b858b (Carga de Serials correctaente)
         )}
         {/* Paginación */}
         {totalPages > 1 && (

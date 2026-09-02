@@ -1,93 +1,155 @@
 "use strict";
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
+var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+    function accept(f) { if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected"); return f; }
+    var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
+    var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
+    var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
+    var _, done = false;
+    for (var i = decorators.length - 1; i >= 0; i--) {
+        var context = {};
+        for (var p in contextIn) context[p] = p === "access" ? {} : contextIn[p];
+        for (var p in contextIn.access) context.access[p] = contextIn.access[p];
+        context.addInitializer = function (f) { if (done) throw new TypeError("Cannot add initializers after decoration has completed"); extraInitializers.push(accept(f || null)); };
+        var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context);
+        if (kind === "accessor") {
+            if (result === void 0) continue;
+            if (result === null || typeof result !== "object") throw new TypeError("Object expected");
+            if (_ = accept(result.get)) descriptor.get = _;
+            if (_ = accept(result.set)) descriptor.set = _;
+            if (_ = accept(result.init)) initializers.unshift(_);
+        }
+        else if (_ = accept(result)) {
+            if (kind === "field") initializers.unshift(_);
+            else descriptor[key] = _;
+        }
+    }
+    if (target) Object.defineProperty(target, contextIn.name, descriptor);
+    done = true;
 };
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+var __runInitializers = (this && this.__runInitializers) || function (thisArg, initializers, value) {
+    var useValue = arguments.length > 2;
+    for (var i = 0; i < initializers.length; i++) {
+        value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
+    }
+    return useValue ? value : void 0;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UpdateUserDto = exports.ResetPasswordDto = exports.CreateUserDto = void 0;
-const class_validator_1 = require("class-validator");
-class CreateUserDto {
-    nombre;
-    email;
-    password;
-    rol;
-    isActive;
-}
+var class_validator_1 = require("class-validator");
+var CreateUserDto = function () {
+    var _a;
+    var _nombre_decorators;
+    var _nombre_initializers = [];
+    var _nombre_extraInitializers = [];
+    var _email_decorators;
+    var _email_initializers = [];
+    var _email_extraInitializers = [];
+    var _password_decorators;
+    var _password_initializers = [];
+    var _password_extraInitializers = [];
+    var _rol_decorators;
+    var _rol_initializers = [];
+    var _rol_extraInitializers = [];
+    var _isActive_decorators;
+    var _isActive_initializers = [];
+    var _isActive_extraInitializers = [];
+    return _a = /** @class */ (function () {
+            function CreateUserDto() {
+                this.nombre = __runInitializers(this, _nombre_initializers, void 0);
+                this.email = (__runInitializers(this, _nombre_extraInitializers), __runInitializers(this, _email_initializers, void 0));
+                this.password = (__runInitializers(this, _email_extraInitializers), __runInitializers(this, _password_initializers, void 0));
+                this.rol = (__runInitializers(this, _password_extraInitializers), __runInitializers(this, _rol_initializers, void 0));
+                this.isActive = (__runInitializers(this, _rol_extraInitializers), __runInitializers(this, _isActive_initializers, void 0));
+                __runInitializers(this, _isActive_extraInitializers);
+            }
+            return CreateUserDto;
+        }()),
+        (function () {
+            var _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+            _nombre_decorators = [(0, class_validator_1.IsString)()];
+            _email_decorators = [(0, class_validator_1.IsEmail)()];
+            _password_decorators = [(0, class_validator_1.IsString)(), (0, class_validator_1.MinLength)(6, { message: 'La contraseña debe tener al menos 6 caracteres' })];
+            _rol_decorators = [(0, class_validator_1.IsString)()];
+            _isActive_decorators = [(0, class_validator_1.IsBoolean)(), (0, class_validator_1.IsOptional)()];
+            __esDecorate(null, null, _nombre_decorators, { kind: "field", name: "nombre", static: false, private: false, access: { has: function (obj) { return "nombre" in obj; }, get: function (obj) { return obj.nombre; }, set: function (obj, value) { obj.nombre = value; } }, metadata: _metadata }, _nombre_initializers, _nombre_extraInitializers);
+            __esDecorate(null, null, _email_decorators, { kind: "field", name: "email", static: false, private: false, access: { has: function (obj) { return "email" in obj; }, get: function (obj) { return obj.email; }, set: function (obj, value) { obj.email = value; } }, metadata: _metadata }, _email_initializers, _email_extraInitializers);
+            __esDecorate(null, null, _password_decorators, { kind: "field", name: "password", static: false, private: false, access: { has: function (obj) { return "password" in obj; }, get: function (obj) { return obj.password; }, set: function (obj, value) { obj.password = value; } }, metadata: _metadata }, _password_initializers, _password_extraInitializers);
+            __esDecorate(null, null, _rol_decorators, { kind: "field", name: "rol", static: false, private: false, access: { has: function (obj) { return "rol" in obj; }, get: function (obj) { return obj.rol; }, set: function (obj, value) { obj.rol = value; } }, metadata: _metadata }, _rol_initializers, _rol_extraInitializers);
+            __esDecorate(null, null, _isActive_decorators, { kind: "field", name: "isActive", static: false, private: false, access: { has: function (obj) { return "isActive" in obj; }, get: function (obj) { return obj.isActive; }, set: function (obj, value) { obj.isActive = value; } }, metadata: _metadata }, _isActive_initializers, _isActive_extraInitializers);
+            if (_metadata) Object.defineProperty(_a, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        })(),
+        _a;
+}();
 exports.CreateUserDto = CreateUserDto;
-__decorate([
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], CreateUserDto.prototype, "nombre", void 0);
-__decorate([
-    (0, class_validator_1.IsEmail)(),
-    __metadata("design:type", String)
-], CreateUserDto.prototype, "email", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MinLength)(6, { message: 'La contraseña debe tener al menos 6 caracteres' }),
-    __metadata("design:type", String)
-], CreateUserDto.prototype, "password", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], CreateUserDto.prototype, "rol", void 0);
-__decorate([
-    (0, class_validator_1.IsBoolean)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Boolean)
-], CreateUserDto.prototype, "isActive", void 0);
-class ResetPasswordDto {
-    token;
-    password;
-}
+var ResetPasswordDto = function () {
+    var _a;
+    var _token_decorators;
+    var _token_initializers = [];
+    var _token_extraInitializers = [];
+    var _password_decorators;
+    var _password_initializers = [];
+    var _password_extraInitializers = [];
+    return _a = /** @class */ (function () {
+            function ResetPasswordDto() {
+                this.token = __runInitializers(this, _token_initializers, void 0);
+                this.password = (__runInitializers(this, _token_extraInitializers), __runInitializers(this, _password_initializers, void 0));
+                __runInitializers(this, _password_extraInitializers);
+            }
+            return ResetPasswordDto;
+        }()),
+        (function () {
+            var _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+            _token_decorators = [(0, class_validator_1.IsString)(), (0, class_validator_1.IsNotEmpty)({ message: 'El token es obligatorio' })];
+            _password_decorators = [(0, class_validator_1.IsString)(), (0, class_validator_1.MinLength)(6, { message: 'La contraseña debe tener al menos 6 caracteres' })];
+            __esDecorate(null, null, _token_decorators, { kind: "field", name: "token", static: false, private: false, access: { has: function (obj) { return "token" in obj; }, get: function (obj) { return obj.token; }, set: function (obj, value) { obj.token = value; } }, metadata: _metadata }, _token_initializers, _token_extraInitializers);
+            __esDecorate(null, null, _password_decorators, { kind: "field", name: "password", static: false, private: false, access: { has: function (obj) { return "password" in obj; }, get: function (obj) { return obj.password; }, set: function (obj, value) { obj.password = value; } }, metadata: _metadata }, _password_initializers, _password_extraInitializers);
+            if (_metadata) Object.defineProperty(_a, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        })(),
+        _a;
+}();
 exports.ResetPasswordDto = ResetPasswordDto;
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsNotEmpty)({ message: 'El token es obligatorio' }),
-    __metadata("design:type", String)
-], ResetPasswordDto.prototype, "token", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MinLength)(6, { message: 'La contraseña debe tener al menos 6 caracteres' }),
-    __metadata("design:type", String)
-], ResetPasswordDto.prototype, "password", void 0);
-class UpdateUserDto {
-    nombre;
-    email;
-    password;
-    rol;
-    isActive;
-}
+var UpdateUserDto = function () {
+    var _a;
+    var _nombre_decorators;
+    var _nombre_initializers = [];
+    var _nombre_extraInitializers = [];
+    var _email_decorators;
+    var _email_initializers = [];
+    var _email_extraInitializers = [];
+    var _password_decorators;
+    var _password_initializers = [];
+    var _password_extraInitializers = [];
+    var _rol_decorators;
+    var _rol_initializers = [];
+    var _rol_extraInitializers = [];
+    var _isActive_decorators;
+    var _isActive_initializers = [];
+    var _isActive_extraInitializers = [];
+    return _a = /** @class */ (function () {
+            function UpdateUserDto() {
+                this.nombre = __runInitializers(this, _nombre_initializers, void 0);
+                this.email = (__runInitializers(this, _nombre_extraInitializers), __runInitializers(this, _email_initializers, void 0));
+                this.password = (__runInitializers(this, _email_extraInitializers), __runInitializers(this, _password_initializers, void 0)); // Opcional para actualizar, ya que no siempre se cambia
+                this.rol = (__runInitializers(this, _password_extraInitializers), __runInitializers(this, _rol_initializers, void 0));
+                this.isActive = (__runInitializers(this, _rol_extraInitializers), __runInitializers(this, _isActive_initializers, void 0));
+                __runInitializers(this, _isActive_extraInitializers);
+            }
+            return UpdateUserDto;
+        }()),
+        (function () {
+            var _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+            _nombre_decorators = [(0, class_validator_1.IsString)(), (0, class_validator_1.IsOptional)()];
+            _email_decorators = [(0, class_validator_1.IsEmail)(), (0, class_validator_1.IsOptional)()];
+            _password_decorators = [(0, class_validator_1.IsString)(), (0, class_validator_1.IsOptional)(), (0, class_validator_1.MinLength)(6, { message: 'La contraseña debe tener al menos 6 caracteres' })];
+            _rol_decorators = [(0, class_validator_1.IsString)(), (0, class_validator_1.IsOptional)()];
+            _isActive_decorators = [(0, class_validator_1.IsBoolean)(), (0, class_validator_1.IsOptional)()];
+            __esDecorate(null, null, _nombre_decorators, { kind: "field", name: "nombre", static: false, private: false, access: { has: function (obj) { return "nombre" in obj; }, get: function (obj) { return obj.nombre; }, set: function (obj, value) { obj.nombre = value; } }, metadata: _metadata }, _nombre_initializers, _nombre_extraInitializers);
+            __esDecorate(null, null, _email_decorators, { kind: "field", name: "email", static: false, private: false, access: { has: function (obj) { return "email" in obj; }, get: function (obj) { return obj.email; }, set: function (obj, value) { obj.email = value; } }, metadata: _metadata }, _email_initializers, _email_extraInitializers);
+            __esDecorate(null, null, _password_decorators, { kind: "field", name: "password", static: false, private: false, access: { has: function (obj) { return "password" in obj; }, get: function (obj) { return obj.password; }, set: function (obj, value) { obj.password = value; } }, metadata: _metadata }, _password_initializers, _password_extraInitializers);
+            __esDecorate(null, null, _rol_decorators, { kind: "field", name: "rol", static: false, private: false, access: { has: function (obj) { return "rol" in obj; }, get: function (obj) { return obj.rol; }, set: function (obj, value) { obj.rol = value; } }, metadata: _metadata }, _rol_initializers, _rol_extraInitializers);
+            __esDecorate(null, null, _isActive_decorators, { kind: "field", name: "isActive", static: false, private: false, access: { has: function (obj) { return "isActive" in obj; }, get: function (obj) { return obj.isActive; }, set: function (obj, value) { obj.isActive = value; } }, metadata: _metadata }, _isActive_initializers, _isActive_extraInitializers);
+            if (_metadata) Object.defineProperty(_a, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        })(),
+        _a;
+}();
 exports.UpdateUserDto = UpdateUserDto;
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], UpdateUserDto.prototype, "nombre", void 0);
-__decorate([
-    (0, class_validator_1.IsEmail)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], UpdateUserDto.prototype, "email", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.MinLength)(6, { message: 'La contraseña debe tener al menos 6 caracteres' }),
-    __metadata("design:type", String)
-], UpdateUserDto.prototype, "password", void 0);
-__decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], UpdateUserDto.prototype, "rol", void 0);
-__decorate([
-    (0, class_validator_1.IsBoolean)(),
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Boolean)
-], UpdateUserDto.prototype, "isActive", void 0);
-//# sourceMappingURL=user.dto.js.map

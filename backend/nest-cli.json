@@ -1,12 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-<<<<<<< HEAD
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true
   }
-=======
-  "sourceRoot": "src"
->>>>>>> f8b858b (Carga de Serials correctaente)
 }

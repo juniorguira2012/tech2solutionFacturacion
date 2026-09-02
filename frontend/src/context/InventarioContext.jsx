@@ -58,7 +58,6 @@ export const InventarioProvider = ({ children }) => {
   }, [usuario?.rol]);
 
   const getAuthHeaders = useCallback(() => {
-<<<<<<< HEAD
     const headers = {
       'Content-Type': 'application/json',
     };
@@ -78,34 +77,6 @@ export const InventarioProvider = ({ children }) => {
   // Este efecto centraliza todas las peticiones iniciales para optimizar el rendimiento.
   useEffect(() => {
     if (!usuario) return;
-=======
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-
-  // 1. Obtener Token JWT de forma síncrona
-  const token = localStorage.getItem('posfactura_token');
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  // 2. Usar estado en memoria o fallback a localStorage para evitar peticiones incompletas en F5
-  const userStored = usuario || JSON.parse(localStorage.getItem('posfactura_user') || 'null');
-
-  if (userStored?.id) {
-    headers['x-user-id'] = String(userStored.id);
-    headers['x-user-role'] = userStored.rol || '';
-    headers['x-inventory-permission'] = String(getInventoryPermission?.() || '');
-  }
-
-  return headers;
-}, [usuario, getInventoryPermission]);
-
-  // --- EFECTO PRINCIPAL DE CARGA DE DATOS ---
-  // Este efecto centraliza todas las peticiones iniciales para optimizar el rendimiento.
-    useEffect(() => {
-      if (!usuario) return;
->>>>>>> f8b858b (Carga de Serials correctaente)
   
     const headers = getAuthHeaders();
   
@@ -140,10 +111,7 @@ export const InventarioProvider = ({ children }) => {
         { url: `${API_BASE_URL}/warehouses`, setter: setAlmacenesDetallados },
         { url: `${API_BASE_URL}/units-of-measure`, setter: setUnidadesMedida },
         { url: `${API_BASE_URL}/movements/technicians`, setter: setTecnicos },
-<<<<<<< HEAD
-=======
         { url: `${API_BASE_URL}/movements`, setter: setMovimientos },
->>>>>>> f8b858b (Carga de Serials correctaente)
         { url: `${API_BASE_URL}/categories`, setter: setCategorias },
         { url: `${API_BASE_URL}/product-serials`, setter: setSeriales },
         { url: `${API_BASE_URL}/comodatos`, setter: setPrestamos },
@@ -159,14 +127,10 @@ export const InventarioProvider = ({ children }) => {
 
       resultados.forEach((resultado, index) => {
         if (resultado.status === 'fulfilled') {
-<<<<<<< HEAD
-          recursos[index].setter(Array.isArray(resultado.value) ? resultado.value : []);
-=======
           const datos = Array.isArray(resultado.value)
             ? resultado.value
             : resultado.value?.data;
           recursos[index].setter(Array.isArray(datos) ? datos : []);
->>>>>>> f8b858b (Carga de Serials correctaente)
         } else {
           console.warn(`Advertencia al cargar ${recursos[index].url}:`, resultado.reason.message);
         }
@@ -263,29 +227,21 @@ export const InventarioProvider = ({ children }) => {
       const params = new URLSearchParams();
       if (productoId) params.append('productoId', productoId);
       
-<<<<<<< HEAD
       // 🛡️ Si el usuario NO es admin, filtramos por su ID.
       if (usuario.rol !== 'admin') params.append('usuarioId', usuario.id);
       
-=======
->>>>>>> f8b858b (Carga de Serials correctaente)
       if (params.toString()) url += `?${params.toString()}`;
 
       const res = await fetch(url, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Error al cargar movimientos');
       const data = await res.json();
-<<<<<<< HEAD
       setMovimientos(data);
-=======
-      setMovimientos(Array.isArray(data) ? data : data?.data || []);
->>>>>>> f8b858b (Carga de Serials correctaente)
     } catch (err) {
       console.error("Error Kardex:", err);
     }
   }, [API_BASE_URL, getAuthHeaders, usuario]);
 
   // Cargar Seriales
-<<<<<<< HEAD
   const cargarSeriales = useCallback(async () => {
     if (!usuario) return;
     try {
@@ -298,42 +254,6 @@ export const InventarioProvider = ({ children }) => {
       setSeriales([]); // Aseguramos que sea un array vacío en caso de error
     }
   }, [API_BASE_URL, getAuthHeaders, usuario]);
-=======
-// En tu inventarioContext.jsx
-const [cargandoSeriales, setCargandoSeriales] = useState(false);
-
-// En inventarioContext.jsx
-const cargarSeriales = useCallback(async () => {
-  // 1. Si no hay usuario en memoria ni token guardado, esperamos
-  const token = localStorage.getItem('posfactura_token');
-  if (!usuario && !token) {
-    setCargandoSeriales(false);
-    return;
-  }
-
-  setCargandoSeriales(true);
-  try {
-    const res = await fetch(`${API_BASE_URL}/product-serials`, { headers: getAuthHeaders() });
-    if (!res.ok) throw new Error('Error al obtener seriales');
-
-    const responseData = await res.json();
-    let listaFinal = [];
-
-    if (Array.isArray(responseData)) {
-      listaFinal = responseData;
-    } else if (Array.isArray(responseData?.data)) {
-      listaFinal = responseData.data;
-    }
-
-    setSeriales(listaFinal);
-  } catch (err) {
-    console.error("Error cargando seriales:", err);
-    setSeriales([]);
-  } finally {
-    setCargandoSeriales(false);
-  }
-}, [API_BASE_URL, getAuthHeaders, usuario]); //Importante incluir `usuario` aquí
->>>>>>> f8b858b (Carga de Serials correctaente)
 
   const actualizarEstadoSerial = async (serialId, nuevoEstado) => {
     try {

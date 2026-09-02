@@ -1,42 +1,72 @@
 "use strict";
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
+var __runInitializers = (this && this.__runInitializers) || function (thisArg, initializers, value) {
+    var useValue = arguments.length > 2;
+    for (var i = 0; i < initializers.length; i++) {
+        value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
+    }
+    return useValue ? value : void 0;
 };
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
+    function accept(f) { if (f !== void 0 && typeof f !== "function") throw new TypeError("Function expected"); return f; }
+    var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
+    var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
+    var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
+    var _, done = false;
+    for (var i = decorators.length - 1; i >= 0; i--) {
+        var context = {};
+        for (var p in contextIn) context[p] = p === "access" ? {} : contextIn[p];
+        for (var p in contextIn.access) context.access[p] = contextIn.access[p];
+        context.addInitializer = function (f) { if (done) throw new TypeError("Cannot add initializers after decoration has completed"); extraInitializers.push(accept(f || null)); };
+        var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context);
+        if (kind === "accessor") {
+            if (result === void 0) continue;
+            if (result === null || typeof result !== "object") throw new TypeError("Object expected");
+            if (_ = accept(result.get)) descriptor.get = _;
+            if (_ = accept(result.set)) descriptor.set = _;
+            if (_ = accept(result.init)) initializers.unshift(_);
+        }
+        else if (_ = accept(result)) {
+            if (kind === "field") initializers.unshift(_);
+            else descriptor[key] = _;
+        }
+    }
+    if (target) Object.defineProperty(target, contextIn.name, descriptor);
+    done = true;
 };
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
+var __setFunctionName = (this && this.__setFunctionName) || function (f, name, prefix) {
+    if (typeof name === "symbol") name = name.description ? "[".concat(name.description, "]") : "";
+    return Object.defineProperty(f, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HistoryController = void 0;
-const common_1 = require("@nestjs/common");
-const passport_1 = require("@nestjs/passport");
-const login_history_service_1 = require("./login-history.service");
-let HistoryController = class HistoryController {
-    loginHistoryService;
-    constructor(loginHistoryService) {
-        this.loginHistoryService = loginHistoryService;
-    }
-    getLoginHistory(page, limit) {
-        return this.loginHistoryService.findAll(page, limit);
-    }
-};
+var common_1 = require("@nestjs/common");
+var passport_1 = require("@nestjs/passport");
+var HistoryController = function () {
+    var _classDecorators = [(0, common_1.Controller)('history')];
+    var _classDescriptor;
+    var _classExtraInitializers = [];
+    var _classThis;
+    var _instanceExtraInitializers = [];
+    var _getLoginHistory_decorators;
+    var HistoryController = _classThis = /** @class */ (function () {
+        function HistoryController_1(loginHistoryService) {
+            this.loginHistoryService = (__runInitializers(this, _instanceExtraInitializers), loginHistoryService);
+        }
+        HistoryController_1.prototype.getLoginHistory = function (page, limit) {
+            return this.loginHistoryService.findAll(page, limit);
+        };
+        return HistoryController_1;
+    }());
+    __setFunctionName(_classThis, "HistoryController");
+    (function () {
+        var _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        _getLoginHistory_decorators = [(0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')), (0, common_1.Get)('login')];
+        __esDecorate(_classThis, null, _getLoginHistory_decorators, { kind: "method", name: "getLoginHistory", static: false, private: false, access: { has: function (obj) { return "getLoginHistory" in obj; }, get: function (obj) { return obj.getLoginHistory; } }, metadata: _metadata }, null, _instanceExtraInitializers);
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        HistoryController = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return HistoryController = _classThis;
+}();
 exports.HistoryController = HistoryController;
-__decorate([
-    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
-    (0, common_1.Get)('login'),
-    __param(0, (0, common_1.Query)('page', new common_1.DefaultValuePipe(1), common_1.ParseIntPipe)),
-    __param(1, (0, common_1.Query)('limit', new common_1.DefaultValuePipe(15), common_1.ParseIntPipe)),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, Number]),
-    __metadata("design:returntype", void 0)
-], HistoryController.prototype, "getLoginHistory", null);
-exports.HistoryController = HistoryController = __decorate([
-    (0, common_1.Controller)('history'),
-    __metadata("design:paramtypes", [login_history_service_1.LoginHistoryService])
-], HistoryController);
-//# sourceMappingURL=history.controller.js.map
