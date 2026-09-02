@@ -56,7 +56,6 @@ const PublicRoute = ({ children }) => {
   const { usuario, loading } = useAuth();
   // 💡 FIX: No retornamos `null` durante la carga.
   // Dejamos que el componente hijo (Login) decida qué mostrar.
-  // Solo redirigimos si la carga ha finalizado y hay un usuario.
   if (!loading && usuario) {
     return <Navigate to="/" replace />;
   }
