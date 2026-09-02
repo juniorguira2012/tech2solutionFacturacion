@@ -1,0 +1,55 @@
+import { Repository, DataSource } from 'typeorm';
+import { Product } from './entities/product.entity';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { Provider } from '../providers/entities/provider.entity';
+import { ProductSerial } from './entities/product-serial.entity';
+export declare class ProductsService {
+    private readonly productRepository;
+    private readonly providerRepository;
+    private readonly dataSource;
+    constructor(productRepository: Repository<Product>, providerRepository: Repository<Provider>, dataSource: DataSource);
+    create(createProductDto: CreateProductDto): Promise<Product>;
+    findAll(isActive?: boolean | 'all'): Promise<Product[]>;
+    findOne(id: number): Promise<Product>;
+    update(id: number, updateProductDto: UpdateProductDto): Promise<Product>;
+    remove(id: number): Promise<{
+        isActive: boolean;
+        id: number;
+        nombre: string;
+        codigo: string;
+        modelo: string;
+        serie: string;
+        categoria: string;
+        precio: number;
+        stock: number;
+        stockMinimo: number;
+        imagen: string;
+        almacen: string;
+        pasillo: string;
+        fila: string;
+        ubicacion: string;
+        unidadMedida: string;
+        movimientoInventario: string;
+        descripcion: string;
+        nota: string;
+        camposPersonalizados: any[];
+        vendidos: number;
+        countItems: import("../inventory-counts/entities/count-item.entity").CountItem[];
+        proveedorId: number;
+        proveedor: Provider;
+        warehouseStocks: import("./entities/product-warehouse-stock.entity").ProductWarehouseStock[];
+        isComodato: boolean;
+        isSerialized: boolean;
+        seriales: ProductSerial[];
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    restore(id: number): Promise<Product>;
+    getInventorySummary(): Promise<{
+        totalValue: number;
+        productsPerCategory: any[];
+        totalProducts: number;
+        totalStock: number;
+    }>;
+}

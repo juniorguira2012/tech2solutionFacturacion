@@ -1,0 +1,36 @@
+import { CountItem } from '../../inventory-counts/entities/count-item.entity';
+import { ProductWarehouseStock } from './product-warehouse-stock.entity';
+import { Provider } from '../../providers/entities/provider.entity';
+import { ProductSerial } from './product-serial.entity';
+export declare class Product {
+    id: number;
+    nombre: string;
+    codigo: string;
+    modelo: string;
+    serie: string;
+    categoria: string;
+    precio: number;
+    stock: number;
+    stockMinimo: number;
+    imagen: string;
+    almacen: string;
+    pasillo: string;
+    fila: string;
+    ubicacion: string;
+    unidadMedida: string;
+    movimientoInventario: string;
+    descripcion: string;
+    nota: string;
+    camposPersonalizados: any[];
+    vendidos: number;
+    isActive: boolean;
+    countItems: CountItem[];
+    proveedorId: number;
+    proveedor: Provider;
+    warehouseStocks: ProductWarehouseStock[];
+    isComodato: boolean;
+    isSerialized: boolean;
+    seriales: ProductSerial[];
+    createdAt: Date;
+    updatedAt: Date;
+}

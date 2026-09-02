@@ -28,7 +28,19 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   const { usuario } = useAuth();
   const { usuarios } = useUsuarios();
   
+<<<<<<< HEAD
   const almacenesNombres = useMemo(() => almacenesDetallados.map(a => a.nombre), [almacenesDetallados]);
+=======
+  const almacenesNombres = useMemo(() => {
+  const lista = Array.isArray(almacenesDetallados) 
+    ? almacenesDetallados 
+    : Array.isArray(almacenesDetallados?.data) 
+    ? almacenesDetallados.data 
+    : [];
+  return lista.map(a => a.nombre);
+}, [almacenesDetallados]);
+
+>>>>>>> f8b858b (Carga de Serials correctaente)
   const [proveedorSeleccionadoId, setProveedorSeleccionadoId] = useState('');
 
   // Estados de control de la UI principal
@@ -46,6 +58,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   const [modalSeriales, setModalSeriales] = useState({ isOpen: false, movimiento: null });
 
   const cerrarModal = () => { 
+<<<<<<< HEAD
     setModalOpen(false);
     setTipoMovimiento(null);
     setItemsEnCarritoMovimiento([]);
@@ -59,6 +72,21 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
     setSerialesDisponibles(seriales.filter(s => s.status === 'disponible')); 
     setProveedorSeleccionadoId('');
   };
+=======
+  setModalOpen(false);
+  setTipoMovimiento(null);
+  setItemsEnCarritoMovimiento([]);
+  setBusquedaCarrito('');
+  setResultadosBusquedaCarrito([]);
+  setAsignacionTecnicoId('');
+  setAsignacionSerialesInput('');
+  setAsignacionIsLoading(false);
+  setSerialesSeleccionados([]);
+  setBusquedaSerial('');
+  setSerialesDisponibles((seriales || []).filter(s => s?.status === 'disponible')); 
+  setProveedorSeleccionadoId('');
+};
+>>>>>>> f8b858b (Carga de Serials correctaente)
 
   // Inicialización de nuestro Custom Hook
   const formProps = useMovimientosForm(
@@ -89,7 +117,11 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
       setResultadosBusquedaCarrito([]);
       return;
     }
+<<<<<<< HEAD
     const filtrados = productos.filter(p => 
+=======
+    const filtrados = (productos || []).filter(p => 
+>>>>>>> f8b858b (Carga de Serials correctaente)
       p.nombre?.toLowerCase().includes(busquedaCarrito.toLowerCase()) || 
       (p.codigo && p.codigo.toLowerCase().includes(busquedaCarrito.toLowerCase()))
     );
@@ -98,6 +130,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
 
   // Lógica de búsqueda de facturas para el dropdown
   useEffect(() => {
+<<<<<<< HEAD
     if (!busquedaFactura.trim()) {
       setResultadosBusquedaFactura([]);
       return;
@@ -108,6 +141,18 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
     ).slice(0, 5); 
     setResultadosBusquedaFactura(filtradas);
   }, [busquedaFactura, historialVentas]);
+=======
+  if (!busquedaFactura.trim()) {
+    setResultadosBusquedaFactura([]);
+    return;
+  }
+  const filtradas = (historialVentas || []).filter(v => 
+    v.id?.toString().includes(busquedaFactura) || 
+    v.cliente?.toLowerCase().includes(busquedaFactura.toLowerCase())
+  ).slice(0, 5); 
+  setResultadosBusquedaFactura(filtradas);
+}, [busquedaFactura, historialVentas]);
+>>>>>>> f8b858b (Carga de Serials correctaente)
 
   // Cargar historial al montar el componente
   useEffect(() => {
@@ -213,7 +258,10 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   };
 
   const abrirModal = (tipo) => {
+<<<<<<< HEAD
     //CONTROL DE PERMISOS: Filtramos las operaciones prohibidas antes de levantar el modal
+=======
+>>>>>>> f8b858b (Carga de Serials correctaente)
     if (!permisosMovimiento?.create) {
       mostrarToast?.(`No tienes autorización para realizar la acción: ${tipo.toUpperCase()}`, "error");
       return;
@@ -226,6 +274,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
     setItemsDevolucion([]);
     setBusquedaFactura('');
     setFacturaEncontrada(null);
+<<<<<<< HEAD
     setAsignacionTecnicoId(''); setAsignacionSerialesInput('');
 
     // Limpieza de la nueva UI de asignación de seriales
@@ -234,6 +283,14 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
     setSerialesDisponibles(seriales.filter(s => s.status === 'disponible'));
     
     // Reseteamos el estado interno del formulario
+=======
+    setAsignacionTecnicoId(''); 
+    setAsignacionSerialesInput('');
+    setSerialesSeleccionados([]);
+    setBusquedaSerial('');
+    setSerialesDisponibles((seriales || []).filter(s => s?.status === 'disponible'));
+    
+>>>>>>> f8b858b (Carga de Serials correctaente)
     formProps.setMovimientoData({ productoId: '', cantidad: 1, almacenDestino: almacenesNombres[0] || 'Principal', nota: '' });
     formProps.setAjusteProductoId('');
     formProps.setAjusteAlmacen('');
@@ -330,6 +387,7 @@ const processarMovimientoMasivo = async () => {
   };
 
   // Filtrado reactivo de la tabla Kardex (Memoizado)
+<<<<<<< HEAD
   const movimientosFiltrados = useMemo(() => {
     return movimientos.filter(m => {
       const matchBusqueda = (m.producto?.nombre || "").toLowerCase().includes(busquedaKardex.toLowerCase()) || 
@@ -351,6 +409,35 @@ const processarMovimientoMasivo = async () => {
       return matchBusqueda && matchTipo && matchFecha && matchTecnico && matchUsuario;
     });
   }, [movimientos, busquedaKardex, filtroTipo, fechaInicio, fechaFin, filtroTecnico, filtroUsuario]);
+=======
+// Filtrado reactivo de la tabla Kardex (Memoizado)
+const movimientosFiltrados = useMemo(() => {
+  // 🛡️ Normalizamos 'movimientos' para asegurarnos de tener un Array
+  const listaMovimientos = Array.isArray(movimientos)
+    ? movimientos
+    : Array.isArray(movimientos?.data)
+    ? movimientos.data
+    : Array.isArray(movimientos?.movimientos)
+    ? movimientos.movimientos
+    : [];
+
+  return listaMovimientos.filter(m => {
+    const matchBusqueda = (m.producto?.nombre || "").toLowerCase().includes(busquedaKardex.toLowerCase()) || 
+                          (m.producto?.codigo || "").toLowerCase().includes(busquedaKardex.toLowerCase());
+    const matchTipo = filtroTipo === 'todos' || m.tipo?.toUpperCase() === filtroTipo.toUpperCase();
+    
+    const fechaMov = new Date(m.createdAt);
+    const inicio = fechaInicio ? new Date(fechaInicio + 'T00:00:00') : null;
+    const fin = fechaFin ? new Date(fechaFin + 'T23:59:59') : null;
+    
+    const matchFecha = (!inicio || fechaMov >= inicio) && (!fin || fechaMov <= fin);
+    const matchTecnico = filtroTecnico === 'todos' || String(m.technicianId) === filtroTecnico;
+    const matchUsuario = filtroUsuario === 'todos' || String(m.usuarioId) === filtroUsuario;
+
+    return matchBusqueda && matchTipo && matchFecha && matchTecnico && matchUsuario;
+  });
+}, [movimientos, busquedaKardex, filtroTipo, fechaInicio, fechaFin, filtroTecnico, filtroUsuario]);
+>>>>>>> f8b858b (Carga de Serials correctaente)
 
 const exportarKardexCSV = () => {
     if (movimientosFiltrados.length === 0) {
@@ -468,6 +555,7 @@ const exportarKardexCSV = () => {
     setSerialesSeleccionados(prev => prev.filter(s => s.id !== serial.id));
   };
 
+<<<<<<< HEAD
   const serialesDisponiblesFiltrados = useMemo(() => {
     if (!busquedaSerial) return serialesDisponibles;
     const query = busquedaSerial.toLowerCase();
@@ -476,6 +564,17 @@ const exportarKardexCSV = () => {
       s.producto?.nombre.toLowerCase().includes(query)
     );
   }, [busquedaSerial, serialesDisponibles]);
+=======
+ const serialesDisponiblesFiltrados = useMemo(() => {
+  const lista = Array.isArray(serialesDisponibles) ? serialesDisponibles : [];
+  if (!busquedaSerial) return lista;
+  const query = busquedaSerial.toLowerCase();
+  return lista.filter(s => 
+    s.serialNumber?.toLowerCase().includes(query) ||
+    s.producto?.nombre?.toLowerCase().includes(query)
+  );
+}, [busquedaSerial, serialesDisponibles]);
+>>>>>>> f8b858b (Carga de Serials correctaente)
 
  // Puedes dejar este array fuera del componente o justo arriba del return
 const BOTONES_ACCION = [

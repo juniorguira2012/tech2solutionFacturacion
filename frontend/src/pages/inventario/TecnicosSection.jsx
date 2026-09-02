@@ -24,6 +24,7 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
   } = useInventario();
   const { usuario } = useAuth();
 
+<<<<<<< HEAD
   const almacenesNombres = useMemo(
     () => almacenesDetallados.map(a => a.nombre).filter(Boolean),
     [almacenesDetallados]
@@ -35,13 +36,42 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
     // las entregas a técnicos manuales (sin ID).
     return movimientos
       .filter(m => m.tipo === 'DESPACHAR' && 
+=======
+  // 🛡️ Helper genérico para extraer arreglos de forma segura
+  const normalizarArray = (data, propClave) => {
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.data)) return data.data;
+    if (propClave && Array.isArray(data?.[propClave])) return data[propClave];
+    return [];
+  };
+
+  // 1. Almacenes seguros
+  const almacenesNombres = useMemo(() => {
+    const lista = normalizarArray(almacenesDetallados);
+    return lista.map(a => a?.nombre).filter(Boolean);
+  }, [almacenesDetallados]);
+
+  // 2. Entregas recientes seguras (Fix del error `movimientos.filter`)
+  const entregasRecientes = useMemo(() => {
+    const listaMovimientos = normalizarArray(movimientos, 'movimientos');
+    return listaMovimientos
+      .filter(m => ['DESPACHAR', 'ASIGNACION_TECNICO'].includes(m?.tipo) &&
+>>>>>>> f8b858b (Carga de Serials correctaente)
         (m.technicianId || m.nota?.startsWith('Entrega a técnico:')))
       .slice(0, 8);
   }, [movimientos]);
 
+<<<<<<< HEAD
   const tecnicosOrdenados = useMemo(() => (
     [...tecnicos].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || '')))
   ), [tecnicos]);
+=======
+  // 3. Técnicos ordenados seguros
+  const tecnicosOrdenados = useMemo(() => {
+    const listaTecnicos = normalizarArray(tecnicos, 'tecnicos');
+    return [...listaTecnicos].sort((a, b) => String(a?.nombre || '').localeCompare(String(b?.nombre || '')));
+  }, [tecnicos]);
+>>>>>>> f8b858b (Carga de Serials correctaente)
 
   const [busquedaProducto, setBusquedaProducto] = useState('');
   const [form, setForm] = useState({
@@ -63,6 +93,7 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
     telefono: '',
     email: ''
   });
+<<<<<<< HEAD
   // Estados para el nuevo modal de devolución masiva
   const [devolucionModalOpen, setDevolucionModalOpen] = useState(false);
   const [devolucionSerialesInput, setDevolucionSerialesInput] = useState('');
@@ -78,14 +109,41 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
       .filter(p => (
         p.nombre?.toLowerCase().includes(query) ||
         p.codigo?.toLowerCase().includes(query)
+=======
+  
+  // Estados para el nuevo modal de devolución masiva
+  const [devolucionModalOpen, setDevolucionModalOpen] = useState(false);
+  const [devolucionSerialesInput, setDevolucionSerialesInput] = useState('');
+  const [devolucionNota, setDevolucionNota] = useState('');
+  const [devolucionLoading, setDevolucionLoading] = useState(false);
+  const [expandedTechnician, setExpandedTechnician] = useState(null);
+
+  // 4. Productos filtrados seguros
+  const productosFiltrados = useMemo(() => {
+    const query = busquedaProducto.trim().toLowerCase();
+    if (!query) return [];
+    const listaProductos = normalizarArray(productos, 'productos');
+    return listaProductos
+      .filter(p => (
+        p?.nombre?.toLowerCase().includes(query) ||
+        p?.codigo?.toLowerCase().includes(query)
+>>>>>>> f8b858b (Carga de Serials correctaente)
       ))
       .slice(0, 8);
   }, [busquedaProducto, productos]);
 
+<<<<<<< HEAD
   const productoSeleccionado = useMemo(
     () => productos.find(p => Number(p.id) === Number(form.productoId)),
     [productos, form.productoId]
   );
+=======
+  // 5. Producto seleccionado seguro
+  const productoSeleccionado = useMemo(() => {
+    const listaProductos = normalizarArray(productos, 'productos');
+    return listaProductos.find(p => Number(p?.id) === Number(form.productoId));
+  }, [productos, form.productoId]);
+>>>>>>> f8b858b (Carga de Serials correctaente)
 
   const seleccionarProducto = (producto) => {
     setForm(prev => ({
@@ -128,7 +186,10 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
   };
 
   const abrirNuevoTecnico = () => {
+<<<<<<< HEAD
     // 🛡️ Verificación de permiso de creación
+=======
+>>>>>>> f8b858b (Carga de Serials correctaente)
     if (!permisosTecnicos?.create) {
       return mostrarToast('No tienes permiso para registrar nuevos técnicos', 'error');
     }
@@ -138,7 +199,10 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
   };
 
   const abrirEditarTecnico = (tecnico) => {
+<<<<<<< HEAD
     // 🛡️ Verificación de permiso de edición
+=======
+>>>>>>> f8b858b (Carga de Serials correctaente)
     if (!permisosTecnicos?.edit) {
       return mostrarToast('No tienes permiso para editar técnicos', 'error');
     }
@@ -160,7 +224,10 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
       return;
     }
 
+<<<<<<< HEAD
     // 🛡️ Verificación de permisos de creación/edición
+=======
+>>>>>>> f8b858b (Carga de Serials correctaente)
     if ((editandoTecnicoId && !permisosTecnicos?.edit) || (!editandoTecnicoId && !permisosTecnicos?.create)) {
       mostrarToast("No tienes permiso para realizar esta acción", "error");
       return;
@@ -193,7 +260,10 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
   };
 
   const borrarTecnico = async (tecnico) => {
+<<<<<<< HEAD
     // 🛡️ Verificación de permiso de eliminación
+=======
+>>>>>>> f8b858b (Carga de Serials correctaente)
     if (!permisosTecnicos?.delete) {
       return mostrarToast('No tienes permiso para eliminar técnicos', 'error');
     }
@@ -212,6 +282,7 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
     }
   };
 
+<<<<<<< HEAD
   const [expandedTechnician, setExpandedTechnician] = useState(null);
 
   // Al inicio de tu componente TecnicoSection, asegúrate de estar extrayendo el usuario:
@@ -236,6 +307,24 @@ const handleDevolverSerial = async (serialNumber) => {
 
   const handleDevolucionMasiva = async (e) => {
     // 🛡️ Verificación de permiso de creación (ya que genera un movimiento de entrada)
+=======
+  const handleDevolverSerial = async (serialNumber) => {
+    const nota = window.prompt(`Introduce una nota para la devolución del serial ${serialNumber}:`, 'Devuelto por técnico');
+    if (nota === null) {
+      mostrarToast?.('Devolución cancelada.', 'info');
+      return;
+    }
+
+    try {
+      await devolverSerialTecnico(serialNumber, nota, usuario);
+      mostrarToast?.(`Serial ${serialNumber} devuelto al inventario`, 'success');
+    } catch (error) {
+      mostrarToast?.(error.message || 'No se pudo procesar la devolución', 'error');
+    }
+  };
+
+  const handleDevolucionMasiva = async (e) => {
+>>>>>>> f8b858b (Carga de Serials correctaente)
     if (!permisosTecnicos?.create) {
       return mostrarToast('No tienes permiso para procesar devoluciones', 'error');
     }
@@ -255,11 +344,19 @@ const handleDevolverSerial = async (serialNumber) => {
 
     for (const serial of serialesADevolver) {
       try {
+<<<<<<< HEAD
         // 3. Usamos la nota del formulario del modal. Si está vacía, ponemos un texto por defecto.
         await devolverSerialTecnico(
           serial, 
           devolucionNota.trim() || 'Devolución masiva desde módulo de técnicos', 
           usuario);
+=======
+        await devolverSerialTecnico(
+          serial, 
+          devolucionNota.trim() || 'Devolución masiva desde módulo de técnicos', 
+          usuario
+        );
+>>>>>>> f8b858b (Carga de Serials correctaente)
         exitosos++;
       } catch (error) {
         fallidos++;
@@ -267,22 +364,34 @@ const handleDevolverSerial = async (serialNumber) => {
       }
     }
 
+<<<<<<< HEAD
     // Manejo de respuestas finales (Toasts de éxito o errores acumulados)
+=======
+>>>>>>> f8b858b (Carga de Serials correctaente)
     setDevolucionLoading(false);
     if (errores.length > 0) {
       console.error("Errores en devolución masiva:", errores);
       mostrarToast?.(`Procesados: ${exitosos} éxitos, ${fallidos} fallas.`, 'error');
     } else {
       mostrarToast?.(`Se devolvieron ${exitosos} seriales correctamente.`, 'success');
+<<<<<<< HEAD
       // 4. Limpiamos y cerramos el modal al finalizar con éxito.
+=======
+>>>>>>> f8b858b (Carga de Serials correctaente)
       setDevolucionModalOpen(false);
       setDevolucionSerialesInput('');
       setDevolucionNota('');
     }
   };
+<<<<<<< HEAD
   const entregarProducto = async (e) => {
     e.preventDefault();
     // 🛡️ Verificación de permiso de creación (ya que genera un movimiento de salida)
+=======
+
+  const entregarProducto = async (e) => {
+    e.preventDefault();
+>>>>>>> f8b858b (Carga de Serials correctaente)
     if (!permisosTecnicos?.create) {
       return mostrarToast('No tienes permiso para registrar entregas', 'error');
     }
@@ -294,7 +403,10 @@ const handleDevolverSerial = async (serialNumber) => {
 
     setGuardando(true);
 
+<<<<<<< HEAD
     // --- LÓGICA PARA PRODUCTOS SERIALIZADOS ---
+=======
+>>>>>>> f8b858b (Carga de Serials correctaente)
     if (productoSeleccionado.isSerialized) {
       const serials = form.serialsInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
       if (serials.length === 0) {
@@ -332,6 +444,7 @@ const handleDevolverSerial = async (serialNumber) => {
       } finally {
         setGuardando(false);
       }
+<<<<<<< HEAD
       return; // Finaliza el flujo para serializados
     }
 
@@ -339,11 +452,24 @@ const handleDevolverSerial = async (serialNumber) => {
     const nombreTecnico = obtenerNombreTecnico();
     if (!nombreTecnico) {
       mostrarToast?.('Selecciona o escribe el técnico responsable', 'error');
+=======
+      return;
+    }
+
+    const nombreTecnico = obtenerNombreTecnico();
+    if (!nombreTecnico) {
+      mostrarToast?.('Selecciona o escribe el técnico responsable', 'error');
+      setGuardando(false);
+>>>>>>> f8b858b (Carga de Serials correctaente)
       return;
     }
 
     if (!form.almacen) {
       mostrarToast?.('Selecciona el almacén de salida', 'error');
+<<<<<<< HEAD
+=======
+      setGuardando(false);
+>>>>>>> f8b858b (Carga de Serials correctaente)
       return;
     }
 
@@ -382,7 +508,11 @@ const handleDevolverSerial = async (serialNumber) => {
       setGuardando(false);
     }
   };
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> f8b858b (Carga de Serials correctaente)
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
