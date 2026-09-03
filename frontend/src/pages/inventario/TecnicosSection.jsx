@@ -64,6 +64,7 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
     referencia: '',
     nota: ''
   });
+  const [productosEntrega, setProductosEntrega] = useState([]);
   const [guardando, setGuardando] = useState(false);
   const [modalTecnicoOpen, setModalTecnicoOpen] = useState(false);
   const [guardandoTecnico, setGuardandoTecnico] = useState(false);
@@ -93,28 +94,42 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
       .slice(0, 8);
   }, [busquedaProducto, productos]);
 
-  // 5. Producto seleccionado seguro
-  const productoSeleccionado = useMemo(() => {
-    const listaProductos = normalizarArray(productos, 'productos');
-    return listaProductos.find(p => Number(p?.id) === Number(form.productoId));
-  }, [productos, form.productoId]);
-
   const seleccionarProducto = (producto) => {
+    if (productosEntrega.some(item => Number(item.producto.id) === Number(producto.id))) {
+      setBusquedaProducto('');
+      return;
+    }
+    setProductosEntrega(prev => [...prev, {
+      producto,
+      cantidad: producto.isSerialized ? 0 : 1,
+      serialsInput: ''
+    }]);
     setForm(prev => ({
       ...prev,
-      productoId: producto.id,
       almacen: prev.almacen || producto.almacen || almacenesNombres[0] || 'Principal'
     }));
-    setBusquedaProducto(`${producto.nombre}${producto.codigo ? ` (${producto.codigo})` : ''}`);
+    setBusquedaProducto('');
   };
 
   const limpiarProducto = () => {
-    setForm(prev => ({ ...prev, productoId: '' }));
+    setProductosEntrega([]);
+    setForm(prev => ({ ...prev, productoId: '', cantidad: 1, serialsInput: '' }));
     setBusquedaProducto('');
+  };
+
+  const actualizarProductoEntrega = (productoId, cambios) => {
+    setProductosEntrega(prev => prev.map(item =>
+      Number(item.producto.id) === Number(productoId) ? { ...item, ...cambios } : item
+    ));
+  };
+
+  const quitarProductoEntrega = (productoId) => {
+    setProductosEntrega(prev => prev.filter(item => Number(item.producto.id) !== Number(productoId)));
   };
 
   const resetForm = () => {
     setBusquedaProducto('');
+    setProductosEntrega([]);
     setForm({
       productoId: '',
       cantidad: 1,
@@ -284,52 +299,12 @@ const handleDevolverSerial = async (serialNumber) => {
       return mostrarToast('No tienes permiso para registrar entregas', 'error');
     }
 
-    if (!productoSeleccionado) {
-      mostrarToast?.('Selecciona un producto válido', 'error');
+    if (productosEntrega.length === 0) {
+      mostrarToast?.('Agrega al menos un producto', 'error');
       return;
     }
 
     setGuardando(true);
-
-    if (productoSeleccionado.isSerialized) {
-      const serials = form.serialsInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-      if (serials.length === 0) {
-        mostrarToast?.('Debes ingresar al menos un número de serie.', 'warning');
-        setGuardando(false);
-        return;
-      }
-
-      const tecnicoId = form.tecnicoId ? Number(form.tecnicoId) : undefined;
-      if (!tecnicoId) {
-        mostrarToast?.('Debes seleccionar un técnico del catálogo para asignar seriales.', 'error');
-        setGuardando(false);
-        return;
-      }
-
-      const nombreTecnico = obtenerNombreTecnico();
-      const nota = [
-        `Entrega a técnico: ${nombreTecnico}`,
-        form.referencia ? `Referencia: ${form.referencia}` : '',
-        form.nota ? `Nota: ${form.nota}` : ''
-      ].filter(Boolean).join(' | ');
-
-      try {
-        await asignarSerialesTecnico({
-          technicianId: tecnicoId,
-          serials: serials,
-          usuarioId: Number(usuario?.id),
-          nota: nota,
-        });
-        mostrarToast?.(`${serials.length} serial(es) asignado(s) a ${obtenerNombreTecnico()}`, 'success');
-        recargarInventario();
-        resetForm();
-      } catch (error) {
-        mostrarToast?.(error.message || 'No se pudo asignar los seriales', 'error');
-      } finally {
-        setGuardando(false);
-      }
-      return;
-    }
 
     const nombreTecnico = obtenerNombreTecnico();
     if (!nombreTecnico) {
@@ -343,12 +318,6 @@ const handleDevolverSerial = async (serialNumber) => {
       return;
     }
 
-    const cantidad = Number(form.cantidad);
-    if (!Number.isFinite(cantidad) || cantidad <= 0) {
-      mostrarToast?.('La cantidad debe ser mayor a 0', 'error');
-      setGuardando(false);
-      return;
-    }
     try {
       const nota = [
         `Entrega a técnico: ${nombreTecnico}`,
@@ -356,20 +325,40 @@ const handleDevolverSerial = async (serialNumber) => {
         form.nota ? `Nota: ${form.nota}` : ''
       ].filter(Boolean).join(' | ');
 
-      await registrarMovimiento({
-        productoId: Number(productoSeleccionado.id),
-        tipo: 'DESPACHAR',
-        cantidad,
-        almacenOrigen: form.almacen,
-        almacenDestino: form.almacen,
-        technicianId: form.tecnicoId ? Number(form.tecnicoId) : undefined,
-        technicianName: form.tecnicoId ? undefined : nombreTecnico,
-        referencia: form.referencia || undefined,
-        nota,
-        usuarioId: usuario?.id ? String(usuario.id) : undefined
-      });
+      const tecnicoId = form.tecnicoId ? Number(form.tecnicoId) : undefined;
+      for (const item of productosEntrega) {
+        if (item.producto.isSerialized) {
+          const serials = item.serialsInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+          if (!tecnicoId || serials.length === 0) {
+            throw new Error(`Completa el técnico y los seriales de ${item.producto.nombre}`);
+          }
+          await asignarSerialesTecnico({
+            technicianId: tecnicoId,
+            serials,
+            usuarioId: Number(usuario?.id),
+            nota
+          });
+        } else {
+          const cantidad = Number(item.cantidad);
+          if (!Number.isFinite(cantidad) || cantidad <= 0) {
+            throw new Error(`La cantidad de ${item.producto.nombre} debe ser mayor a 0`);
+          }
+          await registrarMovimiento({
+            productoId: Number(item.producto.id),
+            tipo: 'DESPACHAR',
+            cantidad,
+            almacenOrigen: form.almacen,
+            almacenDestino: form.almacen,
+            technicianId: tecnicoId,
+            technicianName: tecnicoId ? undefined : nombreTecnico,
+            referencia: form.referencia || undefined,
+            nota,
+            usuarioId: usuario?.id ? String(usuario.id) : undefined
+          });
+        }
+      }
 
-      mostrarToast?.(`Producto entregado a ${nombreTecnico}`, 'success');
+      mostrarToast?.(`${productosEntrega.length} producto(s) entregado(s) a ${nombreTecnico}`, 'success');
       recargarInventario();
       resetForm();
     } catch (error) {
@@ -515,7 +504,7 @@ const handleDevolverSerial = async (serialNumber) => {
                   placeholder="Buscar por nombre o código..."
                   className="w-full h-12 pl-10 pr-11 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white"
                 />
-                {form.productoId && (
+                {productosEntrega.length > 0 && (
                   <button type="button" onClick={limpiarProducto} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500">
                     <X size={16} />
                   </button>
@@ -541,6 +530,41 @@ const handleDevolverSerial = async (serialNumber) => {
               )}
             </div>
 
+            {productosEntrega.length > 0 && (
+              <div className="lg:col-span-2 space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Productos para entregar</label>
+                {productosEntrega.map(item => (
+                  <div key={item.producto.id} className="grid grid-cols-[minmax(0,1fr)_minmax(140px,220px)_auto] items-center gap-3 rounded-xl border border-slate-200 p-3">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black text-slate-700 uppercase truncate">{item.producto.nombre}</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">{item.producto.codigo || 'Sin código'} | Stock: {item.producto.stock}</p>
+                    </div>
+                    {item.producto.isSerialized ? (
+                      <textarea
+                        required
+                        value={item.serialsInput}
+                        onChange={e => actualizarProductoEntrega(item.producto.id, { serialsInput: e.target.value })}
+                        placeholder="Seriales, uno por línea"
+                        className="w-full min-h-12 p-2 rounded-lg border border-slate-200 outline-none focus:border-brand font-mono text-[10px] resize-y"
+                      />
+                    ) : (
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={item.cantidad}
+                        onChange={e => actualizarProductoEntrega(item.producto.id, { cantidad: e.target.value })}
+                        className="w-full h-10 px-3 rounded-lg border border-slate-200 outline-none focus:border-brand font-black text-xs"
+                      />
+                    )}
+                    <button type="button" onClick={() => quitarProductoEntrega(item.producto.id)} className="p-2 text-slate-400 hover:text-rose-500" aria-label={`Quitar ${item.producto.nombre}`}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Almacén de salida</label>
               <select
@@ -558,26 +582,11 @@ const handleDevolverSerial = async (serialNumber) => {
 
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
-                {productoSeleccionado?.isSerialized ? 'Seriales (uno por línea)' : 'Cantidad'}
+                Producto seleccionado
               </label>
-              {productoSeleccionado?.isSerialized ? (
-                <textarea
-                  required
-                  value={form.serialsInput}
-                  onChange={(e) => setForm(prev => ({ ...prev, serialsInput: e.target.value }))}
-                  placeholder="SN-001&#10;SN-002&#10;SN-003"
-                  className="w-full p-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-mono text-xs bg-white h-24 resize-y"
-                />
-              ) : (
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={form.cantidad}
-                  onChange={(e) => setForm(prev => ({ ...prev, cantidad: e.target.value }))}
-                  className="w-full h-12 px-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-black text-xs bg-white"
-                />
-              )}
+              <div className="h-12 px-4 flex items-center rounded-xl border border-slate-200 bg-slate-50 font-bold text-xs text-slate-500">
+                {productosEntrega.length} producto(s) agregado(s)
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -628,12 +637,12 @@ const handleDevolverSerial = async (serialNumber) => {
             </div>
           </div>
 
-          {productoSeleccionado && (
+          {productosEntrega.length > 0 && (
             <div className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-2xl p-4">
               <PackageSearch className="text-brand shrink-0" size={20} />
               <div className="min-w-0">
-                <p className="text-[10px] font-black text-slate-800 uppercase truncate">{productoSeleccionado.nombre}</p>
-                <p className="text-[9px] font-bold text-slate-400 uppercase">Stock global: {productoSeleccionado.stock} | Almacén base: {productoSeleccionado.almacen || 'N/A'}</p>
+                <p className="text-[10px] font-black text-slate-800 uppercase truncate">{productosEntrega.length} productos seleccionados</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase">Revisa cantidades o seriales antes de confirmar</p>
               </div>
             </div>
           )}
