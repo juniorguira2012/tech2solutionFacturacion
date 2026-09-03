@@ -1,4 +1,4 @@
-import { IsNumber, IsString, IsOptional } from 'class-validator';
+import { IsNumber, IsString, IsOptional, IsArray } from 'class-validator';
 
 export class CreateMovementDto {
   @IsNumber()
@@ -9,6 +9,11 @@ export class CreateMovementDto {
 
   @IsNumber()
   cantidad: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  serials?: string[];
 
   @IsOptional()
   @IsString()

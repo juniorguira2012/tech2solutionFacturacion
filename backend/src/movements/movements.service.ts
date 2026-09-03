@@ -289,6 +289,7 @@ export class MovementsService {
       lote,
       technicianId,
       technicianName,
+      serials,
     } = createMovementDto as any;
 
     try {
@@ -541,6 +542,7 @@ export class MovementsService {
           productoId: producto.id,
           tipo: tipoNormalizado,
           cantidad: cantidadMovimiento,
+          serials: Array.isArray(serials) ? serials.map(s => String(s).trim()).filter(Boolean) : [],
           nuevoStock: Number(producto.stock),
           nota: `${nota || ''}${batchInfo ? ` | Lote: ${batchInfo}` : ''} | Almacén: ${almacenNormalizado}`,
           costoUnitario: producto.precio ? Number(producto.precio) : undefined,

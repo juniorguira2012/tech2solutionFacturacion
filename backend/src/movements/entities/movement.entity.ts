@@ -28,6 +28,9 @@ export class Movement {
   @Column()
   cantidad: number;
 
+  @Column({ type: 'jsonb', nullable: true, default: () => "'[]'" })
+  serials?: string[];
+
   @Column({ nullable: true })
   nota: string;
 

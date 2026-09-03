@@ -63,6 +63,9 @@ var Movement = function () {
     var _cantidad_decorators;
     var _cantidad_initializers = [];
     var _cantidad_extraInitializers = [];
+    var _serials_decorators;
+    var _serials_initializers = [];
+    var _serials_extraInitializers = [];
     var _nota_decorators;
     var _nota_initializers = [];
     var _nota_extraInitializers = [];
@@ -103,7 +106,8 @@ var Movement = function () {
             this.producto = (__runInitializers(this, _productoId_extraInitializers), __runInitializers(this, _producto_initializers, void 0));
             this.tipo = (__runInitializers(this, _producto_extraInitializers), __runInitializers(this, _tipo_initializers, void 0)); // ENTRADA, SALIDA, DESPACHAR, AJUSTE
             this.cantidad = (__runInitializers(this, _tipo_extraInitializers), __runInitializers(this, _cantidad_initializers, void 0));
-            this.nota = (__runInitializers(this, _cantidad_extraInitializers), __runInitializers(this, _nota_initializers, void 0));
+            this.serials = (__runInitializers(this, _cantidad_extraInitializers), __runInitializers(this, _serials_initializers, void 0));
+            this.nota = (__runInitializers(this, _serials_extraInitializers), __runInitializers(this, _nota_initializers, void 0));
             this.nuevoStock = (__runInitializers(this, _nota_extraInitializers), __runInitializers(this, _nuevoStock_initializers, void 0));
             this.costoUnitario = (__runInitializers(this, _nuevoStock_extraInitializers), __runInitializers(this, _costoUnitario_initializers, void 0));
             this.referencia = (__runInitializers(this, _costoUnitario_extraInitializers), __runInitializers(this, _referencia_initializers, void 0));
@@ -126,6 +130,7 @@ var Movement = function () {
         _producto_decorators = [(0, typeorm_1.ManyToOne)(function () { return product_entity_1.Product; }), (0, typeorm_1.JoinColumn)({ name: 'productoId' })];
         _tipo_decorators = [(0, typeorm_1.Column)()];
         _cantidad_decorators = [(0, typeorm_1.Column)()];
+        _serials_decorators = [(0, typeorm_1.Column)({ type: 'jsonb', nullable: true, default: function () { return "'[]'"; } })];
         _nota_decorators = [(0, typeorm_1.Column)({ nullable: true })];
         _nuevoStock_decorators = [(0, typeorm_1.Column)({ nullable: true })];
         _costoUnitario_decorators = [(0, typeorm_1.Column)({ nullable: true, type: 'decimal', precision: 10, scale: 2 })];
@@ -142,6 +147,7 @@ var Movement = function () {
         __esDecorate(null, null, _producto_decorators, { kind: "field", name: "producto", static: false, private: false, access: { has: function (obj) { return "producto" in obj; }, get: function (obj) { return obj.producto; }, set: function (obj, value) { obj.producto = value; } }, metadata: _metadata }, _producto_initializers, _producto_extraInitializers);
         __esDecorate(null, null, _tipo_decorators, { kind: "field", name: "tipo", static: false, private: false, access: { has: function (obj) { return "tipo" in obj; }, get: function (obj) { return obj.tipo; }, set: function (obj, value) { obj.tipo = value; } }, metadata: _metadata }, _tipo_initializers, _tipo_extraInitializers);
         __esDecorate(null, null, _cantidad_decorators, { kind: "field", name: "cantidad", static: false, private: false, access: { has: function (obj) { return "cantidad" in obj; }, get: function (obj) { return obj.cantidad; }, set: function (obj, value) { obj.cantidad = value; } }, metadata: _metadata }, _cantidad_initializers, _cantidad_extraInitializers);
+        __esDecorate(null, null, _serials_decorators, { kind: "field", name: "serials", static: false, private: false, access: { has: function (obj) { return "serials" in obj; }, get: function (obj) { return obj.serials; }, set: function (obj, value) { obj.serials = value; } }, metadata: _metadata }, _serials_initializers, _serials_extraInitializers);
         __esDecorate(null, null, _nota_decorators, { kind: "field", name: "nota", static: false, private: false, access: { has: function (obj) { return "nota" in obj; }, get: function (obj) { return obj.nota; }, set: function (obj, value) { obj.nota = value; } }, metadata: _metadata }, _nota_initializers, _nota_extraInitializers);
         __esDecorate(null, null, _nuevoStock_decorators, { kind: "field", name: "nuevoStock", static: false, private: false, access: { has: function (obj) { return "nuevoStock" in obj; }, get: function (obj) { return obj.nuevoStock; }, set: function (obj, value) { obj.nuevoStock = value; } }, metadata: _metadata }, _nuevoStock_initializers, _nuevoStock_extraInitializers);
         __esDecorate(null, null, _costoUnitario_decorators, { kind: "field", name: "costoUnitario", static: false, private: false, access: { has: function (obj) { return "costoUnitario" in obj; }, get: function (obj) { return obj.costoUnitario; }, set: function (obj, value) { obj.costoUnitario = value; } }, metadata: _metadata }, _costoUnitario_initializers, _costoUnitario_extraInitializers);

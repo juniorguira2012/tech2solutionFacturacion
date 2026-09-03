@@ -435,7 +435,7 @@ var MovementsService = function () {
                             return [4 /*yield*/, queryRunner.startTransaction()];
                         case 2:
                             _b.sent();
-                            _a = createMovementDto, productoId = _a.productoId, tipo = _a.tipo, cantidad = _a.cantidad, nota = _a.nota, usuarioId = _a.usuarioId, almacenOrigen = _a.almacenOrigen, almacenDestino = _a.almacenDestino, referencia = _a.referencia, lote = _a.lote, technicianId = _a.technicianId, technicianName = _a.technicianName;
+                            _a = createMovementDto, productoId = _a.productoId, tipo = _a.tipo, cantidad = _a.cantidad, nota = _a.nota, usuarioId = _a.usuarioId, almacenOrigen = _a.almacenOrigen, almacenDestino = _a.almacenDestino, referencia = _a.referencia, lote = _a.lote, technicianId = _a.technicianId, technicianName = _a.technicianName, serials = _a.serials;
                             _b.label = 3;
                         case 3:
                             _b.trys.push([3, 25, 27, 29]);
@@ -740,6 +740,7 @@ var MovementsService = function () {
                                 productoId: producto.id,
                                 tipo: tipoNormalizado,
                                 cantidad: cantidadMovimiento,
+                                serials: Array.isArray(serials) ? serials.map(function (s) { return String(s).trim(); }).filter(Boolean) : [],
                                 nuevoStock: Number(producto.stock),
                                 nota: "".concat(nota || '').concat(batchInfo ? " | Lote: ".concat(batchInfo) : '', " | Almac\u00E9n: ").concat(almacenNormalizado),
                                 costoUnitario: producto.precio ? Number(producto.precio) : undefined,
