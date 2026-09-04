@@ -20,6 +20,7 @@ import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import RolesManager from './pages/RolesManager';
+import AccessDeniedAlert from './components/AccessDeniedAlert';
 
 // 💡 FIX: Fallback seguro si la variable no está configurada en .env
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "000000000000-dummyclientid.apps.googleusercontent.com";
@@ -44,7 +45,7 @@ const PrivateRoute = ({ children, moduloRequerido }) => {
     
     if (!nivelPermiso?.view) {
       console.warn(`⚠️ Acceso denegado a ${moduloRequerido} para el rol ${usuario.rol}`);
-      return <Navigate to="/" replace />;
+      return <Layout><AccessDeniedAlert modulo={moduloRequerido} /></Layout>;
     }
   }
 

@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import {
   Package, Tags, ArrowLeftRight, CheckCircle, Edit3,
   ClipboardList, Bell, Layers3, AlertTriangle, RefreshCw, Warehouse,
-  Ruler, Braces, Plug, Truck, HandHelping, Wrench, Fingerprint, Lock
+  Ruler, Braces, Plug, Truck, HandHelping, Wrench, Fingerprint
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import { useAuth } from '../context/AuthContext';
@@ -21,6 +21,7 @@ import LotesSection from './inventario/LotesSection';
 import ComodatoSection from './inventario/ComodatoSection';
 import TecnicosSection from './inventario/TecnicosSection';
 import SerialesSection from './inventario/SerialesSection';
+import AccessDeniedAlert from '../components/AccessDeniedAlert';
 
 const Inventario = () => {
   const { productos, categorias, setCategorias } = useInventario();
@@ -119,17 +120,7 @@ const Inventario = () => {
 
   // 🛡️ Muro de seguridad global para el módulo
   if (!permisos.view) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4 animate-in fade-in duration-300">
-        <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-200 max-w-md">
-          <div className="h-20 w-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
-            <Lock size={40} className="text-slate-400" />
-          </div>
-          <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">Acceso Restringido</h2>
-          <p className="text-slate-500 font-medium mt-2">Tu perfil de usuario no tiene autorización para gestionar el inventario.</p>
-        </div>
-      </div>
-    );
+    return <AccessDeniedAlert modulo="el inventario" />;
   }
 
   return (

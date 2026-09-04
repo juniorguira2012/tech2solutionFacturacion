@@ -63,11 +63,13 @@ export const Layout = ({ children }) => {
 
       const rolesConfig = JSON.parse(savedRoles);
       const configDelRol = rolesConfig[usuario.rol];
+      const modules = configDelRol?.modules || configDelRol;
 
       // Verificamos si existe el rol y si el módulo NO es 'none'
       // Si es 'view' o 'full', debe devolver TRUE para mostrar el botón
-      if (configDelRol && configDelRol.modules) {
-        return configDelRol.modules[moduloId] !== 'none';
+      if (modules) {
+        const modulePermission = modules[moduloId];
+        return modulePermission !== 'none' && modulePermission?.view !== false;
       }
     } catch (error) {
       console.error("Error leyendo permisos:", error);
@@ -82,7 +84,10 @@ export const Layout = ({ children }) => {
     const savedRoles = localStorage.getItem('posfactura_roles_config');
     if (!savedRoles) return false;
     const rolesConfig = JSON.parse(savedRoles);
-    return rolesConfig[usuario?.rol]?.modules[moduloId] === 'view';
+    const configDelRol = rolesConfig[usuario?.rol];
+    const modules = configDelRol?.modules || configDelRol;
+    const modulePermission = modules?.[moduloId];
+    return modulePermission === 'view' || modulePermission?.view === true && !modulePermission?.create && !modulePermission?.edit && !modulePermission?.delete;
   };
 
   const menuItems = [

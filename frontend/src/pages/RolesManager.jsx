@@ -47,7 +47,7 @@ export const modulos = [
   ];
 
 const RolesManager = () => {
-  const { usuario } = useAuth();
+  const { usuario, recargarPermisos } = useAuth();
   const { recargarRoles } = useUsuarios();
   
   const [rolesConfig, setRolesConfig] = useState({});
@@ -95,7 +95,7 @@ const RolesManager = () => {
         // Esto asegura que la UI (checkboxes) refleje correctamente los permisos del admin.
         // La lógica de `AuthContext` ya maneja la asignación de permisos de forma correcta para el acceso.
         // Esta corrección es puramente para la consistencia visual en esta pantalla.
-        configMap['admin'] = adminPermissions;
+        configMap['admin'] = { modules: adminPermissions, viewScope: 'all' };
         
         setRolesConfig(configMap);
         
@@ -120,6 +120,7 @@ const RolesManager = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('posfactura_token') || ''}`,
           'x-user-id': usuario?.id || '',
           'x-user-role': usuario?.rol || ''
         },
@@ -127,6 +128,8 @@ const RolesManager = () => {
       });
       if (!res.ok) throw new Error("Error al guardar");
       await recargarRoles();
+      localStorage.removeItem('posfactura_roles_config');
+      await recargarPermisos();
       setToast(true);
       setTimeout(() => setToast(false), 3000);
     } catch (error) {

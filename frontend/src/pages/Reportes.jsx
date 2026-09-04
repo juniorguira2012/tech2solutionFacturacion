@@ -583,7 +583,16 @@ const Reportes = () => {
               <Calendar size={14} className="text-slate-900" />
               <DatePicker
                 selectsRange startDate={startDate} endDate={endDate}
-                onChange={(update) => { setStartDate(update[0]); setEndDate(update[1]); }}
+                onChange={(update) => {
+                  if (!Array.isArray(update)) return;
+                  const [nextStartDate, nextEndDate] = update;
+                  if (nextStartDate instanceof Date && !Number.isNaN(nextStartDate.getTime())) {
+                    setStartDate(nextStartDate);
+                  }
+                  if (nextEndDate instanceof Date && !Number.isNaN(nextEndDate.getTime())) {
+                    setEndDate(nextEndDate);
+                  }
+                }}
                 className="outline-none font-black text-[10px] uppercase text-slate-600 cursor-pointer w-36" 
                 dateFormat="dd/MM/yyyy"
               />

@@ -5,7 +5,7 @@ import { readFileSync } from 'fs'
 
 // Leemos el package.json para extraer la versión actual
 const packageJson = JSON.parse(
-  readFileSync(new URL('../package.json', import.meta.url))
+  readFileSync(new URL('./package.json', import.meta.url))
 )
 
 // https://vitejs.dev/config/

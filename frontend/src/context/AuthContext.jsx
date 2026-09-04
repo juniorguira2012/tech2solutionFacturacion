@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }) => {
           adminPermissions[modulo.id] = modulePerms;
         });
         // 🚨 CORRECCIÓN: Devolvemos el objeto de permisos directamente, sin anidarlo en 'modules'.
-        return adminPermissions;
+        return { modules: adminPermissions, viewScope: 'all' };
       }
       
       return null;
@@ -109,7 +109,7 @@ export const AuthProvider = ({ children }) => {
       const user = JSON.parse(userSaved);
       setUsuario(user);
       
-      const config = await cargarPermisos(user.rol, false); // false para usar caché rápido primero
+      const config = await cargarPermisos(user.rol, true); // Siempre validar permisos actuales al iniciar sesión
       setPermisos(config);
     } catch (e) {
       console.error("Error al parsear usuario local:", e);
@@ -148,6 +148,14 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   }, [API_BASE_URL, cargarPermisos]);
+
+  const recargarPermisos = useCallback(async () => {
+    if (!usuario?.rol) return null;
+    localStorage.removeItem('posfactura_roles_config');
+    const config = await cargarPermisos(usuario.rol, true);
+    setPermisos(config);
+    return config;
+  }, [usuario?.rol, cargarPermisos]);
 
   // 💡 NUEVO: Función para limpiar todos los temporizadores
   const clearTimers = () => {
@@ -359,7 +367,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
   
   return (
-    <AuthContext.Provider value={{ usuario, permisos, login, loginWithGoogle, logout, loading, getAuthHeaders, showIdleModal, countdown, stayActive, handleIdleLogout }}>
+    <AuthContext.Provider value={{ usuario, permisos, login, loginWithGoogle, logout, loading, getAuthHeaders, recargarPermisos, showIdleModal, countdown, stayActive, handleIdleLogout }}>
       {!loading && children}
     </AuthContext.Provider>
   );

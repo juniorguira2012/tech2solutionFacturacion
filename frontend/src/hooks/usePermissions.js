@@ -21,8 +21,9 @@ export const usePermissions = (moduleId) => {
 
       const userRoleConfig = rolesConfig[usuario.rol];
 
-      if (userRoleConfig?.modules?.[moduleId]) {
-        const modulePermission = userRoleConfig.modules[moduleId];
+      const modules = userRoleConfig?.modules || userRoleConfig;
+      if (modules?.[moduleId]) {
+        const modulePermission = modules[moduleId];
         
         if (modulePermission === 'full') return { view: true, create: true, edit: true, delete: true };
         if (modulePermission === 'view') return { view: true, create: false, edit: false, delete: false };

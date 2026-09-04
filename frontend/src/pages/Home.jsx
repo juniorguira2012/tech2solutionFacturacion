@@ -22,7 +22,9 @@ const Home = () => {
       if (!savedRoles) return true;
       const rolesConfig = JSON.parse(savedRoles);
       const configDelRol = rolesConfig[usuario.rol];
-      return configDelRol?.modules?.[moduloId] !== 'none';
+      const modules = configDelRol?.modules || configDelRol;
+      const modulePermission = modules?.[moduloId];
+      return modulePermission !== 'none' && modulePermission?.view !== false;
     } catch { return true; }
   };
 
