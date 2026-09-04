@@ -206,7 +206,7 @@ export const Layout = ({ children }) => {
               Tec2Solution © 2026
             </span>
             <span className={`bg-white/10 border border-white/5 px-2.5 py-0.5 rounded-full text-slate-200 font-mono text-[10px]`}>
-              {`v${import.meta.env.VITE_APP_VERSION || '1.9.7'}`}
+              {`v${import.meta.env.VITE_APP_VERSION || 'dev'}`}
             </span>
           </div>
         </div>
