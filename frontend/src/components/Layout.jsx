@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock, Menu, Bell, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Settings, BarChart3, ShoppingCart, Box, Users, LayoutDashboard, LogOut, UserCircle, X, Check, Lock, Menu, Bell, ChevronsLeft, ChevronsRight, Cable } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useInventario } from '../context/InventarioContext';
 import NotificationDropdown from './NotificationDropdown';
@@ -26,7 +26,7 @@ export const Layout = ({ children }) => {
   useEffect(() => {
     if (notificationCount > 0 && !hasAlertedRef.current) {
       const playNotification = () => {
-        const audio = new Audio('../../public/notificacion.mp3'); // Asegúrate de poner este archivo en la carpeta /public
+        const audio = new Audio('/notificacion.mp3');
         audio.play().catch(error => {
           console.warn("El navegador bloqueó el auto-play. Se requiere interacción previa del usuario.", error);
         });
@@ -97,6 +97,7 @@ export const Layout = ({ children }) => {
     { name: 'Clientes', path: '/clientes', icon: <Users size={20} />, id: 'clientes' },
     { name: 'Usuarios', path: '/usuarios', icon: <UserCircle size={20} />, id: 'configuracion' }, 
     { name: 'Reportes', path: '/reportes', icon: <BarChart3 size={20} />, id: 'reportes' },
+    { name: 'Proyectos', path: '/proyectos', icon: <Cable size={20} />, id: 'proyectos' },
   ];
   
   return (
@@ -249,8 +250,16 @@ export const Layout = ({ children }) => {
 
             {/* Menú Desplegable de Notificaciones */}
             {showNotifications && (
-              <NotificationDropdown 
-                onClose={() => setShowNotifications(false)} 
+              <NotificationDropdown
+                isOpen={showNotifications}
+                onClose={() => setShowNotifications(false)}
+                onCountChange={setNotificationCount}
+              />
+            )}
+            {!showNotifications && (
+              <NotificationDropdown
+                isOpen={false}
+                onClose={() => setShowNotifications(false)}
                 onCountChange={setNotificationCount}
               />
             )}

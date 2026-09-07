@@ -1,9 +1,10 @@
 // src/app.module.ts
-import { Module } from '@nestjs/common';
+import { Module, Logger } from '@nestjs/common';
 import * as path from 'path';
-import { Logger } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductsModule } from './products/products.module';
@@ -20,15 +21,15 @@ import { UnitsOfMeasureModule } from './units-of-measure/units-of-measure.module
 import { ProductSerialsModule } from './products/product-serials.module';
 import { CategoriesModule } from './categories/categories.module';
 import { DatabaseModule } from './database/database.module'; 
-import { ScheduleModule } from '@nestjs/schedule'; // 🌟 Importado correctamente
-import {InventoryBatchesModule} from './inventory-batches/inventory-batches.module'; // 🌟 Importado correctamente
+import { InventoryBatchesModule } from './inventory-batches/inventory-batches.module';
+import { ProjectsModule } from './projects/projects.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       envFilePath: [
         path.resolve(__dirname, `../../.env.${process.env.NODE_ENV}`),
-            path.resolve(__dirname, '../.env'),
+        path.resolve(__dirname, '../.env'),
         path.resolve(__dirname, '../../.env'),
       ],
       isGlobal: true,
@@ -38,10 +39,15 @@ import {InventoryBatchesModule} from './inventory-batches/inventory-batches.modu
       inject: [ConfigService],
       useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
         const logger = new Logger('TypeOrmModule');
-        const synchronize = configService.get<boolean>('DATABASE_SYNCHRONIZE', false);
+        
+        // Conversión estricta a booleano real
+        const rawSync = configService.get('DATABASE_SYNCHRONIZE');
+        const synchronize = String(rawSync).toLowerCase() === 'true';
+
         if (synchronize) {
           logger.warn('DATABASE_SYNCHRONIZE está habilitado. No usar en producción.');
         }
+
         return {
           type: 'postgres',
           host: configService.get<string>('DATABASE_HOST', 'localhost'),
@@ -55,7 +61,7 @@ import {InventoryBatchesModule} from './inventory-batches/inventory-batches.modu
         };
       },
     }),
-    ScheduleModule.forRoot(), // 🚀 ¡REPARACIÓN! Inicializa el motor de Crons globalmente
+    ScheduleModule.forRoot(),
     ProductsModule,
     InventoryCountsModule,
     MovementsModule,
@@ -71,6 +77,9 @@ import {InventoryBatchesModule} from './inventory-batches/inventory-batches.modu
     CategoriesModule,
     DatabaseModule, 
     InventoryBatchesModule,
+    ProjectsModule,
   ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}

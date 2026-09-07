@@ -21,6 +21,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import RolesManager from './pages/RolesManager';
 import AccessDeniedAlert from './components/AccessDeniedAlert';
+import Proyectos from './pages/Proyectos';
 
 // 💡 FIX: Fallback seguro si la variable no está configurada en .env
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "000000000000-dummyclientid.apps.googleusercontent.com";
@@ -117,6 +118,10 @@ function App() {
                     
                     <Route path="/reportes" element={
                       <PrivateRoute moduloRequerido="reportes"><Reportes /></PrivateRoute>
+                    } />
+
+                    <Route path="/proyectos" element={
+                      <PrivateRoute moduloRequerido="proyectos"><Proyectos /></PrivateRoute>
                     } />
 
                     <Route path="/configuracion" element={

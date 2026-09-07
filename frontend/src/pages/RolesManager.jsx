@@ -28,6 +28,7 @@ export const modulos = [
       ]
     },
     { id: 'clientes', nombre: 'Gestión de Clientes', desc: 'Control sobre la cartera de clientes', actions: ['view', 'create', 'edit', 'delete'] },
+    { id: 'proyectos', nombre: 'Proyectos de Fibra', desc: 'Presupuesto, inversión y avance de fibra óptica', actions: ['view', 'create', 'edit', 'delete'] },
     { 
       id: 'reportes', 
       nombre: 'Reportes y Analíticas', 

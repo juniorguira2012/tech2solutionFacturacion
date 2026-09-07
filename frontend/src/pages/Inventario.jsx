@@ -21,7 +21,7 @@ import LotesSection from './inventario/LotesSection';
 import ComodatoSection from './inventario/ComodatoSection';
 import TecnicosSection from './inventario/TecnicosSection';
 import SerialesSection from './inventario/SerialesSection';
-import AccessDeniedAlert from '../components/AccessDeniedAlert';
+import AccessDeniedAlert from '../components/AccessDeniedAlert'; 
 
 const Inventario = () => {
   const { productos, categorias, setCategorias } = useInventario();

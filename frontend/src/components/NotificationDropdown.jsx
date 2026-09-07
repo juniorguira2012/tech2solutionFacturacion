@@ -4,12 +4,20 @@ import { useInventario } from '../context/InventarioContext';
 import { useAuth } from '../context/AuthContext';
 import { UserCircle, Package, ArrowLeftRight, KeyRound, Check, Trash2 } from 'lucide-react';
 
-const NotificationDropdown = ({ onClose, onCountChange }) => {
+const NotificationDropdown = ({ onClose, onCountChange, isOpen }) => {
   const navigate = useNavigate();
-  const { prestamos, productos, movimientos } = useInventario();
+  const { prestamos, productos, movimientos, cargarMovimientos } = useInventario();
   
   // 1. Primero obtenemos los datos del contexto
   const { usuario, getAuthHeaders } = useAuth(); 
+
+  useEffect(() => {
+    if (!usuario) return undefined;
+
+    cargarMovimientos();
+    const intervalId = window.setInterval(cargarMovimientos, 30000);
+    return () => window.clearInterval(intervalId);
+  }, [usuario, cargarMovimientos]);
 
   // 2. Inicializamos los estados del componente
   const [fadingOut, setFadingOut] = useState(new Set());
@@ -26,8 +34,14 @@ const NotificationDropdown = ({ onClose, onCountChange }) => {
   const dismissNotification = (type, id) => {
     const notificationId = `${type}-${id}`;
     setFadingOut(prev => new Set(prev).add(notificationId));
+
+    setDismissedNotifications(prev => {
+      const next = new Set(prev).add(notificationId);
+      localStorage.setItem('posfactura_dismissed_notifications', JSON.stringify([...next]));
+      return next;
+    });
+
     setTimeout(() => {
-      setDismissedNotifications(prev => new Set(prev).add(notificationId));
       setFadingOut(prev => { 
         const newSet = new Set(prev); 
         newSet.delete(notificationId); 
@@ -53,7 +67,7 @@ const NotificationDropdown = ({ onClose, onCountChange }) => {
   }, [productos, dismissedNotifications]);
 
   const movimientosRecientes = useMemo(() => {
-    return movimientos.filter(m => !dismissedNotifications.has(`movimiento-${m.id}`)).slice(0, 5);
+    return movimientos.filter(m => !dismissedNotifications.has(`movimiento-${m.id}`));
   }, [movimientos, dismissedNotifications]);
 
   // --- CÁLCULO DEL TOTAL Y COMUNICACIÓN AL PADRE ---
@@ -73,12 +87,15 @@ const NotificationDropdown = ({ onClose, onCountChange }) => {
       ...movimientosRecientes.map(i => `movimiento-${i.id}`)
     ];
     setDismissedNotifications(new Set(allIds));
+    localStorage.setItem('posfactura_dismissed_notifications', JSON.stringify(allIds));
   };
 
   const handleNavigation = (path, state) => {
     navigate(path, { state });
     onClose(); // Cierra el dropdown después de navegar
   };
+
+  if (!isOpen) return null;
 
   return (
     <>
