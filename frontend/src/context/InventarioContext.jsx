@@ -233,9 +233,27 @@ export const InventarioProvider = ({ children }) => {
       if (params.toString()) url += `?${params.toString()}`;
 
       const res = await fetch(url, { headers: getAuthHeaders() });
-      if (!res.ok) throw new Error('Error al cargar movimientos');
-      const data = await res.json();
-      setMovimientos(data);
+      const responseText = await res.text();
+      let data = null;
+
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        throw new Error(`Respuesta no válida del servidor (${res.status})`);
+      }
+
+      if (!res.ok) {
+        const message = Array.isArray(data?.message)
+          ? data.message.join(', ')
+          : data?.message;
+        throw new Error(message || `Error al cargar movimientos (${res.status})`);
+      }
+
+      if (!Array.isArray(data) && !Array.isArray(data?.data)) {
+        throw new Error('El servidor no devolvió una lista de movimientos');
+      }
+
+      setMovimientos(Array.isArray(data) ? data : data.data);
     } catch (err) {
       console.error("Error Kardex:", err);
     }
@@ -248,7 +266,8 @@ export const InventarioProvider = ({ children }) => {
       const res = await fetch(`${API_BASE_URL}/product-serials`, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Error al cargar los seriales de productos');
       const data = await res.json();
-      setSeriales(Array.isArray(data) ? data : []);
+      const listaSeriales = Array.isArray(data) ? data : data?.data;
+      setSeriales(Array.isArray(listaSeriales) ? listaSeriales : []);
     } catch (err) {
       console.error("Error cargando seriales:", err);
       setSeriales([]); // Aseguramos que sea un array vacío en caso de error
@@ -288,7 +307,10 @@ export const InventarioProvider = ({ children }) => {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || 'Error al actualizar el serial');
+        const message = Array.isArray(data.message)
+          ? data.message.join(', ')
+          : data.message;
+        throw new Error(message || 'Error al actualizar el serial');
       }
 
       // Actualizamos el estado global de productos para reflejar el cambio
@@ -753,7 +775,10 @@ const registrarMovimientosMasivos = async (payload) => {
     if (!res.ok) {
       // Si el backend responde con un error, extraemos el mensaje
       const errorData = await res.json();
-      throw new Error(errorData.message || 'Error al actualizar el producto');
+      const message = Array.isArray(errorData.message)
+        ? errorData.message.join(', ')
+        : errorData.message;
+      throw new Error(message || 'Error al actualizar el producto');
     }
 
     const data = await res.json();

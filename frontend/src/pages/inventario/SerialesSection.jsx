@@ -208,7 +208,7 @@ const serialesFiltrados = useMemo(() => {
                   )}
                 </td>
                 <td className="px-6 py-3 font-medium text-slate-600 uppercase">
-                  {serial.almacen?.nombre || 'S/N'}
+                  {serial.almacen || 'S/N'}
                 </td>
                 <td className="px-6 py-3 font-medium text-slate-600 uppercase">
                   {serial.technician ? `${serial.technician.nombre} ${serial.technician.apellido || ''}` : 'NO ASIGNADO'}

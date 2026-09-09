@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { Movement } from '../movements/entities/movement.entity';
 import { ProductSerial, SerialStatus } from './entities/product-serial.entity';
 import { Product } from './entities/product.entity';
 import { UpdateProductSerialDto } from './dto/update-product-serial.dto';
@@ -12,14 +13,67 @@ export class ProductSerialsService {
     private readonly serialRepository: Repository<ProductSerial>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(Movement)
+    private readonly movementRepository: Repository<Movement>,
     private readonly dataSource: DataSource,
   ) {}
 
-  findAll() {
-    return this.serialRepository.find({
-      relations: ['producto'],
+  private async addTechniciansToSerials(serials: ProductSerial[]) {
+    if (serials.length === 0) return serials;
+
+    const movements = await this.movementRepository.find({
+      where: [
+        { tipo: 'ASIGNACION_TECNICO' },
+        { tipo: 'DEVOLUCION_TECNICO' },
+      ],
+      relations: ['technician'],
       order: { createdAt: 'DESC' },
     });
+    const latestMovementBySerial = new Map<string, Movement>();
+
+    for (const movement of movements) {
+      for (const serialNumber of movement.serials || []) {
+        if (!latestMovementBySerial.has(serialNumber)) {
+          latestMovementBySerial.set(serialNumber, movement);
+        }
+      }
+    }
+
+    return serials.map(serial => {
+      const latestMovement = latestMovementBySerial.get(serial.serialNumber);
+      return {
+        ...serial,
+        technician:
+          latestMovement?.tipo === 'ASIGNACION_TECNICO'
+            ? latestMovement.technician || null
+            : null,
+      };
+    });
+  }
+
+  async findAll(query?: { page?: number; limit?: number }) {
+    // Si el Frontend no pide paginación explícita, devuelve un Array plano (máximo 50)
+    if (!query?.page && !query?.limit) {
+      const serials = await this.serialRepository.find({
+        relations: ['producto'],
+        order: { createdAt: 'DESC' },
+        take: 50, // Límite de seguridad para cuidar la RAM
+      });
+      return this.addTechniciansToSerials(serials);
+    }
+
+    // Si se solicita paginación, devuelve el objeto estructurado
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+
+    const [data, total] = await this.serialRepository.findAndCount({
+      relations: ['producto'],
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: (page - 1) * limit,
+    });
+
+    return { data: await this.addTechniciansToSerials(data), meta: { total, page, limit } };
   }
 
   async findOne(id: number) {
@@ -33,12 +87,15 @@ export class ProductSerialsService {
     return serial;
   }
 
-  async findByProductId(productId: number) {
-    return this.serialRepository.find({
+  // ✅ AGREGADO LÍMITE DE SEGURIDAD PARA CONSULTAS POR PRODUCTO
+  async findByProductId(productId: number, limit: number = 50) {
+    const serials = await this.serialRepository.find({
       where: { productoId: productId },
       relations: ['producto'],
       order: { createdAt: 'DESC' },
+      take: limit,
     });
+    return this.addTechniciansToSerials(serials);
   }
 
   async updateSerialNumber(id: number, updateDto: UpdateProductSerialDto) {
@@ -61,15 +118,22 @@ export class ProductSerialsService {
         throw new BadRequestException(`No se puede modificar el serial. Su estado es '${serial.status}'.`);
       }
 
-      const existingSerial = await queryRunner.manager.findOne(ProductSerial, {
-        where: { serialNumber: newSerialNumber, productoId: serial.productoId },
-      });
+      const existingSerial = await queryRunner.manager
+        .getRepository(ProductSerial)
+        .createQueryBuilder('serial')
+        .where('UPPER(TRIM(serial.serialNumber)) = UPPER(TRIM(:serialNumber))', {
+          serialNumber: newSerialNumber,
+        })
+        .andWhere('serial.id != :id', { id })
+        .getOne();
 
-      if (existingSerial && existingSerial.id !== id) {
-        throw new BadRequestException(`El serial '${newSerialNumber}' ya existe para este producto.`);
+      if (existingSerial) {
+        throw new BadRequestException(
+          `El serial '${newSerialNumber}' ya existe en la base de datos y no se puede repetir.`,
+        );
       }
 
-      serial.serialNumber = newSerialNumber;
+      serial.serialNumber = newSerialNumber.toUpperCase();
       const updatedSerial = await queryRunner.manager.save(ProductSerial, serial);
 
       await queryRunner.commitTransaction();
@@ -100,13 +164,11 @@ export class ProductSerialsService {
       serial.status = status;
       const serialActualizado = await queryRunner.manager.save(ProductSerial, serial);
 
-      // --- INICIO: Lógica de sincronización de stock ---
       const nuevoStockDisponible = await queryRunner.manager.count(ProductSerial, {
         where: { productoId: serial.productoId, status: SerialStatus.DISPONIBLE },
       });
 
       await queryRunner.manager.update(Product, serial.productoId, { stock: nuevoStockDisponible });
-      // --- FIN: Lógica de sincronización ---
 
       await queryRunner.commitTransaction();
       return serialActualizado;

@@ -15,6 +15,7 @@ export const Layout = ({ children }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const { usuario, logout } = useAuth();
   const hasAlertedRef = useRef(false);
+  const notificationAudioRef = useRef(null);
   const [notificationCount, setNotificationCount] = useState(0);
 
   // Guarda el estado del menú en localStorage cada vez que cambia.
@@ -25,18 +26,25 @@ export const Layout = ({ children }) => {
   // Lógica para la alerta sonora
   useEffect(() => {
     if (notificationCount > 0 && !hasAlertedRef.current) {
-      const playNotification = () => {
-        const audio = new Audio('/notificacion.mp3');
-        audio.play().catch(error => {
-          console.warn("El navegador bloqueó el auto-play. Se requiere interacción previa del usuario.", error);
-        });
-        hasAlertedRef.current = true;
-      };
-      playNotification();
+      const audio = notificationAudioRef.current || new Audio('/notificacion.mp3');
+      notificationAudioRef.current = audio;
+      audio.currentTime = 0;
+      audio.play().catch(() => {
+        console.warn("El navegador bloqueó el auto-play. Se requiere interacción previa del usuario.");
+      });
+      hasAlertedRef.current = true;
     }
     if (notificationCount === 0) {
       hasAlertedRef.current = false;
     }
+
+    return () => {
+      const audio = notificationAudioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    };
   }, [notificationCount]);
   const navigate = useNavigate();
 

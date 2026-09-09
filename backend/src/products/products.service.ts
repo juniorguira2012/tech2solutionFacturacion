@@ -41,12 +41,35 @@ export class ProductsService {
         almacen: productData.almacen || 'Principal',
         nota: nota, // <-- Añadimos la nota al objeto del producto
       };
+
+      const serie = datosConAlmacen.serie?.trim();
+      if (!datosConAlmacen.isSerialized && serie) {
+        const productoConSerie = await queryRunner.manager
+          .getRepository(Product)
+          .createQueryBuilder('producto')
+          .where('UPPER(TRIM(producto.serie)) = UPPER(TRIM(:serie))', { serie })
+          .getOne();
+
+        if (productoConSerie) {
+          throw new BadRequestException(
+            `La serie '${serie}' ya está registrada en otro producto y no se puede repetir.`,
+          );
+        }
+      }
+
+      if (serie) {
+        datosConAlmacen.serie = serie.toUpperCase();
+      }
       const nuevoProducto = queryRunner.manager.create(Product, datosConAlmacen);
 
 
       if (nuevoProducto.isSerialized && serials && serials.length > 0) {
+        const serialesNormalizados = serials
+          .map(serial => String(serial).trim())
+          .filter(Boolean);
+        const uniqueSerials = [...new Set(serialesNormalizados.map(serial => serial.toUpperCase()))];
+
         // Validar duplicados dentro de la misma lista antes de crear
-        const uniqueSerials = [...new Set(serials)];
         if (uniqueSerials.length !== serials.length) {
           throw new BadRequestException('La lista contiene números de serie duplicados.');
         }
@@ -55,7 +78,7 @@ export class ProductsService {
         const serialesExistentes = await queryRunner.manager
           .getRepository(ProductSerial)
           .createQueryBuilder('serial')
-          .where('serial.serialNumber IN (:...serials)', { serials: uniqueSerials })
+          .where('UPPER(TRIM(serial.serialNumber)) IN (:...serials)', { serials: uniqueSerials })
           .getMany();
 
         if (serialesExistentes.length > 0) {
@@ -128,6 +151,27 @@ export class ProductsService {
         throw new NotFoundException(`Producto con ID ${id} no encontrado.`);
       }
 
+      const serie = productData.serie?.trim();
+      const isSerializedFinal = productData.isSerialized ?? producto.isSerialized;
+      if (!isSerializedFinal && serie) {
+        const productoConSerie = await queryRunner.manager
+          .getRepository(Product)
+          .createQueryBuilder('producto')
+          .where('UPPER(TRIM(producto.serie)) = UPPER(TRIM(:serie))', { serie })
+          .andWhere('producto.id != :id', { id })
+          .getOne();
+
+        if (productoConSerie) {
+          throw new BadRequestException(
+            `La serie '${serie}' ya está registrada en otro producto y no se puede repetir.`,
+          );
+        }
+      }
+
+      if (serie) {
+        productData.serie = serie.toUpperCase();
+      }
+
       const almacenOriginal = producto.almacen;
       const almacenNuevo = productData.almacen;
       const cambioDeAlmacen = almacenNuevo && almacenOriginal !== almacenNuevo;
@@ -143,17 +187,19 @@ export class ProductsService {
       if (producto.isSerialized) {
         const serialesActuales = producto.seriales || [];
         const serialesNuevos = serials ?? [];
-        const serialesNuevosStr = [...new Set(serialesNuevos.map(s => String(s).trim()).filter(Boolean))];
+        const serialesNuevosStr = [...new Set(serialesNuevos
+          .map(s => String(s).trim().toUpperCase())
+          .filter(Boolean))];
 
         if (serials && serialesNuevosStr.length !== serials.length) {
           throw new BadRequestException('La lista de seriales contiene duplicados.');
         }
 
-        const serialesActualesStr = serialesActuales.map(s => s.serialNumber);
+        const serialesActualesStr = serialesActuales.map(s => s.serialNumber.trim().toUpperCase());
 
         // 1. Identificar seriales a eliminar
         const serialesAEliminar = serialesActuales.filter(
-          s => !serialesNuevosStr.includes(s.serialNumber),
+          s => !serialesNuevosStr.includes(s.serialNumber.trim().toUpperCase()),
         );
 
         for (const serial of serialesAEliminar) {
@@ -185,7 +231,7 @@ export class ProductsService {
           const serialesExistentesEnDB = await queryRunner.manager
             .getRepository(ProductSerial)
             .createQueryBuilder('serial')
-            .where('serial.serialNumber IN (:...serials)', { serials: numerosDeSerialesACrear })
+            .where('UPPER(TRIM(serial.serialNumber)) IN (:...serials)', { serials: numerosDeSerialesACrear })
             .getMany();
           if (serialesExistentesEnDB.length > 0) {
             throw new BadRequestException(`No se puede añadir, los seriales ya existen: ${serialesExistentesEnDB.map(s => s.serialNumber).join(', ')}`);

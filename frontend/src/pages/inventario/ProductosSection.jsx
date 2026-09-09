@@ -152,6 +152,7 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // �
       stockMinimo: prod.stockMinimo ?? '5', // <-- Cargamos el valor existente o un default
       codigo: prod.codigo || '',
       modelo: prod.modelo || '',
+      serie: prod.serie || '',
       almacen: prod.almacen || 'Principal',
       pasillo: prod.pasillo || '',
       fila: prod.fila || '',
@@ -311,6 +312,25 @@ const handleSave = async (e) => {
     }
   }
 
+  // Las series de productos no serializados también deben ser únicas.
+  if (!formData.isSerialized && formData.serie?.trim()) {
+    const serieNormalizada = formData.serie.trim().toUpperCase();
+    const productoConSerie = productos.find(p =>
+      !p.isSerialized &&
+      p.serie?.trim().toUpperCase() === serieNormalizada &&
+      (!isEditing || p.id !== Number(formData.id)),
+    );
+
+    if (productoConSerie) {
+      setIsSaving(false);
+      mostrarToast?.(
+        `La serie "${formData.serie.trim()}" ya está registrada por: ${productoConSerie.nombre}`,
+        'warning',
+      );
+      return;
+    }
+  }
+
   // 1. Limpieza estricta de metadatos del frontend para evitar errores de NestJS/ValidationPipe
   const { 
     createdAt, 
@@ -329,34 +349,43 @@ const handleSave = async (e) => {
       .split(/[\n,]+/)
       .map(s => s.trim().toUpperCase())
       .filter(Boolean);
+    const serialesExistentesNormalizados = serialesExistentes
+      .map(s => String(s.serialNumber || '').trim().toUpperCase())
+      .filter(Boolean);
 
     // --- VALIDACIÓN DE SERIALES DUPLICADOS ---
-    if (serialesDelInput.length > 0) {
-      // 1. Validar duplicados en la misma lista que se está ingresando
-      if (new Set(serialesDelInput).size !== serialesDelInput.length) {
-        mostrarToast?.('La lista que estás ingresando contiene seriales repetidos.', 'error');
-        setIsSaving(false);
-        return;
-      }
+    const listaSerialesNormalizada = isEditing
+      ? [...serialesExistentesNormalizados, ...serialesDelInput]
+      : serialesDelInput;
+    const serialesUnicos = [...new Set(listaSerialesNormalizada)];
 
-      // 2. Validar contra la base de datos global
-      const serialesGlobales = new Set(seriales.map(s => s.serialNumber));
-      for (const serial of serialesDelInput) {
-        // Si el serial ya existe en el sistema Y no pertenece a este mismo producto (en modo edición)
-        const esPropio = isEditing && serialesExistentes.some(s => s.serialNumber === serial);
-        if (serialesGlobales.has(serial) && !esPropio) {
-          mostrarToast?.(`El serial "${serial}" ya está registrado en el sistema.`, 'error');
-          setIsSaving(false);
-          return;
-        }
-      }
+    if (serialesUnicos.length !== listaSerialesNormalizada.length) {
+      const serialRepetido = listaSerialesNormalizada.find(
+        (serial, index) => listaSerialesNormalizada.indexOf(serial) !== index,
+      );
+      mostrarToast?.(`El serial "${serialRepetido}" está repetido.`, 'error');
+      setIsSaving(false);
+      return;
+    }
+
+    // Validar contra todos los seriales existentes en la base de datos.
+    const serialesGlobales = new Set(
+      seriales.map(s => String(s.serialNumber || '').trim().toUpperCase()),
+    );
+    const serialesPropios = new Set(serialesExistentesNormalizados);
+    const serialRepetidoEnBD = serialesDelInput.find(
+      serial => serialesGlobales.has(serial) && !serialesPropios.has(serial),
+    );
+    if (serialRepetidoEnBD) {
+      mostrarToast?.(`El serial "${serialRepetidoEnBD}" ya está registrado en el sistema.`, 'error');
+      setIsSaving(false);
+      return;
     }
 
     if (isEditing) {
-      const serialesExistentesStr = serialesExistentes.map(s => s.serialNumber);
-      listaSeriales = [...new Set([...serialesExistentesStr, ...serialesDelInput])];
+      listaSeriales = serialesUnicos;
     } else {
-      listaSeriales = serialesDelInput.length > 0 ? serialesDelInput : [];
+      listaSeriales = serialesUnicos;
     }
   }
 

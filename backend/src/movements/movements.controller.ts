@@ -67,12 +67,22 @@ export class MovementsController {
   }
 
   @Get()
-  findAll(@Query('productoId') productoId?: string) {
-    if (productoId) {
-      return this.movementsService.findByProductId(Number(productoId));
+    findAll(
+      @Query('page') page?: string,
+      @Query('limit') limit?: string,
+      @Query('usuarioId') usuarioId?: string,
+      @Query('productoId') productoId?: string,
+    ) {
+      if (productoId) {
+        return this.movementsService.findByProductId(Number(productoId));
+      }
+
+      return this.movementsService.findAll({
+        page: page ? Number(page) : 1,
+        limit: limit ? Number(limit) : 20,
+        usuarioId,
+      });
     }
-    return this.movementsService.findAll();
-  }
 
   @Get('product/:id')
   findByProduct(@Param('id', ParseIntPipe) id: number) {

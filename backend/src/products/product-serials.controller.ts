@@ -1,4 +1,13 @@
-import { Controller, Get, Param, ParseIntPipe, Patch, Body, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Body,
+  Query, // ✅ Importado correctamente
+  BadRequestException,
+} from '@nestjs/common';
 import { ProductSerialsService } from './product-serials.service';
 import { UpdateProductSerialDto } from './dto/update-product-serial.dto';
 
@@ -7,8 +16,18 @@ export class ProductSerialsController {
   constructor(private readonly serialsService: ProductSerialsService) {}
 
   @Get()
-  findAll() {
-    return this.serialsService.findAll();
+  findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.serialsService.findAll(
+      page || limit
+        ? {
+            page: page ? Number(page) : 1,
+            limit: limit ? Number(limit) : 20,
+          }
+        : undefined,
+    );
   }
 
   @Get(':id')
@@ -16,13 +35,12 @@ export class ProductSerialsController {
     return this.serialsService.findOne(id);
   }
 
-  @Get('/product/:productId')
+  @Get('product/:productId')
   findByProductId(@Param('productId', ParseIntPipe) productId: number) {
     return this.serialsService.findByProductId(productId);
   }
 
   @Patch(':id')
-  // @UseGuards(InventoryWriteGuard) // Opcional: Proteger con el guard de escritura
   updateSerialNumber(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: UpdateProductSerialDto,

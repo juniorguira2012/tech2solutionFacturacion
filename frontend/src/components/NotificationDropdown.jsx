@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useInventario } from '../context/InventarioContext';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +9,7 @@ const NotificationDropdown = ({ onClose, onCountChange, isOpen }) => {
   const { prestamos, productos, movimientos, cargarMovimientos } = useInventario();
   
   // 1. Primero obtenemos los datos del contexto
-  const { usuario, getAuthHeaders } = useAuth(); 
+  const { usuario } = useAuth();
 
   useEffect(() => {
     if (!usuario) return undefined;
@@ -50,10 +50,13 @@ const NotificationDropdown = ({ onClose, onCountChange, isOpen }) => {
     }, 300);
   };
 
+  // ✅ FILTROS PROTEGIDOS CONTRA OBJETOS Y UNDEFINED
   const comodatosVencidos = useMemo(() => {
+    const lista = Array.isArray(prestamos) ? prestamos : (prestamos?.data || []);
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-    return prestamos.filter(item => !dismissedNotifications.has(`comodato-${item.id}`) && (() => {
+
+    return lista.filter(item => !dismissedNotifications.has(`comodato-${item.id}`) && (() => {
       if (item.estado !== 'activo' || !item.fechaLimite) return false;
       const limite = new Date(item.fechaLimite);
       const limiteAjustado = new Date(limite.getFullYear(), limite.getMonth(), limite.getDate());
@@ -63,11 +66,15 @@ const NotificationDropdown = ({ onClose, onCountChange, isOpen }) => {
   }, [prestamos, dismissedNotifications]);
 
   const productosBajoStock = useMemo(() => {
-    return productos.filter(p => !dismissedNotifications.has(`producto-${p.id}`) && p.isActive !== false && Number(p.stock) <= Number(p.stockMinimo ?? 5));
+    const lista = Array.isArray(productos) ? productos : (productos?.data || []);
+
+    return lista.filter(p => !dismissedNotifications.has(`producto-${p.id}`) && p.isActive !== false && Number(p.stock) <= Number(p.stockMinimo ?? 5));
   }, [productos, dismissedNotifications]);
 
   const movimientosRecientes = useMemo(() => {
-    return movimientos.filter(m => !dismissedNotifications.has(`movimiento-${m.id}`));
+    const lista = Array.isArray(movimientos) ? movimientos : (movimientos?.data || []);
+
+    return lista.filter(m => !dismissedNotifications.has(`movimiento-${m.id}`));
   }, [movimientos, dismissedNotifications]);
 
   // --- CÁLCULO DEL TOTAL Y COMUNICACIÓN AL PADRE ---
@@ -76,7 +83,6 @@ const NotificationDropdown = ({ onClose, onCountChange, isOpen }) => {
   }, [comodatosVencidos, productosBajoStock, movimientosRecientes]);
   
   useEffect(() => {
-    // 🚀 MEJORA: Comunicamos el total de notificaciones al componente padre (Layout).
     onCountChange(totalNotificacionesVisibles);
   }, [totalNotificacionesVisibles, onCountChange]);
   
@@ -92,7 +98,7 @@ const NotificationDropdown = ({ onClose, onCountChange, isOpen }) => {
 
   const handleNavigation = (path, state) => {
     navigate(path, { state });
-    onClose(); // Cierra el dropdown después de navegar
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -205,7 +211,7 @@ const NotificationDropdown = ({ onClose, onCountChange, isOpen }) => {
               >
                 <div className="flex items-center gap-3">
                   <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
-                    mov.tipo.includes('RECIBIR') ? 'bg-emerald-50 text-emerald-600' : 'bg-sky-50 text-sky-600'
+                    mov.tipo?.includes('RECIBIR') ? 'bg-emerald-50 text-emerald-600' : 'bg-sky-50 text-sky-600'
                   }`}>
                     <ArrowLeftRight size={16} />
                   </div>

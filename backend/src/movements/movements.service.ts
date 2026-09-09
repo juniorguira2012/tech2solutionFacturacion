@@ -729,24 +729,49 @@ export class MovementsService {
     }
   }
 
-  async findAll(usuarioId?: string) {
+  async findAll(query?: { page?: number; limit?: number; usuarioId?: string }) {
+    // Si el Frontend no pide paginación explícita, devuelve un Array plano (máximo 50)
+    if (!query?.page && !query?.limit) {
+      const queryOptions: any = {
+        relations: ['producto', 'technician', 'usuario'],
+        order: { createdAt: 'DESC' },
+        take: 50, // Límite de seguridad
+      };
+
+      if (query?.usuarioId) {
+        queryOptions.where = { usuarioId: query.usuarioId };
+      }
+
+      return await this.movementRepository.find(queryOptions);
+    }
+
+    // Si se solicita paginación, devuelve el objeto estructurado
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
+    const skip = (page - 1) * limit;
+
     const queryOptions: any = {
       relations: ['producto', 'technician', 'usuario'],
       order: { createdAt: 'DESC' },
+      take: limit,
+      skip: skip,
     };
 
-    if (usuarioId) {
-      queryOptions.where = { usuarioId: usuarioId };
+    if (query?.usuarioId) {
+      queryOptions.where = { usuarioId: query.usuarioId };
     }
 
-    return await this.movementRepository.find(queryOptions);
+    const [data, total] = await this.movementRepository.findAndCount(queryOptions);
+
+    return { data, meta: { total, page, limit } };
   }
 
-  async findByProductId(productoId: number) {
+  async findByProductId(productoId: number, limit: number = 50) {
     return await this.movementRepository.find({
       where: { productoId },
       relations: ['producto', 'technician', 'usuario'],
       order: { createdAt: 'DESC' },
+      take: limit, // Limita los últimos N movimientos del producto
     });
   }
 
