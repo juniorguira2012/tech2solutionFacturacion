@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Tag, Edit, ChevronLeft, ChevronRight, History, X, Package, User, Warehouse } from 'lucide-react';
+import { Search, Tag, Edit, Trash2, ChevronLeft, ChevronRight, History, X, Package, User, Warehouse } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 
 const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimos los permisos
-  const { seriales, tecnicos, cargarSeriales, usuario, actualizarEstadoSerial, obtenerHistorialSerial } = useInventario();
+  const { seriales, tecnicos, cargarSeriales, usuario, actualizarEstadoSerial, eliminarSerial, obtenerHistorialSerial } = useInventario();
   const [busqueda, setBusqueda] = useState('');
   const [editingStatusId, setEditingStatusId] = useState(null);
   const [filtroTecnicoId, setFiltroTecnicoId] = useState(null);
@@ -18,6 +18,8 @@ const SerialesSection = ({ mostrarToast, permisos }) => { // 🛡️ 1. Recibimo
   // --- Estados para la paginación ---
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15);
+
+  const esAdmin = String(usuario?.rol?.nombre || usuario?.rol || usuario?.role || '').toLowerCase() === 'admin';
 
  useEffect(() => {
   cargarSeriales();
@@ -86,6 +88,22 @@ const serialesFiltrados = useMemo(() => {
     } finally {
       setEditingStatusId(null); // Cierra el dropdown
       setLoading(false);
+    }
+  };
+
+  const handleDeleteSerial = async (serial) => {
+    if (!esAdmin) {
+      mostrarToast?.('Solo un administrador puede eliminar seriales.', 'error');
+      return;
+    }
+
+    if (!window.confirm(`¿Eliminar definitivamente el serial "${serial.serialNumber}"?`)) return;
+
+    try {
+      await eliminarSerial(serial.id);
+      mostrarToast?.(`Serial "${serial.serialNumber}" eliminado correctamente.`, 'success');
+    } catch (error) {
+      mostrarToast?.(error.message || 'No se pudo eliminar el serial.', 'error');
     }
   };
 
@@ -217,7 +235,16 @@ const serialesFiltrados = useMemo(() => {
                   {serial.createdAt ? new Date(serial.createdAt).toLocaleDateString() : '-'}
                 </td>
                 <td className="px-6 py-3 text-right">
-                  {/* Acciones adicionales si las tienes */}
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSerial(serial)}
+                      className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar serial definitivamente"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

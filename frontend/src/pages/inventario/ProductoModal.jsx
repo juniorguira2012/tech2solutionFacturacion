@@ -18,6 +18,7 @@ const ProductoModal = ({
   handleUpdateSerial,
   mostrarToast,
   handleDeleteSerial, // <-- 1. Recibimos la nueva función para eliminar
+  canDeleteSerial = false,
 }) => {
   if (!isOpen) return null;
 
@@ -272,7 +273,7 @@ const ProductoModal = ({
                             </td>
                             <td className="px-4 py-2 font-bold text-slate-500 uppercase text-[9px]">{serial.almacen}</td>
                             <td className="px-4 py-2 text-right">
-                              {serial.status === 'disponible' && (
+                              {serial.status === 'disponible' && canDeleteSerial && (
                                 <button
                                   type="button"
                                   onClick={() => {

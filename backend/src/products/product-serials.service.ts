@@ -179,4 +179,43 @@ export class ProductSerialsService {
       await queryRunner.release();
     }
   }
+
+  async remove(id: number) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const serial = await queryRunner.manager.findOne(ProductSerial, {
+        where: { id },
+      });
+
+      if (!serial) {
+        throw new NotFoundException(`Serial con ID ${id} no encontrado.`);
+      }
+
+      if (serial.status !== SerialStatus.DISPONIBLE) {
+        throw new BadRequestException(
+          `No se puede eliminar el serial porque su estado es '${serial.status}'.`,
+        );
+      }
+
+      await queryRunner.manager.remove(ProductSerial, serial);
+
+      const stockDisponible = await queryRunner.manager.count(ProductSerial, {
+        where: { productoId: serial.productoId, status: SerialStatus.DISPONIBLE },
+      });
+      await queryRunner.manager.update(Product, serial.productoId, {
+        stock: stockDisponible,
+      });
+
+      await queryRunner.commitTransaction();
+      return { message: `Serial '${serial.serialNumber}' eliminado correctamente.` };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
 }

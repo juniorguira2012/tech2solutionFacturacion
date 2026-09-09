@@ -5,10 +5,11 @@ import { ProductSerialsService } from './product-serials.service';
 import { ProductSerialsController } from './product-serials.controller';
 import { Movement } from '../movements/entities/movement.entity';
 import { Product } from './entities/product.entity';
+import { AdminOnlyGuard } from './guards/admin-only.guard';
 
 @Module({
   imports: [TypeOrmModule.forFeature([ProductSerial, Product, Movement])],
-  providers: [ProductSerialsService],
+  providers: [ProductSerialsService, AdminOnlyGuard],
   controllers: [ProductSerialsController],
   exports: [ProductSerialsService],
 })

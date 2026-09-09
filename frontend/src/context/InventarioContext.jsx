@@ -323,6 +323,22 @@ export const InventarioProvider = ({ children }) => {
     }
   };
 
+  const eliminarSerial = async (id) => {
+    const res = await fetch(`${API_BASE_URL}/product-serials/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+      throw new Error(message || 'Error al eliminar el serial');
+    }
+
+    setSeriales(prev => prev.filter(serial => serial.id !== id));
+    setRefreshIndex(prev => prev + 1);
+    return data;
+  };
+
   const obtenerHistorialSerial = async (serialNumber) => {
     try {
       const res = await fetch(`${API_BASE_URL}/movements/by-serial/${serialNumber}`, {
@@ -1230,6 +1246,7 @@ return (
     restaurarProducto,           // <-- Exponemos la nueva función
     actualizarProducto,
     actualizarSerial, // <-- Exponemos la nueva función
+    eliminarSerial,
     descontarStock,
     registrarMovimiento,         
     crearTecnico,

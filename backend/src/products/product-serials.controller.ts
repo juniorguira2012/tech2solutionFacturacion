@@ -7,9 +7,12 @@ import {
   Body,
   Query, // ✅ Importado correctamente
   BadRequestException,
+  Delete,
+  UseGuards,
 } from '@nestjs/common';
 import { ProductSerialsService } from './product-serials.service';
 import { UpdateProductSerialDto } from './dto/update-product-serial.dto';
+import { AdminOnlyGuard } from './guards/admin-only.guard';
 
 @Controller('product-serials')
 export class ProductSerialsController {
@@ -57,5 +60,11 @@ export class ProductSerialsController {
       throw new BadRequestException('El campo "status" es requerido para esta operación.');
     }
     return this.serialsService.updateStatus(id, updateDto.status);
+  }
+
+  @Delete(':id')
+  @UseGuards(AdminOnlyGuard)
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.serialsService.remove(id);
   }
 }

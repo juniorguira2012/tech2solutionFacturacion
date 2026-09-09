@@ -73,8 +73,12 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // �
     verEliminados,
     setVerEliminados,
     actualizarSerial, // <-- Importamos la nueva función del contexto
+    eliminarSerial,
   } = useInventario();
   const { usuario } = useAuth();
+  const canDeleteSerial = String(
+    usuario?.rol?.nombre || usuario?.rol || usuario?.role || '',
+  ).toLowerCase() === 'admin';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -183,20 +187,26 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // �
     }
   };
 
-  const handleDeleteSerial = (serialId) => {
+  const handleDeleteSerial = async (serialId) => {
     const serialAEliminar = formData.serialesExistentes.find(s => s.id === serialId);
     if (!serialAEliminar) return;
 
     // Confirmación antes de la acción destructiva
-    const confirmar = window.confirm(`¿Estás seguro de que quieres eliminar el serial "${serialAEliminar.serialNumber}"? Esta acción se guardará al confirmar los cambios del producto.`);
+    const confirmar = window.confirm(`¿Estás seguro de que quieres eliminar el serial "${serialAEliminar.serialNumber}"? Se eliminará inmediatamente de la base de datos.`);
     if (!confirmar) return;
 
-    // Actualizamos el estado del formulario filtrando el serial
-    setFormData(prev => ({
-      ...prev,
-      serialesExistentes: prev.serialesExistentes.filter(s => s.id !== serialId)
-    }));
-    mostrarToast(`Serial "${serialAEliminar.serialNumber}" marcado para eliminación.`, 'info');
+    try {
+      await eliminarSerial(serialId);
+
+      // Solo quitamos el serial del formulario después de borrarlo en la BD.
+      setFormData(prev => ({
+        ...prev,
+        serialesExistentes: prev.serialesExistentes.filter(s => s.id !== serialId),
+      }));
+      mostrarToast(`Serial "${serialAEliminar.serialNumber}" eliminado correctamente.`, 'success');
+    } catch (error) {
+      mostrarToast(error.message || 'No se pudo eliminar el serial.', 'error');
+    }
   };
 
   const openImageViewer = (product) => {
@@ -794,6 +804,7 @@ const handleEliminar = (prod) => {
         handleUpdateSerial={handleUpdateSerial}
         mostrarToast={mostrarToast}
         handleDeleteSerial={handleDeleteSerial}
+        canDeleteSerial={canDeleteSerial}
       />
     </div>
   );
