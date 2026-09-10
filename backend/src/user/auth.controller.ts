@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UnauthorizedException, BadRequestException, Logger, UseGuards, Headers } from '@nestjs/common';
+import { Body, Controller, Post, UnauthorizedException, BadRequestException, UseGuards, Headers } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OAuth2Client } from 'google-auth-library';
 import { UsersService } from '../user/users.service';
@@ -67,14 +67,18 @@ export class AuthController {
   @Post('google-login')
   async googleLogin(@Body('token') token: string) {
     try {
-      // 1. Verificar el token con Google
-      const ticket = await this.googleClient.verifyIdToken({
-        idToken: token,
-        audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
-      });
-      const googlePayload = ticket.getPayload();
+      if (!token) {
+        throw new UnauthorizedException('Token de Google requerido.');
+      }
 
-      if (!googlePayload || !googlePayload.email) {
+      // useGoogleLogin entrega un access_token, no un id_token.
+      const tokenInfo = await this.googleClient.getTokenInfo(token);
+      const googleResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const googlePayload = await googleResponse.json();
+
+      if (!googleResponse.ok || !googlePayload?.email || !tokenInfo) {
         throw new UnauthorizedException('Token de Google inválido o sin email.');
       }
 
@@ -162,14 +166,11 @@ export class AuthController {
       throw new BadRequestException('El correo es requerido');
     }
 
-    try {
-      const token = await this.usersService.generateResetToken(email);
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5174');
-      const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${token}`;
-      await this.emailService.sendResetPasswordEmail(email, resetUrl);
-    } catch (error) {
-      Logger.error('Error en forgot-password', error as Error, AuthController.name);
-    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const token = await this.usersService.generateResetToken(normalizedEmail);
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5174');
+    const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+    await this.emailService.sendResetPasswordEmail(normalizedEmail, resetUrl);
 
     return {
       message: 'Si el correo existe, se envió un enlace para restablecer la contraseña.',

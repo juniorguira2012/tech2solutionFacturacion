@@ -23,9 +23,11 @@ import RolesManager from './pages/RolesManager';
 import AccessDeniedAlert from './components/AccessDeniedAlert';
 import Proyectos from './pages/Proyectos';
 
-// 💡 FIX: Fallback seguro si la variable no está configurada en .env
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "000000000000-dummyclientid.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 // --- 1. COMPONENTE DE PROTECCIÓN MEJORADO ---
+if (!GOOGLE_CLIENT_ID) {
+  console.error("Falta configurar VITE_GOOGLE_CLIENT_ID");
+}
 
 const PrivateRoute = ({ children, moduloRequerido }) => {
   const { usuario, permisos, loading } = useAuth();
@@ -82,6 +84,10 @@ const AppContent = () => {
 };
 
 function App() {
+  if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('dummy')) {
+    console.error('Falta configurar VITE_GOOGLE_CLIENT_ID con un Client ID real de Google.');
+  }
+
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <AuthProvider>

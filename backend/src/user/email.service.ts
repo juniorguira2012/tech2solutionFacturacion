@@ -7,13 +7,21 @@ export class EmailService {
   private transporter;
 
   constructor(private configService: ConfigService) {
+    const host = this.configService.get<string>('EMAIL_HOST');
+    const user = this.configService.get<string>('EMAIL_USER');
+    const pass = this.configService.get<string>('EMAIL_PASS')?.replace(/\s+/g, '');
+
+    if (!host || !user || !pass) {
+      throw new Error('Falta configurar EMAIL_HOST, EMAIL_USER o EMAIL_PASS.');
+    }
+
     this.transporter = createTransport({
-      host: this.configService.get<string>('EMAIL_HOST'),
+      host,
       port: parseInt(this.configService.get<string>('EMAIL_PORT', '587'), 10),
       secure: this.configService.get<string>('EMAIL_SECURE') === 'true',
       auth: {
-        user: this.configService.get<string>('EMAIL_USER'),
-        pass: this.configService.get<string>('EMAIL_PASS'),
+        user,
+        pass,
       },
       tls: {
         rejectUnauthorized: this.configService.get<string>('EMAIL_TLS_REJECT_UNAUTHORIZED') !== 'false',
@@ -24,7 +32,7 @@ export class EmailService {
   async sendMail(to: string, subject: string, html: string) {
     try {
       const info = await this.transporter.sendMail({
-        from: this.configService.get<string>('EMAIL_FROM'),
+        from: this.configService.get<string>('EMAIL_FROM') || this.configService.get<string>('EMAIL_USER'),
         to,
         subject,
         html,
