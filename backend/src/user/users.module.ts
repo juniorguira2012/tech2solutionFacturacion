@@ -19,6 +19,6 @@ import { EmailService } from './email.service';
   ],
   providers: [UsersService, EmailService],
   controllers: [UsersController, AuthController],
-  exports: [UsersService, JwtModule],
+  exports: [UsersService, EmailService, JwtModule],
 })
 export class UsersModule {}

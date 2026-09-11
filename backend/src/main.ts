@@ -19,8 +19,8 @@ async function bootstrap() {
     process.env.FRONTEND_URL,
     process.env.CORS_ORIGIN,
     'https://inventario.oneredrd.com',
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5174',
   ].filter(Boolean);
 
   console.log('Allowed CORS origins:', allowedOrigins);
