@@ -336,6 +336,32 @@ export class MovementsService {
           batchGenerated = await this.generateAndSaveBatch(queryRunner.manager, producto.id, cantidadNumerica, targetAlmacen, lote);
 
         } else if (tiposDecremento.includes(tipoNormalizado)) {
+          
+          // 🌟 AÑADIR ESTO: Si el producto maneja seriales, los marcamos como VENDIDOS
+          if (producto.isSerialized) {
+            if (!Array.isArray(serials) || serials.length === 0) {
+              throw new BadRequestException(`Debe proporcionar una lista de seriales para este producto serializado.`);
+            }
+            
+            for (const serialNumber of serials) {
+              const serialADespachar = await queryRunner.manager.findOne(ProductSerial, { 
+                where: { 
+                  productoId: producto.id, 
+                  serialNumber: serialNumber.trim(), 
+                  status: SerialStatus.DISPONIBLE 
+                }
+              });
+
+              if (!serialADespachar) {
+                throw new BadRequestException(`Serial "${serialNumber}" no encontrado o no disponible en el inventario.`);
+              }
+
+              serialADespachar.status = SerialStatus.VENDIDO; 
+              await queryRunner.manager.save(ProductSerial, serialADespachar);
+            }
+          }
+          // --------------------------------------------------------------------------
+
           const stockEnAlmacen = await queryRunner.manager.findOne(ProductWarehouseStock, {
             where: { productoId: producto.id, almacen: targetAlmacen }
           });
@@ -600,7 +626,7 @@ export class MovementsService {
         throw new NotFoundException(`Los siguientes seriales no se encontraron: ${notFound.join(', ')}`);
       }
 
-      const movementsToCreate: any[] = []; // 👈 Cambiado a any[] temporalmente para evadir la restricción estricta de TypeORM
+      const movementsToCreate: any[] = []; //Cambiado a any[] temporalmente para evadir la restricción estricta de TypeORM
       const productsToUpdate = new Map<number, number>();
 
       for (const serial of productSerials) {

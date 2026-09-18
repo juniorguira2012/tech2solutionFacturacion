@@ -117,15 +117,13 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   setResultadosBusquedaFactura(filtradas);
 }, [busquedaFactura, historialVentas]);
 
-  // Cargar historial al montar el componente
   useEffect(() => {
-    //CONTROL DE PERMISOS: Usamos el prop directamente y dependemos del usuario
     if (permisosMovimiento?.view) {
       cargarMovimientos();
     } else {
-      mostrarToast?.("No tienes permisos para visualizar el historial de movimientos", "error");
+      mostrarToast?.('No tienes permisos para visualizar el historial de movimientos', 'error');
     }
-  }, [permisosMovimiento?.view, usuario, cargarMovimientos]);
+  }, [permisosMovimiento?.view, usuario?.id, cargarMovimientos]);
 
   // Efecto para ejecutar una acción inicial (ej: desde una notificación)
   useEffect(() => {

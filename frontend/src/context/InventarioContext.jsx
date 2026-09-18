@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 
 const InventarioContext = createContext();
@@ -15,8 +15,14 @@ export const InventarioProvider = ({ children }) => {
   const [seriales, setSeriales] = useState([]);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [verEliminados, setVerEliminados] = useState(false);
+  const movimientosCargandoRef = useRef(false);
+  const movimientosUltimaCargaRef = useRef(0);
 
-  const { usuario } = useAuth();
+  const {usuario, permisos} = useAuth();
+
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
   
   // Si VITE_API_URL no está definido o es absoluto hacia producción, 
   // forzamos el uso de la ruta relativa para que use el subdominio actual.
@@ -57,71 +63,82 @@ export const InventarioProvider = ({ children }) => {
     }
   }, [usuario?.rol]);
 
-  const getAuthHeaders = useCallback(() => {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-    const token = localStorage.getItem('posfactura_token');
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-    if (usuario && usuario.id) {
-      headers['x-user-id'] = usuario.id;
-      headers['x-user-role'] = usuario.rol;
-      headers['x-inventory-permission'] = getInventoryPermission();
-    }
-    return headers;
-  }, [usuario, getInventoryPermission]);
+ const getAuthHeaders = useCallback(() => {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  const token = localStorage.getItem('posfactura_token');
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  
+  if (usuario?.id) {
+    headers['x-user-id'] = usuario.id;
+    headers['x-user-role'] = usuario.rol;
+    headers['x-inventory-permission'] = getInventoryPermission();
+  }
+  
+  return headers;
+}, [usuario?.id, usuario?.rol, getInventoryPermission]); // Solo depende de los estados reales de sesión
 
-  // --- EFECTO PRINCIPAL DE CARGA DE DATOS ---
-  // Este efecto centraliza todas las peticiones iniciales para optimizar el rendimiento.
-  useEffect(() => {
-    if (!usuario) return;
-  
-    const headers = getAuthHeaders();
-  
-    // 🚀 MEJORA 1: Función para cargar los productos de forma prioritaria.
-    // Esta función se encarga de la carga principal y controla el estado de 'loading'.
-    const cargarProductosPrioritarios = async () => {
-      setLoading(true);
-      setErrorConexion(null);
-      try {
-        const productsUrl = `${API_URL}?isActive=${verEliminados === 'all' ? 'all' : (verEliminados ? 'false' : 'true')}`;
-        const res = await fetch(productsUrl, { headers });
-        if (!res.ok) throw new Error(`Error ${res.status} al cargar productos`);
-        const data = await res.json();
-        setProductos(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Error crítico al cargar productos:", error);
-        setErrorConexion(error.message);
-        setProductos([]); // Aseguramos un estado limpio en caso de error
-      } finally {
-        setLoading(false); // Liberamos el loading tan pronto como los productos están listos.
+ //LA FUNCIÓN FUERA DEL USEEFFECT (A nivel del Provider)
+  const cargarProductosPrioritarios = async (page = 1, terminoBusqueda = '') => {
+    setLoading(true);
+    setErrorConexion(null);
+    try {
+      const headers = getAuthHeaders();
+      const estadoFiltro = verEliminados === 'all' ? 'all' : verEliminados ? 'false' : 'true';
+      
+      // 💡 Añadimos el parámetro de búsqueda a la URL si el usuario escribió algo
+      let productsUrl = `${API_URL}?page=${page}&limit=20&isActive=${estadoFiltro}`;
+      if (terminoBusqueda.trim() !== '') {
+        productsUrl += `&search=${encodeURIComponent(terminoBusqueda)}`;
       }
-    };
-  
-    // 🚀 MEJORA 2: Función para cargar el resto de los datos en segundo plano.
-    // Estos datos no bloquean la renderización de la lista de productos.
+      
+      const res = await fetch(productsUrl, { headers });
+      if (!res.ok) throw new Error(`Error ${res.status} al cargar productos`);
+      
+      const responseData = await res.json();
+      const listaProductos = responseData.data || (Array.isArray(responseData) ? responseData : []);
+      
+      setProductos(listaProductos);
+      setPaginaActual(responseData.page || page);
+      setTotalPaginas(responseData.lastPage || 1);
+      setTotalRegistros(responseData.total || listaProductos.length);
+    } catch (error) {
+      console.error("Error crítico al buscar productos:", error);
+      setErrorConexion(error.message);
+      setProductos([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  //EL USEEFFECT QUE LLAMA A AMBAS FUNCIONES
+  useEffect(() => {
+    if (!usuario?.id) return;
+
+    const headers = getAuthHeaders();
+    if (!headers.Authorization || headers.Authorization.includes('undefined')) {
+      return;
+    }
+
     const cargarDatosSecundarios = async () => {
-      // 🚀 OPTIMIZACIÓN: Usamos Promise.allSettled para asegurar que todas las peticiones
-      // se completen, incluso si alguna falla. Esto evita que un error en una API
-      // secundaria (ej. lotes) impida la carga de otras (ej. categorías).
       const recursos = [
         { url: `${API_BASE_URL}/providers`, setter: setProveedores },
         { url: `${API_BASE_URL}/warehouses`, setter: setAlmacenesDetallados },
         { url: `${API_BASE_URL}/units-of-measure`, setter: setUnidadesMedida },
         { url: `${API_BASE_URL}/movements/technicians`, setter: setTecnicos },
-        { url: `${API_BASE_URL}/movements`, setter: setMovimientos },
         { url: `${API_BASE_URL}/categories`, setter: setCategorias },
-        { url: `${API_BASE_URL}/product-serials`, setter: setSeriales },
-        { url: `${API_BASE_URL}/comodatos`, setter: setPrestamos },
-        // { url: `${API_BASE_URL}/inventory-batches`, setter: setLotes }, // Lotes deshabilitados
       ];
-  
-      const promesas = recursos.map(r => fetch(r.url, { headers }).then(res => {
-        if (!res.ok) throw new Error(`Fallo en ${r.url}`);
-        return res.json();
-      }));
+
+      const promesas = recursos.map((r) =>
+        fetch(r.url, { headers }).then((res) => {
+          if (!res.ok) throw new Error(`Fallo en ${r.url}`);
+          return res.json();
+        })
+      );
 
       const resultados = await Promise.allSettled(promesas);
 
@@ -136,12 +153,12 @@ export const InventarioProvider = ({ children }) => {
         }
       });
     };
-  
-    // 🚀 MEJORA 3: Orquestamos la carga.
-    cargarProductosPrioritarios();
+
+    // Ejecutamos ambas cargas
+    cargarProductosPrioritarios(1);
     cargarDatosSecundarios();
-  
-  }, [usuario, refreshIndex, verEliminados, getAuthHeaders, API_URL, API_BASE_URL]);
+
+  }, [usuario?.id, refreshIndex, verEliminados]);
 
   // --- GESTIÓN DE UNIDADES DE MEDIDA (DB) ---
   const cargarUnidadesMedida = useCallback(async () => {
@@ -219,45 +236,40 @@ export const InventarioProvider = ({ children }) => {
     }
   };
 
-  // 1.1 Cargar Movimientos (Kardex)
-  const cargarMovimientos = useCallback(async (productoId = null) => {
-    if (!usuario) return; // Si no hay usuario, no hacemos nada.
-    try {
-      let url = `${API_BASE_URL}/movements`;
-      const params = new URLSearchParams();
-      if (productoId) params.append('productoId', productoId);
-      
-      // 🛡️ Si el usuario NO es admin, filtramos por su ID.
-      if (usuario.rol !== 'admin') params.append('usuarioId', usuario.id);
-      
-      if (params.toString()) url += `?${params.toString()}`;
+ const cargarMovimientos = useCallback(async (productoId = null) => {
+  if (!usuario || movimientosCargandoRef.current) return;
+  
+  movimientosCargandoRef.current = true;
 
-      const res = await fetch(url, { headers: getAuthHeaders() });
-      const responseText = await res.text();
-      let data = null;
+  try {
+    let url = `${API_BASE_URL}/movements`;
+    const params = new URLSearchParams();
+    
+    // Paginación opcional: No traigas miles de registros para la campanita
+    if (!productoId) params.append('limit', '20'); 
+    if (productoId) params.append('productoId', productoId);
+    if (usuario.rol?.toLowerCase() !== 'admin') params.append('usuarioId', usuario.id);
 
-      try {
-        data = responseText ? JSON.parse(responseText) : null;
-      } catch {
-        throw new Error(`Respuesta no válida del servidor (${res.status})`);
-      }
+    if (params.toString()) url += `?${params.toString()}`;
 
-      if (!res.ok) {
-        const message = Array.isArray(data?.message)
-          ? data.message.join(', ')
-          : data?.message;
-        throw new Error(message || `Error al cargar movimientos (${res.status})`);
-      }
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) return;
+    
+    const data = await res.json();
+    const lista = Array.isArray(data) ? data : (data?.data || []);
 
-      if (!Array.isArray(data) && !Array.isArray(data?.data)) {
-        throw new Error('El servidor no devolvió una lista de movimientos');
-      }
-
-      setMovimientos(Array.isArray(data) ? data : data.data);
-    } catch (err) {
-      console.error("Error Kardex:", err);
+    // Solo actualizamos el estado si es la lista general de la campanita
+    if (!productoId) {
+      setMovimientos(lista);
     }
-  }, [API_BASE_URL, getAuthHeaders, usuario]);
+    
+    return lista;
+  } catch (err) {
+    console.error("Error al cargar movimientos:", err);
+  } finally {
+    movimientosCargandoRef.current = false;
+  }
+}, [API_BASE_URL, getAuthHeaders, usuario?.id, usuario?.rol]);
 
   // Cargar Seriales
   const cargarSeriales = useCallback(async () => {
@@ -383,7 +395,7 @@ export const InventarioProvider = ({ children }) => {
       throw new Error('El ID de usuario es obligatorio y debe ser un número.');
     }
 
-    console.log("Enviando Payload correcto a NestJS:", payload);
+    //console.log("Enviando Payload correcto a NestJS:", payload);
 
     const res = await fetch(URL_COMPLETA, {
       method: 'POST',
@@ -539,7 +551,6 @@ export const InventarioProvider = ({ children }) => {
       if (!res.ok) throw new Error(data.message || 'Error en la transferencia');
 
       setRefreshIndex(prev => prev + 1);
-      cargarMovimientos();
       return true;
     } catch (err) {
       console.error("Error en registrarTransferencia:", err);
@@ -587,7 +598,6 @@ const registrarMovimientosMasivos = async (payload) => {
 
     // 2. Refrescamos la UI
     setRefreshIndex(prev => prev + 1);
-    cargarMovimientos(); 
     
     return data;
   } catch (err) {
@@ -808,6 +818,29 @@ const registrarMovimientosMasivos = async (payload) => {
   }
 };
 
+const obtenerProductos = async (id) => {
+  try {
+    const token = localStorage.getItem('token');
+    
+    // 💡 Quita el '/products' extra de la URL:
+    const res = await fetch(`${API_URL}/${id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!res.ok) throw new Error('Error al consultar el detalle del producto');
+
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error("Error en obtenerProductos:", error);
+    throw error;
+  }
+};
+
   // --- GESTIÓN DE CATEGORÍAS (DB) ---
   const agregarCategoria = async (categoriaData) => {
   try {
@@ -876,45 +909,70 @@ const registrarMovimientosMasivos = async (payload) => {
   // 5. Descontar Stock
   const descontarStock = async (itemsCarrito) => {
     try {
-      // Creamos headers especiales para despacho que aseguren que el backend
-      // entienda que es una operación de venta y no una gestión manual.
       const headers = getAuthHeaders();
       if (headers['x-inventory-permission'] === 'none') {
-        headers['x-inventory-permission'] = 'view'; // Mínimo permiso para despachar
+        headers['x-inventory-permission'] = 'view';
       }
 
       const promesas = itemsCarrito.map(async (item) => {
-        const res = await fetch(`${API_BASE_URL}/movements`, {
+        // 1. Unificamos la captura de seriales desde cualquier propiedad posible del carrito
+        const rawSerials = Array.isArray(item.seriales) 
+          ? item.seriales 
+          : (Array.isArray(item.serials) 
+              ? item.serials 
+              : (Array.isArray(item.selectedSerials) 
+                  ? item.selectedSerials 
+                  : (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])));
+
+        // 2. Aseguramos que 'serialsLista' esté correctamente definida como un array de strings puros
+        const serialsLista = rawSerials.map(s => 
+          typeof s === 'object' && s !== null ? String(s.serial || s.codigo || s.numero || '') : String(s)
+        ).filter(s => s.trim() !== '');
+
+        // 3. Calculamos la cantidad de forma segura
+        const cantidadCalculada = serialsLista.length > 0 
+          ? serialsLista.length 
+          : Number(item.cantidad || 1);
+
+        const res = await fetch(`${API_BASE_URL}/movements/outbound`, {
           method: 'POST',
           headers: headers,
           body: JSON.stringify({
             productoId: Number(item.id),
-            tipo: 'DESPACHAR',
-            nota: 'Venta realizada desde el POS',
-            // Si el item tiene seriales, los enviamos. Si no, enviamos la cantidad.
-            // El backend debe estar preparado para recibir uno u otro.
-            ...(item.serials && item.serials.length > 0
-              ? { serials: item.serials }
-              : { cantidad: Number(item.cantidad) }
-            )
+            cantidad: cantidadCalculada, 
+            tipo: 'SALIDA',
+            almacenId: item.almacenId ? Number(item.almacenId) : undefined,
+            serials: serialsLista, // 👈 Ahora sí, totalmente definida y lista
+            usuarioId: usuario?.id ? String(usuario.id) : "1", 
           })
         });
+        
+        const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.message || `Error al descontar stock de ${item.nombre}`);
+          const msg = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+          throw new Error(msg || `Error al descontar stock de ${item.nombre || 'producto'}`);
         }
-        return res.json();
+        return data;
       });
 
-      const resultados = await Promise.all(promesas);
-      setRefreshIndex(prev => prev + 1); // Recargamos para ver stock y Kardex actualizado
+      await Promise.all(promesas);
+      setRefreshIndex(prev => prev + 1); 
+
+      if (typeof cargarSeriales === 'function') {
+        await cargarSeriales();
+      }
+
+      if (typeof cargarProductos === 'function') {
+        await cargarProductos();
+      }
+
+      return true;
     } catch (error) {
       console.error("Error al descontar stock:", error);
-      throw error; // Re-lanzamos el error para que Ventas.jsx lo capture
+      throw error;
     }
   };
-  // --- GESTIÓN DE CONTEO FÍSICO (Auditoría) ---
   // --- GESTIÓN DE CONTEO FÍSICO (Auditoría) ---
   const cargarConteos = useCallback(async (almacen = '') => {
     try {
@@ -922,10 +980,8 @@ const registrarMovimientosMasivos = async (payload) => {
         ? `${API_BASE_URL}/inventory-counts?almacen=${almacen}`
         : `${API_BASE_URL}/inventory-counts`;
       
-      // Obtenemos los headers de autenticación de tu sistema
       const headers = getAuthHeaders();
       
-      // 🛡️ SI EL TOKEN NO ESTÁ LISTO: Abortamos la petición antes de que tire un 401
       if (!headers || !headers.Authorization || headers.Authorization.includes('undefined')) {
         console.warn("Carga de conteos pospuesta: El token de autenticación no está listo.");
         return;
@@ -935,7 +991,7 @@ const registrarMovimientosMasivos = async (payload) => {
     
       if (res.status === 401) {
         console.warn("401: Este perfil no tiene autorización en el backend para ver conteos físicos.");
-        setConteos([]); // Limpiamos el estado de forma segura para que no se quede cargando
+        setConteos([]);
         return;
       }
 
@@ -946,7 +1002,8 @@ const registrarMovimientosMasivos = async (payload) => {
     } catch (err) {
       console.error("Error cargando conteos:", err);
     }
-  }, [API_BASE_URL]);
+  }, [API_BASE_URL, getAuthHeaders]);
+
   const crearConteo = async (payload) => {
     try {
       const res = await fetch(`${API_BASE_URL}/inventory-counts`, {
@@ -1062,24 +1119,18 @@ const registrarMovimientosMasivos = async (payload) => {
     } catch (err) { console.error(err); throw err; }
   };
 
- // --- GESTIÓN DE LOTES ---
+  // --- GESTIÓN DE LOTES ---
   const cargarLotes = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/inventory-batches`, { headers: getAuthHeaders() });
-      
-      // 🛡️ Si el backend responde 404 (no existe aún), salimos en paz sin tirar errores
       if (res.status === 404) {
         setLotes([]);
         return;
       }
-
-      // Para cualquier otro error (500, 403, etc.), ahí sí vigilamos
       if (!res.ok) throw new Error('Error al cargar lotes');
-      
       const data = await res.json();
       setLotes(Array.isArray(data) ? data : []);
     } catch (err) {
-      // Cambiamos console.error por un log más limpio e informativo
       console.warn("⚠️ Nota de desarrollo: El endpoint de lotes no está listo o falló:", err.message);
       setLotes([]);
     }
@@ -1138,7 +1189,7 @@ const registrarMovimientosMasivos = async (payload) => {
       console.error("Error cargando comodatos:", err);
       setPrestamos([]);
     }
-  }, [API_BASE_URL, usuario]); // Mantener usuario aquí para que el useCallback no cambie innecesariamente
+  }, [API_BASE_URL, getAuthHeaders]);
 
   const crearPrestamo = async (payload) => {
     try {
@@ -1147,7 +1198,7 @@ const registrarMovimientosMasivos = async (payload) => {
         headers: getAuthHeaders(),
         body: JSON.stringify({
           ...payload,
-          usuarioId: usuario?.id // Vinculamos quién registra el préstamo
+          usuarioId: usuario?.id
         })
       });
 
@@ -1157,9 +1208,8 @@ const registrarMovimientosMasivos = async (payload) => {
       }
 
       const data = await res.json();
-      // Esto inserta el nuevo préstamo al inicio del array (arriba)
       setPrestamos(prev => [data, ...prev]); 
-      setRefreshIndex(prev => prev + 1); // Refrescamos productos para actualizar stock
+      setRefreshIndex(prev => prev + 1);
       return true;
     } catch (err) {
       console.error(err);
@@ -1181,7 +1231,7 @@ const registrarMovimientosMasivos = async (payload) => {
 
       const data = await res.json();
       setPrestamos(prev => prev.map(p => p.id === comodatoId ? data : p));
-      setRefreshIndex(prev => prev + 1); // Refrescamos productos para actualizar stock
+      setRefreshIndex(prev => prev + 1);
       return true;
     } catch (err) {
       console.error(err);
@@ -1189,78 +1239,82 @@ const registrarMovimientosMasivos = async (payload) => {
     }
   };
 
-
-return (
-  <InventarioContext.Provider value={{ 
-    productos, 
-    tecnicos,
-    prestamos,
-    seriales,
-    cargarSeriales,
-    obtenerHistorialSerial,
-    actualizarEstadoSerial,
-    agregarCategoria,
-    actualizarCategoria, // <-- Exponemos la nueva función
-    eliminarCategoria,
-    movimientos, 
-    asignarSerialesTecnico,
-    loading, 
-    errorConexion, 
-    categorias, 
-    setCategorias,
-    proveedores,
-    agregarProveedor,
-    actualizarProveedor,
-    eliminarProveedor,
-    setProveedores,
-    unidadesMedida, 
-    conteos,
-    lotes,
-    cargarPrestamos,
-    crearPrestamo,
-    devolverPrestamo, 
-    cargarLotes: () => {}, // Función vacía para no romper llamadas
-    agregarLote: async () => {},
-    actualizarLote: async () => {},
-    eliminarLote: async () => {},
-    devolverSerialTecnico,
-    cargarUnidadesMedida,
-    agregarUnidadMedida,
-    actualizarUnidadMedida,
-    crearConteo,
-    obtenerConteo,
-    agregarItemAConteo,
-    actualizarItemConteo,
-    eliminarConteo,
-    publicarConteo,
-    setUnidadesMedida, 
-    almacenesDetallados, // <-- Exponemos los almacenes
-    agregarAlmacen,
-    actualizarAlmacen,
-    eliminarAlmacen,
-    setAlmacenesDetallados, // <-- Exponemos el setter para AlmacenSection
-    agregarProducto,
-    verEliminados,
-    setVerEliminados,
-    eliminarProducto,
-    restaurarProducto,           // <-- Exponemos la nueva función
-    actualizarProducto,
-    actualizarSerial, // <-- Exponemos la nueva función
-    eliminarSerial,
-    descontarStock,
-    registrarMovimiento,         
-    crearTecnico,
-    actualizarTecnico,
-    eliminarTecnico,
-    registrarTransferencia,      
-    registrarMovimientosMasivos,
-    cargarMovimientos,
-    cargarConteos,
-    recargarInventario: () => setRefreshIndex(prev => prev + 1)
-  }}>
-    {children}
-  </InventarioContext.Provider>
-);
+  return (
+    <InventarioContext.Provider value={{ 
+      productos,
+      paginaActual,
+      totalPaginas,
+      totalRegistros,
+      tecnicos,
+      prestamos,
+      seriales,
+      cargarSeriales,
+      obtenerHistorialSerial,
+      actualizarEstadoSerial,
+      agregarCategoria,
+      actualizarCategoria,
+      eliminarCategoria,
+      movimientos, 
+      asignarSerialesTecnico,
+      loading, 
+      errorConexion, 
+      categorias, 
+      setCategorias,
+      proveedores,
+      agregarProveedor,
+      actualizarProveedor,
+      eliminarProveedor,
+      setProveedores,
+      unidadesMedida, 
+      conteos,
+      lotes,
+      cargarPrestamos,
+      crearPrestamo,
+      devolverPrestamo, 
+      cargarLotes,
+      agregarLote,
+      actualizarLote,
+      eliminarLote,
+      devolverSerialTecnico,
+      cargarUnidadesMedida,
+      agregarUnidadMedida,
+      actualizarUnidadMedida,
+      crearConteo,
+      obtenerConteo,
+      agregarItemAConteo,
+      actualizarItemConteo,
+      eliminarConteo,
+      publicarConteo,
+      setUnidadesMedida, 
+      almacenesDetallados,
+      agregarAlmacen,
+      actualizarAlmacen,
+      eliminarAlmacen,
+      setAlmacenesDetallados,
+      agregarProducto,
+      verEliminados,
+      setVerEliminados,
+      eliminarProducto,
+      restaurarProducto,
+      cargarProductosPrioritarios,
+      actualizarProducto,
+      obtenerProductos,
+      actualizarSerial,
+      eliminarSerial,
+      descontarStock,
+      registrarMovimiento, 
+      crearTecnico,
+      actualizarTecnico,
+      eliminarTecnico,
+      registrarTransferencia, 
+      registrarMovimientosMasivos,
+      cargarMovimientos,
+      cargarConteos,
+      recargarInventario: () => setRefreshIndex(prev => prev + 1)
+    }}>
+      {children}
+    </InventarioContext.Provider>
+  );
 };
 
 export const useInventario = () => useContext(InventarioContext);

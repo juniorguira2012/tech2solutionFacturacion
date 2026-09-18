@@ -81,8 +81,9 @@ const Ventas = () => {
   const { registrarVenta } = useVentas();
   const { productos, descontarStock, setVerEliminados } = useInventario();
   const { clientes } = useClientes();
-  const permisos = usePermissions('ventas'); // 🛡️ Obtenemos los permisos para el módulo de ventas
+  const permisos = usePermissions('ventas'); //Obtenemos los permisos para el módulo de ventas
   const { usuario } = useAuth();
+  const {cargarProductosPrioritarios} = useInventario();
   
   // Load company data from local storage
   const companyData = useMemo(() => {
@@ -218,7 +219,7 @@ const Ventas = () => {
   };
 
   const procesarVenta = useCallback(async () => {
-    // 🛡️ Verificación de permiso de creación antes de procesar
+    //Verificación de permiso de creación antes de procesar
     if (!permisos.create) {
       return alert("No tienes permiso para registrar ventas.");
     }
@@ -237,14 +238,12 @@ const Ventas = () => {
         itbis: Number(impuesto),
         total: Number(totalFinal),
         items: carrito.map(item => ({
-          productoId: Number(item.id), // ID del producto
-          precio: Number(item.precio), // Precio al momento de la venta
-          // Si es serializado, enviamos el array de seriales.
-          // Si no, enviamos la cantidad.
-          ...(item.isSerialized 
-            ? { serials: item.serials } 
-            : { cantidad: Number(item.cantidad) }
-          )
+          productoId: Number(item.id),
+          precio: Number(item.precio),
+          // 💡 La cantidad siempre se envía como número. 
+          // Si es serializado, la cantidad es igual a cuántos seriales lleva en su array (ej. 1, 2...). 
+          // Si es normal, usa su cantidad numérica habitual.
+          cantidad: Number(item.isSerialized ? (item.serials?.length || 1) : item.cantidad),
         })),
         vendedorId: usuario?.id?.toString(),
       };
@@ -604,7 +603,11 @@ const Ventas = () => {
                 autoFocus 
                 type="text" 
                 value={busqueda} 
-                onChange={(e) => setBusqueda(e.target.value)} 
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  setBusqueda(valor);
+                  cargarProductosPrioritarios(1, valor);
+                }} 
                 placeholder="Buscar producto por nombre o SKU..." 
                 className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 focus:border-brand outline-none text-xs font-medium bg-slate-50/50" 
               />

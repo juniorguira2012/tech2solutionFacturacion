@@ -5,7 +5,7 @@ import { ProductsController } from './products.controller';
 import { Product } from './entities/product.entity';
 import { ProvidersModule } from '../providers/providers.module'; // <-- Importamos el módulo completo
 import { UsersModule } from '../user/users.module';
-import { LowStockAlertService } from './low-stock-alert.service';
+//import { LowStockAlertService } from './low-stock-alert.service';
 
 @Module({
   imports: [
@@ -14,7 +14,7 @@ import { LowStockAlertService } from './low-stock-alert.service';
     UsersModule,
   ],
   controllers: [ProductsController],
-  providers: [ProductsService, LowStockAlertService],
+  providers: [ProductsService],
   exports: [ProductsService, TypeOrmModule], 
 })
 export class ProductsModule {}

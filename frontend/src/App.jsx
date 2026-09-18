@@ -24,26 +24,22 @@ import AccessDeniedAlert from './components/AccessDeniedAlert';
 import Proyectos from './pages/Proyectos';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-// --- 1. COMPONENTE DE PROTECCIÓN MEJORADO ---
-if (!GOOGLE_CLIENT_ID) {
-  console.error("Falta configurar VITE_GOOGLE_CLIENT_ID");
+
+if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('dummy')) {
+  console.error("⚠️ Falta configurar VITE_GOOGLE_CLIENT_ID con un Client ID válido.");
 }
 
+// --- 1. COMPONENTE DE PROTECCIÓN DE RUTAS ---
 const PrivateRoute = ({ children, moduloRequerido }) => {
   const { usuario, permisos, loading } = useAuth();
 
   if (loading) return null; 
 
-  // Si no hay usuario, al Login
   if (!usuario) return <Navigate to="/login" replace />;
 
-  // VERIFICACIÓN DE ROLES DESDE EL CONTEXTO (DB)
   if (usuario.rol !== 'admin' && moduloRequerido) {
-    if (!permisos) {
-      return null; 
-    }
+    if (!permisos) return null; 
 
-    // 🚀 CORRECCIÓN AQUÍ: Agregamos ".modules" antes de buscar el módulo requerido
     const nivelPermiso = permisos.modules?.[moduloRequerido];
     
     if (!nivelPermiso?.view) {
@@ -52,42 +48,34 @@ const PrivateRoute = ({ children, moduloRequerido }) => {
     }
   }
 
-  // Si pasó las pruebas, mostramos el Layout + Contenido
   return <Layout>{children}</Layout>;
 };
 
 const PublicRoute = ({ children }) => {
   const { usuario, loading } = useAuth();
-  // 💡 FIX: No retornamos `null` durante la carga.
-  // Dejamos que el componente hijo (Login) decida qué mostrar.
-  if (!loading && usuario) {
-    return <Navigate to="/" replace />;
-  }
+  
+  // Evitamos destellos del login mientras se valida la sesión activa
+  if (loading) return null; 
+  if (usuario) return <Navigate to="/" replace />;
+  
   return children;
 };
 
-// --- 2. COMPONENTE PRINCIPAL ---
-
+// --- 2. CONTENIDO GLOBAL (MODALES) ---
 const AppContent = () => {
   const { showIdleModal, countdown, stayActive, handleIdleLogout } = useAuth();
   return (
-    <>
-      <InactivityModal 
-        isOpen={showIdleModal}
-        countdown={countdown}
-        onStay={stayActive}
-        onLogout={handleIdleLogout}
-      />
-      {/* El resto de tu aplicación se renderiza aquí */}
-    </>
+    <InactivityModal 
+      isOpen={showIdleModal}
+      countdown={countdown}
+      onStay={stayActive}
+      onLogout={handleIdleLogout}
+    />
   );
 };
 
+// --- 3. COMPONENTE PRINCIPAL ---
 function App() {
-  if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('dummy')) {
-    console.error('Falta configurar VITE_GOOGLE_CLIENT_ID con un Client ID real de Google.');
-  }
-
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <AuthProvider>
@@ -95,8 +83,10 @@ function App() {
           <UsuariosProvider>
             <InventarioProvider>
               <ClienteProvider>
-                <AppContent />
                 <Router>
+                  {/* AppContent dentro del Router para poder usar navegación interna si es necesario */}
+                  <AppContent />
+                  
                   <Routes>
                     {/* RUTAS PÚBLICAS */}
                     <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />

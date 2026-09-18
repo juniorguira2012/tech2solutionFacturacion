@@ -87,6 +87,54 @@ export class ProductSerialsService {
     return serial;
   }
 
+  // ✅ Permite cambiar el estado de una lista de seriales a 'vendido' (o el estado que prefieras) y recalcular stock
+  async marcarComoVendidos(serialNumbers: string[]) {
+    if (!serialNumbers || serialNumbers.length === 0) return;
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Buscamos los seriales que coincidan con los números provistos
+      const seriales = await queryRunner.manager
+        .getRepository(ProductSerial)
+        .createQueryBuilder('serial')
+        .where('serial.serialNumber IN (:...serialNumbers)', { serialNumbers })
+        .getMany();
+
+      if (seriales.length === 0) {
+        await queryRunner.commitTransaction();
+        return;
+      }
+
+      // Obtenemos los IDs de productos afectados para recalcular su stock después
+      const productoIdsSet = new Set<number>();
+
+      for (const serial of seriales) {
+        serial.status = SerialStatus.VENDIDO; // O 'vendido' según tu enum
+        productoIdsSet.add(serial.productoId);
+        await queryRunner.manager.save(ProductSerial, serial);
+      }
+
+      // 2. Recalculamos y actualizamos el stock disponible de cada producto afectado
+      for (const prodId of productoIdsSet) {
+        const nuevoStockDisponible = await queryRunner.manager.count(ProductSerial, {
+          where: { productoId: prodId, status: SerialStatus.DISPONIBLE },
+        });
+
+        await queryRunner.manager.update(Product, prodId, { stock: nuevoStockDisponible });
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   // ✅ AGREGADO LÍMITE DE SEGURIDAD PARA CONSULTAS POR PRODUCTO
   async findByProductId(productId: number, limit: number = 50) {
     const serials = await this.serialRepository.find({

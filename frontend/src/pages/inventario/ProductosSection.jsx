@@ -54,8 +54,8 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
 };
 
 //Componente Principal 
-const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // 🛡️ 1. Recibimos los permisos y el producto inicial
-  // 🛡️ Extraemos los permisos específicos para esta sección
+const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { //Recibimos los permisos y el producto inicial
+  //Extraemos los permisos específicos para esta sección
   const permisosProductos = permisos?.subModulos?.productos ?? permisos;
 
   const {
@@ -63,8 +63,13 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // �
     loading,
     eliminarProducto,
     agregarProducto,
+    cargarProductosPrioritarios,
+    paginaActual,
+    totalPaginas, 
+    totalRegistros,
     restaurarProducto,
     actualizarProducto,
+    obtenerProductos,
     categorias, // Mantener categorías aquí
     seriales, // <-- Traemos todos los seriales para la validación
     almacenesDetallados, // <-- Obtenemos los almacenes del contexto
@@ -91,6 +96,9 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // �
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
   const [viewingProduct, setViewingProduct] = useState(null);
 
+
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [isDetalleModalOpen, setIsDetalleModalOpen] = useState(false);
 
   // Sincroniza el filtro local con el estado del contexto para traer eliminados de la DB
   const handleCambioFiltro = (filtro) => {
@@ -135,6 +143,16 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // �
     movimientoInventario: 'Entrada', descripcion: '', imagen: '', camposPersonalizados: []
   });
 
+  const abrirDetalle = (prod) => {
+    if (!prod) return;
+    
+    // Guardamos el producto en el estado para que el modal lo pueda leer
+    setProductoSeleccionado(prod); 
+    
+    // Abrimos el modal de detalles
+    setIsDetalleModalOpen(true); 
+  };
+
   // Efecto para abrir el modal si se recibe un producto inicial
   useEffect(() => {
     if (productoInicial) {
@@ -143,17 +161,17 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // �
   }, [productoInicial]);
 
   const abrirEditar = (prod) => {
-    // 🛡️ Verificación de permiso de edición
-    if (!permisosProductos?.edit) {
-      return mostrarToast('No tienes permiso para editar productos', 'error');
-    }
+    if (!prod) return mostrarToast('Selecciona un producto válido', 'error');
+    if (!permisosProductos?.edit) return mostrarToast('No tienes permiso para editar', 'error');
+
+    // Cargamos el formulario DIRECTAMENTE con el objeto 'prod' de la fila
     setFormData({
       id: prod.id,
-      nombre: prod.nombre,
-      categoria: prod.categoria || '', // <-- CORRECCIÓN: Usar '' si no hay categoría definida
-      precio: prod.precio,
-      stock: prod.stock,
-      stockMinimo: prod.stockMinimo ?? '5', // <-- Cargamos el valor existente o un default
+      nombre: prod.nombre || '',
+      categoria: prod.categoria || '',
+      precio: prod.precio ?? 0,
+      stock: prod.stock ?? 0,
+      stockMinimo: prod.stockMinimo ?? '5',
       codigo: prod.codigo || '',
       modelo: prod.modelo || '',
       serie: prod.serie || '',
@@ -161,31 +179,32 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // �
       pasillo: prod.pasillo || '',
       fila: prod.fila || '',
       isSerialized: prod.isSerialized || false,
-      serialsInput: '', // El campo de texto siempre inicia vacío para agregar nuevos seriales
+      serialsInput: '',
       unidadMedida: prod.unidadMedida || 'Unidad',
       movimientoInventario: prod.movimientoInventario || 'Entrada',
       descripcion: prod.descripcion || '',
       imagen: prod.imagen || '',
-      proveedorId: prod.proveedor ? prod.proveedor.id : (prod.proveedorId || ''),
+      proveedorId: prod.proveedor?.id || prod.proveedorId || '',
       camposPersonalizados: prod.camposPersonalizados || [],
-      serialesExistentes: prod.seriales || [], // <-- Cargamos los objetos de seriales completos
+      serialesExistentes: prod.seriales || [],
     });
+
     setIsEditing(true);
     setIsModalOpen(true);
   };
-  
+    
 
-  const handleUpdateSerial = async (serialId, nuevoNumero) => {
-    // Esta función ahora solo llama al contexto. La actualización del estado
-    // del formulario se manejará dentro del componente del modal.
-    try {
-      const serialActualizado = await actualizarSerial(serialId, nuevoNumero);
-      return serialActualizado; // Devolvemos el resultado para que el modal lo use
-    } catch (error) {
-      mostrarToast(error.message || 'No se pudo actualizar el serial', 'error');
-      throw error; // Re-lanzamos el error para que el modal lo sepa
-    }
-  };
+    const handleUpdateSerial = async (serialId, nuevoNumero) => {
+      // Esta función ahora solo llama al contexto. La actualización del estado
+      // del formulario se manejará dentro del componente del modal.
+      try {
+        const serialActualizado = await actualizarSerial(serialId, nuevoNumero);
+        return serialActualizado; // Devolvemos el resultado para que el modal lo use
+      } catch (error) {
+        mostrarToast(error.message || 'No se pudo actualizar el serial', 'error');
+        throw error; // Re-lanzamos el error para que el modal lo sepa
+      }
+    };
 
   const handleDeleteSerial = async (serialId) => {
     const serialAEliminar = formData.serialesExistentes.find(s => s.id === serialId);
@@ -229,9 +248,43 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { // �
   };
 
   const obtenerImagenProducto = (producto) => {
-    const campoImagen = producto.camposPersonalizados?.find(c => c.nombre === 'imagenProducto');
-    return producto.imagen || campoImagen?.valor || '';
+    if (!producto) return '';
+
+    // Buscamos en las propiedades directas del objeto que suele mandar NestJS
+    const rutaImagen = producto.imagen || producto.image || producto.urlImagen || '';
+
+    // Si no está directa, buscamos en campos personalizados por si acaso
+    const campoImagen = producto.camposPersonalizados?.find(c => c.nombre === 'imagenProducto' || c.nombre === 'imagen');
+    const valorFinal = rutaImagen || campoImagen?.valor || '';
+
+    if (!valorFinal) return '';
+
+    // Como ya viene en formato Base64 (data:image/...), lo devolvemos tal cual para que el navegador lo pinte
+    if (valorFinal.startsWith('data:image') || valorFinal.startsWith('http')) {
+      return valorFinal;
+    }
+
+    // Por si acaso viene como ruta relativa suelta
+    const API_URL = 'http://localhost:3000';
+    const rutaLimpia = valorFinal.startsWith('/') ? valorFinal : `/${valorFinal}`;
+    return `${API_URL}${rutaLimpia}`;
   };
+//   const obtenerImagenProducto = (producto) => {
+//   if (!producto) return '';
+
+//   // Imprimimos para ver qué propiedades tiene este producto exactamente
+//   console.log("Evaluando producto:", producto.nombre, {
+//     imagenDirecta: producto.imagen,
+//     imageDirecta: producto.image,
+//     camposPersonalizados: producto.camposPersonalizados
+//   });
+
+//   // Buscamos en la propiedad imagen o en los campos personalizados
+//   const campoImagen = producto.camposPersonalizados?.find(c => c.nombre === 'imagenProducto' || c.nombre === 'imagen');
+//   const valorFinal = producto.imagen || producto.image || campoImagen?.valor || '';
+
+//   return valorFinal;
+// };
 
   const exportarAExcel = () => {
     if (productosFiltrados.length === 0) {
@@ -394,8 +447,6 @@ const handleSave = async (e) => {
 
     if (isEditing) {
       listaSeriales = serialesUnicos;
-    } else {
-      listaSeriales = serialesUnicos;
     }
   }
 
@@ -447,7 +498,6 @@ const handleEliminar = (prod) => {
     return mostrarToast('No tienes permiso para eliminar productos', 'error');
   }
 
-  // Verificación rápida: si no hay ID, no podemos eliminar
   console.log("ID a eliminar:", prod.id);
   if (!prod.id) {
     mostrarToast?.('Error: El producto no tiene un ID válido', 'error');
@@ -499,18 +549,35 @@ const handleEliminar = (prod) => {
   };
   
   const productosFiltrados = useMemo(() => productos.filter(p => {
-    const query = searchTerm.toLowerCase();
-    const coincideBusqueda = (p.nombre?.toLowerCase() || '').includes(query) || (p.codigo?.toLowerCase() || '').includes(query);
-    const coincideAlmacen = almacenFiltro === 'todos' || (p.almacen || 'Principal') === almacenFiltro;
-    const estaActivo = p.isActive !== false;
-    const coincideTipo =
-      filtroProducto === 'todos' ||
-      (filtroProducto === 'productos' && p.categoria !== 'Servicios') ||
-      (filtroProducto === 'servicios' && p.categoria === 'Servicios') ||
-      (filtroProducto === 'activos' && estaActivo) ||
-      (filtroProducto === 'eliminados' && p.isActive === false);
-    return coincideBusqueda && coincideAlmacen && coincideTipo;
-  }), [productos, searchTerm, almacenFiltro, filtroProducto]);
+  const query = searchTerm.toLowerCase();
+  const coincideBusqueda = (p.nombre?.toLowerCase() || '').includes(query) || (p.codigo?.toLowerCase() || '').includes(query);
+  const coincideAlmacen = almacenFiltro === 'todos' || (p.almacen || 'Principal') === almacenFiltro;
+  
+  // Si el filtro es "eliminados", filtramos solo inactivos. De lo contrario, filtramos solo activos.
+  const coincideEstado = filtroProducto === 'eliminados' ? p.isActive === false : p.isActive !== false;
+
+  const coincideTipo =
+    filtroProducto === 'todos' ||
+    filtroProducto === 'activos' ||
+    filtroProducto === 'eliminados' ||
+    (filtroProducto === 'productos' && p.categoria !== 'Servicios') ||
+    (filtroProducto === 'servicios' && p.categoria === 'Servicios');
+
+  return coincideBusqueda && coincideAlmacen && coincideEstado && coincideTipo;
+    }), [productos, searchTerm, almacenFiltro, filtroProducto]);
+
+  // Manejadores seguros para la paginación
+  const handlePaginaAnterior = () => {
+    if (typeof cargarProductosPrioritarios === 'function' && paginaActual > 1) {
+      cargarProductosPrioritarios(paginaActual - 1);
+    }
+  };
+
+  const handlePaginaSiguiente = () => {
+    if (typeof cargarProductosPrioritarios === 'function' && paginaActual < totalPaginas) {
+      cargarProductosPrioritarios(paginaActual + 1);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -592,7 +659,18 @@ const handleEliminar = (prod) => {
       <div className="flex flex-col xl:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15}/>
-          <input type="text" placeholder="Buscar por nombre o código..." className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 outline-none text-xs font-bold" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+          <input 
+            type="text" 
+            placeholder="Buscar por nombre o código..." 
+            className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 outline-none text-xs font-bold" 
+            value={searchTerm} 
+            onChange={(e) => {
+              const valor = e.target.value;
+              setSearchTerm(valor); // Actualiza el estado visual de tu input
+              //Dispara la búsqueda en la página 1 con el texto ingresado
+              cargarProductosPrioritarios(1, valor);
+            }}
+          />
         </div>
         <select value={almacenFiltro} onChange={(e) => setAlmacenFiltro(e.target.value)} className="min-w-44 h-9 px-3 rounded-lg border border-slate-200 text-[10px] font-black uppercase text-slate-600 bg-white">
           <option value="todos">Todos los almacenes</option>
@@ -607,107 +685,118 @@ const handleEliminar = (prod) => {
         ) : productosFiltrados.length === 0 ? (
           <div className="py-20 text-center text-xs font-black uppercase text-slate-400">No hay productos</div>
         ) : vista === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 p-3">
-            {productosFiltrados.map(prod => (
-              <article 
-                key={prod.id} 
-                className="group rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all hover:-translate-y-0.5 relative cursor-pointer"
-                onClick={() => obtenerImagenProducto(prod) && openImageViewer(prod)}
-                title={obtenerImagenProducto(prod) ? "Clic para ampliar imagen" : "Sin imagen"}
-              >
-                <div 
-                  className="aspect-[2.5/1] bg-slate-50 relative border-b border-slate-100"
-                >
-                  {obtenerImagenProducto(prod)
-                    ? <img src={obtenerImagenProducto(prod)} alt={prod.nombre} className="h-full w-full object-cover"/>
-                    : <div className="h-full w-full flex items-center justify-center text-slate-200"><Package size={20}/></div>}
-                  <div className="absolute left-2 top-2">
-                    <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${prod.categoria === 'Servicios' ? 'bg-sky-500' : 'bg-slate-900'}`}>
-                      {prod.categoria === 'Servicios' ? 'Servicio' : 'Producto'}
-                    </span>
-                  </div>
-                </div>
-                <div className="p-3 space-y-2">
-                  <div className="flex justify-between items-start gap-2">
-                    <h3 className="font-black text-slate-800 uppercase text-xs truncate">{prod.nombre}</h3>
-                    <p className="font-black text-slate-900 text-xs italic whitespace-nowrap">RD$ {formatPrice(prod.precio)}</p>
-                  </div>
-                {prod.proveedor && <p className="text-[8px] font-black text-brand uppercase tracking-widest -mt-1">{prod.proveedor.nombre}</p>}                
-                  <div className="flex gap-2">
-                    <div className={`w-14 shrink-0 rounded-lg p-1.5 border ${prod.stock <= (prod.stockMinimo ?? 5) ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`} title={`Stock Mínimo: ${prod.stockMinimo ?? 5}`}>
-                      <p className="text-[8px] font-black uppercase opacity-70">Stock</p>
-                      <span className="text-xs font-black">{prod.stock}</span>
-                    </div>
-                    <div 
-                      className="flex-1 bg-slate-50 p-1.5 rounded-lg border overflow-hidden cursor-help"
-                      title={`Almacén: ${prod.almacen || 'Principal'}${prod.ubicacion ? `\nUbicación: ${prod.ubicacion}` : ''}`}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 p-3">
+              {productosFiltrados.map(prod => (
+                <article 
+                  key={prod.id} 
+                  className="group rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all hover:-translate-y-0.5 relative cursor-pointer"
+                    onClick={() => {
+                      // 👇 Al hacer clic en la tarjeta, SIEMPRE abrimos el visor/modal del artículo
+                      if (typeof openImageViewer === 'function') {
+                        openImageViewer(prod);
+                      }
+                    }}
+                    title="Clic para ver detalles del producto"
+                  >
+                  <div 
+                    className="aspect-[2.5/1] bg-slate-50 relative border-b border-slate-100"
+                      onClick={(e) => {
+                        e.stopPropagation(); // 👈 Evita que se abra la edición si el usuario solo quiere ver la foto grande
+                        if (typeof openImageViewer === 'function' && obtenerImagenProducto(prod)) {
+                          openImageViewer(prod);
+                        }
+                      }}
+                      title={obtenerImagenProducto(prod) ? "Clic para ampliar imagen" : "Sin imagen"}
                     >
-                      <p className="text-[8px] font-black text-slate-400 uppercase">Almacén / Ubicación</p>
-                      <div className="max-h-[40px] overflow-y-auto flex flex-col justify-center">
-                        <p className="text-[9px] font-black truncate text-slate-700 uppercase leading-tight">
-                          {prod.almacen || 'Principal'}
-                        </p>
-                        {prod.ubicacion && (
-                          <div className="flex items-center gap-1 text-brand mt-0.5">
-                            <MapPin size={10} strokeWidth={3} />
-                            <span className="text-[8px] font-black truncate uppercase">{prod.ubicacion}</span>
-                          </div>
-                        )}
-                      </div>
+                    {obtenerImagenProducto(prod)
+                      ? <img src={obtenerImagenProducto(prod)} alt={prod.nombre} className="h-full w-full object-cover"/>
+                      : <div className="h-full w-full flex items-center justify-center text-slate-200"><Package size={20}/></div>}
+                    <div className="absolute left-2 top-2">
+                      <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${prod.categoria === 'Servicios' ? 'bg-sky-500' : 'bg-slate-900'}`}>
+                        {prod.categoria === 'Servicios' ? 'Servicio' : 'Producto'}
+                      </span>
                     </div>
                   </div>
-                  {/* --- INICIO: Mostrar Seriales Disponibles --- */}
-                  {prod.isSerialized && (() => {
-                    const serialesDisponibles = prod.seriales?.filter(s => s.status === 'disponible') || [];
-                    return (
-                      <div className="pt-2 mt-2 border-t border-slate-100">
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Seriales Disponibles ({serialesDisponibles.length})</p>
-                        {serialesDisponibles.length > 0 ? (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {serialesDisponibles.slice(0, 3).map(s => (
-                              <div key={s.id} className="flex items-center gap-1 bg-slate-200 text-slate-700 rounded px-1.5 py-0.5" title={s.lastReturnNote ? `Última devolución: ${s.lastReturnNote}` : ''}>
-                                <span className="text-[9px] font-mono font-bold">{s.serialNumber}</span>
-                                {s.lastReturnNote && <MessageSquare size={10} className="text-slate-500" />}
-                              </div>
-                            ))}
-                            {serialesDisponibles.length > 3 && (
-                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">+{serialesDisponibles.length - 3} más</span>
-                            )}
-                          </div>
-                        ) : <p className="text-[9px] text-slate-400 italic mt-1">No hay seriales disponibles.</p>}
+                  <div className="p-3 space-y-2">
+                    <div className="flex justify-between items-start gap-2">
+                      <h3 className="font-black text-slate-800 uppercase text-xs truncate">{prod.nombre}</h3>
+                      <p className="font-black text-slate-900 text-xs italic whitespace-nowrap">RD$ {formatPrice(prod.precio)}</p>
+                    </div>
+                  {prod.proveedor && <p className="text-[8px] font-black text-brand uppercase tracking-widest -mt-1">{prod.proveedor.nombre}</p>}                
+                    <div className="flex gap-2">
+                      <div className={`w-14 shrink-0 rounded-lg p-1.5 border ${prod.stock <= (prod.stockMinimo ?? 5) ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`} title={`Stock Mínimo: ${prod.stockMinimo ?? 5}`}>
+                        <p className="text-[8px] font-black uppercase opacity-70">Stock</p>
+                        <span className="text-xs font-black">{prod.stock}</span>
                       </div>
-                    );
-                  })()}
-                  {/* 🛡️ 3. Condicionamos los botones de acción en la VISTA DE CUADRÍCULA */}
-                  {/* --- FIN: Mostrar Seriales Disponibles --- */}
-                  <div className="px-1 py-1 text-right flex items-center justify-end gap-1 border-t border-slate-50 mt-2">
-                    {prod.isActive === false ? (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleRestaurar(prod); }} 
-                        className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
+                      <div 
+                        className="flex-1 bg-slate-50 p-1.5 rounded-lg border overflow-hidden cursor-help"
+                        title={`Almacén: ${prod.almacen || 'Principal'}${prod.ubicacion ? `\nUbicación: ${prod.ubicacion}` : ''}`}
                       >
-                        Restaurar
-                      </button>
-                    ) : (
-                      <>
-                        {permisosProductos?.edit && (
-                          <button onClick={(e) => { e.stopPropagation(); abrirEditar(prod); }} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
-                            <Edit3 size={16}/>
-                          </button>
-                        )}
-                        {permisosProductos?.delete && (
-                          <button onClick={(e) => { e.stopPropagation(); handleEliminar(prod); }} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
-                            <Trash2 size={16}/>
-                          </button>
-                        )}
-                      </>
-                    )}
+                        <p className="text-[8px] font-black text-slate-400 uppercase">Almacén / Ubicación</p>
+                        <div className="max-h-[40px] overflow-y-auto flex flex-col justify-center">
+                          <p className="text-[9px] font-black truncate text-slate-700 uppercase leading-tight">
+                            {prod.almacen || 'Principal'}
+                          </p>
+                          {prod.ubicacion && (
+                            <div className="flex items-center gap-1 text-brand mt-0.5">
+                              <MapPin size={10} strokeWidth={3} />
+                              <span className="text-[8px] font-black truncate uppercase">{prod.ubicacion}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {/* --- INICIO: Mostrar Seriales Disponibles --- */}
+                    {prod.isSerialized && (() => {
+                      const serialesDisponibles = prod.seriales?.filter(s => s.status === 'disponible') || [];
+                      return (
+                        <div className="pt-2 mt-2 border-t border-slate-100">
+                          <p className="text-[8px] font-black text-slate-400 uppercase">Seriales Disponibles ({serialesDisponibles.length})</p>
+                          {serialesDisponibles.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {serialesDisponibles.slice(0, 3).map(s => (
+                                <div key={s.id} className="flex items-center gap-1 bg-slate-200 text-slate-700 rounded px-1.5 py-0.5" title={s.lastReturnNote ? `Última devolución: ${s.lastReturnNote}` : ''}>
+                                  <span className="text-[9px] font-mono font-bold">{s.serialNumber}</span>
+                                  {s.lastReturnNote && <MessageSquare size={10} className="text-slate-500" />}
+                                </div>
+                              ))}
+                              {serialesDisponibles.length > 3 && (
+                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">+{serialesDisponibles.length - 3} más</span>
+                              )}
+                            </div>
+                          ) : <p className="text-[9px] text-slate-400 italic mt-1">No hay seriales disponibles.</p>}
+                        </div>
+                      );
+                    })()}
+                    {/* --- FIN: Mostrar Seriales Disponibles --- */}
+                    <div className="px-1 py-1 text-right flex items-center justify-end gap-1 border-t border-slate-50 mt-2">
+                      {prod.isActive === false ? (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleRestaurar(prod); }} 
+                          className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
+                        >
+                          Restaurar
+                        </button>
+                      ) : (
+                        <>
+                          {permisosProductos?.edit && (
+                            <button onClick={(e) => { e.stopPropagation(); abrirEditar(prod); }} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
+                              <Edit3 size={16}/>
+                            </button>
+                          )}
+                          {permisosProductos?.delete && (
+                            <button onClick={(e) => { e.stopPropagation(); handleEliminar(prod); }} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
+                              <Trash2 size={16}/>
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
+                </article>
+              ))}
+            </div>
+          ) : (
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b text-[9px] font-black uppercase text-slate-400">
               <tr>
@@ -786,6 +875,31 @@ const handleEliminar = (prod) => {
             </tbody>
           </table>
         )}
+      </div>
+      {/* 💡 BOTONERA DE PAGINACIÓN SEGURA */}
+      <div className="flex items-center justify-between bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-sm">
+        <span className="text-xs font-bold text-slate-500">
+          Página <span className="text-slate-800">{paginaActual}</span> de{' '}
+          <span className="text-slate-800">{totalPaginas}</span> ({totalRegistros} productos)
+        </span>
+        
+        <div className="flex gap-2">
+          <button
+            disabled={paginaActual <= 1 || loading}
+            onClick={handlePaginaAnterior}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            Anterior
+          </button>
+          
+          <button
+            disabled={paginaActual >= totalPaginas || loading}
+            onClick={handlePaginaSiguiente}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            Siguiente
+          </button>
+        </div>
       </div>
 
       {/* Modal Nuevo / Editar Producto */}

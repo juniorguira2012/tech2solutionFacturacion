@@ -41,6 +41,23 @@ const ProductoModal = ({
   const handleImagenUpload = (event) => {
     const archivo = event.target.files?.[0];
     if (!archivo) return;
+
+    // 1. Validar que sea un archivo de imagen válido
+    if (!archivo.type.startsWith('image/')) {
+      mostrarToast('Por favor selecciona un archivo de imagen válido (JPG, PNG, WEBP)', 'error');
+      event.target.value = ''; // Limpiar el input para permitir reintentar
+      return;
+    }
+
+    // 2. Validar el tamaño máximo (2 Megabytes = 2 * 1024 * 1024 bytes)
+    const tamañoMaximo = 2 * 1024 * 1024;
+    if (archivo.size > tamañoMaximo) {
+      mostrarToast('La imagen es muy pesada. El tamaño máximo permitido es 2MB.', 'error');
+      event.target.value = ''; // Limpiar el input
+      return;
+    }
+
+    // Si pasa las validaciones, procedemos a leerla en Base64
     const reader = new FileReader();
     reader.onload = () => setFormData(prev => ({ ...prev, imagen: reader.result || '' }));
     reader.readAsDataURL(archivo);

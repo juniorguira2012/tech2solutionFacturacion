@@ -16,6 +16,7 @@ docker-compose*.yaml
 docker-compose.local.yml
 docker-compose.test.yml
 docker-compose.yml
+docker-compose.production.yml
 
 
 # Base de datos local (si Docker crea una carpeta de datos)

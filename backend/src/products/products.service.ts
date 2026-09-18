@@ -8,6 +8,14 @@ import { Provider } from '../providers/entities/provider.entity';
 import { ProductSerial, SerialStatus } from './entities/product-serial.entity'; 
 import { Movement } from '../movements/entities/movement.entity';
 
+// Define an interface for the parameters of the findAll method
+export interface FindAllParams {
+  page?: number;
+  limit?: number;
+  isActive?: boolean | 'all';
+  search?: string;
+}
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -109,28 +117,80 @@ export class ProductsService {
     }
   }
 
-  // Obtener todos los productos (Lo que usará tu tabla de Inventario)
-  async findAll(isActive: boolean | 'all' = true) {
-    if (isActive === 'all') {
-      return await this.productRepository.find({
-        // 💡 MEJORA: Incluimos la relación con seriales para que el POS pueda buscar por ellos.
-        relations: ['seriales', 'proveedor'],
-        order: { createdAt: 'DESC' }, // Ordenar por fecha de creación descendente
-      });
-    }
-    return await this.productRepository.find({
-      where: { isActive }, // Usar el parámetro recibido
-      // 💡 MEJORA: También la incluimos en la búsqueda de productos activos.
-      relations: ['seriales', 'proveedor'],
-      order: { createdAt: 'DESC' }, // Los más nuevos primero
-    });
+
+// Obtener todos los productos con paginación, filtrado y búsqueda
+async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams = {}) {
+  const skip = (page - 1) * limit;
+
+  const query = this.productRepository
+    .createQueryBuilder('producto')
+    .select([
+      'producto.id',
+      'producto.nombre',
+      'producto.codigo',
+      'producto.modelo',
+      'producto.serie',
+      'producto.categoria',
+      'producto.precio',
+      'producto.stock',
+      'producto.stockMinimo',
+      'producto.imagen', 
+      'producto.almacen',
+      'producto.pasillo',
+      'producto.fila',
+      'producto.ubicacion',
+      'producto.unidadMedida',
+      'producto.isActive',
+      'producto.isComodato',
+      'producto.isSerialized',
+      'producto.createdAt',
+      'producto.proveedorId',
+    ])
+    .leftJoinAndSelect('producto.proveedor', 'proveedor')
+    .leftJoinAndSelect(
+      'producto.seriales',
+      'serialDisponible',
+      'serialDisponible.status = :serialStatus',
+      { serialStatus: SerialStatus.DISPONIBLE },
+    )
+    .orderBy('producto.createdAt', 'DESC')
+    .skip(skip)
+    .take(limit);
+
+  // Filtro de activos/inactivos
+  if (isActive !== 'all') {
+    query.andWhere('producto.isActive = :isActive', { isActive });
   }
+
+  // Buscador rápido integrado directamente en la DB
+  if (search) {
+    query.andWhere(
+      '(LOWER(producto.nombre) LIKE LOWER(:search) OR LOWER(producto.codigo) LIKE LOWER(:search))',
+      { search: `%${search}%` },
+    );
+  }
+
+  const [data, total] = await query.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page,
+    lastPage: Math.ceil(total / limit),
+  };
+}
 
   // Obtener uno solo
   async findOne(id: number) {
-    const producto = await this.productRepository.findOneBy({ id });
-    if (!producto)
-      throw new NotFoundException(`Producto con ID ${id} no encontrado`);
+    const producto = await this.productRepository.findOne({
+      where: { id },
+      relations: ['proveedor'] // Incluye las relaciones que necesites
+    });
+
+    if (!producto) {
+      throw new NotFoundException(`El producto con ID ${id} no fue encontrado`);
+    }
+
     return producto;
   }
 

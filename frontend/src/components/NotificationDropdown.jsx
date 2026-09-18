@@ -12,12 +12,13 @@ const NotificationDropdown = ({ onClose, onCountChange, isOpen }) => {
   const { usuario } = useAuth();
 
   useEffect(() => {
-    if (!usuario) return undefined;
+  if (!usuario) return;
 
+  // Carga únicamente al abrir el menú desplegable
+  if (isOpen) {
     cargarMovimientos();
-    const intervalId = window.setInterval(cargarMovimientos, 30000);
-    return () => window.clearInterval(intervalId);
-  }, [usuario, cargarMovimientos]);
+  }
+}, [isOpen]);
 
   // 2. Inicializamos los estados del componente
   const [fadingOut, setFadingOut] = useState(new Set());
@@ -83,8 +84,10 @@ const NotificationDropdown = ({ onClose, onCountChange, isOpen }) => {
   }, [comodatosVencidos, productosBajoStock, movimientosRecientes]);
   
   useEffect(() => {
+  if (typeof onCountChange === 'function') {
     onCountChange(totalNotificacionesVisibles);
-  }, [totalNotificacionesVisibles, onCountChange]);
+  }
+}, [totalNotificacionesVisibles]);
   
   const clearAllNotifications = () => {
     const allIds = [

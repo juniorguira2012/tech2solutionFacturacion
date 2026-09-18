@@ -104,7 +104,7 @@ export class Product {
   proveedor: Provider;
 
   // Relación para el stock desglosado por almacén
-  @OneToMany(() => ProductWarehouseStock, (stock) => stock.producto, { cascade: true, eager: true })
+  @OneToMany(() => ProductWarehouseStock, (stock) => stock.producto, { cascade: true })
   warehouseStocks: ProductWarehouseStock[];
 
   @Column({ default: false })
@@ -114,7 +114,7 @@ export class Product {
   isSerialized: boolean;
 
   // ─── Serials ──────────────────────────────────────────────────────────────
-  @OneToMany(() => ProductSerial, (serial) => serial.producto, { cascade: true, eager: true })
+  @OneToMany(() => ProductSerial, (serial) => serial.producto, { cascade: true })
   seriales: ProductSerial[];
 
   // ─── Timestamps ───────────────────────────────────────────────────────────

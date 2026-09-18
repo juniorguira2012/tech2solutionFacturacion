@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, ParseIntPipe, NotFoundException, Req } from '@nestjs/common'; // 🚨 Se agregó 'Req' aquí
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, ParseIntPipe, NotFoundException, Req } from '@nestjs/common';
 import { MovementsService } from './movements.service';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { CreateBulkMovementDto } from './dto/create-bulk-movement.dto';
@@ -7,9 +7,14 @@ import { AssignSerialsToTechnicianDto } from './dto/assign-serials.dto';
 @Controller('movements')
 export class MovementsController {
   constructor(private readonly movementsService: MovementsService) {}
-
+  
   @Post()
   create(@Body() createMovementDto: CreateMovementDto) {
+    return this.movementsService.create(createMovementDto);
+  }
+
+  @Post('outbound')
+  createOutbound(@Body() createMovementDto: CreateMovementDto) {
     return this.movementsService.create(createMovementDto);
   }
 

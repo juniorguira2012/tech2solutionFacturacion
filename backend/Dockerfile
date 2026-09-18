@@ -11,6 +11,11 @@ RUN npm run build
 FROM node:22-alpine
 WORKDIR /app
 
+# 1. Declarar el ARG para recibir el valor desde docker-compose
+ARG VITE_GOOGLE_CLIENT_ID
+# 2. Convertirlo en ENV para que Vite lo lea durante 'npm run build'
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+
 # 🚀 Aquí SÍ es correcto tener el cliente de Postgres para backups y scripts del backend
 RUN apk add --no-cache postgresql18-client
 
