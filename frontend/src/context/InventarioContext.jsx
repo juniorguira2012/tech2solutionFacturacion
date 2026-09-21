@@ -562,20 +562,31 @@ export const InventarioProvider = ({ children }) => {
 
 const registrarMovimientosMasivos = async (payload) => {
   try {
-    const url = `${API_BASE_URL}/movements/bulk-receive`;
+    // 💡 CAMBIO CLAVE: Si vas a registrar salidas/ventas, asegúrate de apuntar 
+    // a la ruta masiva correcta de salidas de tu backend (ej. bulk-outbound o bulk si aplica).
+    // Si tu backend usa la misma para todo, déjala como bulk-receive, pero valida tu controlador.
+    const url = `${API_BASE_URL}/movements/bulk-receive`; 
     
-    // 🌟 DEPURADOR ULTRAESTRICTO: Eliminamos cualquier rastro de lotes del payload
-    let payloadLimpio = JSON.parse(JSON.stringify(payload)); // Clonamos para no romper el estado de la UI
+    let payloadLimpio = JSON.parse(JSON.stringify(payload)); 
 
+    // Asegurarnos de limpiar propiedades de lotes y garantizar tipos correctos
     if (Array.isArray(payloadLimpio)) {
-      // Si el payload es un array directo: [ { ... }, { ... } ]
-      payloadLimpio = payloadLimpio.map(({ numeroLote, lote, loteId, ...resto }) => resto);
+      payloadLimpio = payloadLimpio.map(({ numeroLote, lote, loteId, ...resto }) => ({
+        ...resto,
+        usuarioId: resto.usuarioId ? Number(resto.usuarioId) : 1
+      }));
     } else if (payloadLimpio && Array.isArray(payloadLimpio.items)) {
-      // Si el payload viene envuelto en un objeto con la propiedad 'items' (Tu caso actual 🎯)
-      payloadLimpio.items = payloadLimpio.items.map(({ numeroLote, lote, loteId, ...resto }) => resto);
+      payloadLimpio.usuarioId = Number(payloadLimpio.usuarioId) || 1;
+      payloadLimpio.nota = String(payloadLimpio.nota || "Salida masiva de inventario");
+      
+      payloadLimpio.items = payloadLimpio.items.map(({ numeroLote, lote, loteId, ...resto }) => ({
+        ...resto,
+        productoId: Number(resto.productoId),
+        cantidad: Number(resto.cantidad),
+        serials: Array.isArray(resto.serials) ? resto.serials : []
+      }));
     }
 
-    // 1. Apuntamos a la ruta exacta de tu controlador de NestJS pasándole el payload limpio
     const res = await fetch(url, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -596,7 +607,6 @@ const registrarMovimientosMasivos = async (payload) => {
 
     const data = await res.json();
 
-    // 2. Refrescamos la UI
     setRefreshIndex(prev => prev + 1);
     
     return data;
@@ -907,72 +917,53 @@ const obtenerProductos = async (id) => {
     }
   };
   // 5. Descontar Stock
-  const descontarStock = async (itemsCarrito) => {
-    try {
-      const headers = getAuthHeaders();
-      if (headers['x-inventory-permission'] === 'none') {
-        headers['x-inventory-permission'] = 'view';
-      }
-
-      const promesas = itemsCarrito.map(async (item) => {
-        // 1. Unificamos la captura de seriales desde cualquier propiedad posible del carrito
-        const rawSerials = Array.isArray(item.seriales) 
-          ? item.seriales 
-          : (Array.isArray(item.serials) 
-              ? item.serials 
-              : (Array.isArray(item.selectedSerials) 
-                  ? item.selectedSerials 
-                  : (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])));
-
-        // 2. Aseguramos que 'serialsLista' esté correctamente definida como un array de strings puros
-        const serialsLista = rawSerials.map(s => 
-          typeof s === 'object' && s !== null ? String(s.serial || s.codigo || s.numero || '') : String(s)
-        ).filter(s => s.trim() !== '');
-
-        // 3. Calculamos la cantidad de forma segura
-        const cantidadCalculada = serialsLista.length > 0 
-          ? serialsLista.length 
-          : Number(item.cantidad || 1);
-
-        const res = await fetch(`${API_BASE_URL}/movements/outbound`, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify({
-            productoId: Number(item.id),
-            cantidad: cantidadCalculada, 
-            tipo: 'SALIDA',
-            almacenId: item.almacenId ? Number(item.almacenId) : undefined,
-            serials: serialsLista, // 👈 Ahora sí, totalmente definida y lista
-            usuarioId: usuario?.id ? String(usuario.id) : "1", 
-          })
-        });
-        
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          const msg = Array.isArray(data.message) ? data.message.join(', ') : data.message;
-          throw new Error(msg || `Error al descontar stock de ${item.nombre || 'producto'}`);
-        }
-        return data;
-      });
-
-      await Promise.all(promesas);
-      setRefreshIndex(prev => prev + 1); 
-
-      if (typeof cargarSeriales === 'function') {
-        await cargarSeriales();
-      }
-
-      if (typeof cargarProductos === 'function') {
-        await cargarProductos();
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Error al descontar stock:", error);
-      throw error;
+ const descontarStock = async (carritoItems, notaVenta = "Salida por Venta") => {
+  try {
+    if (!carritoItems || carritoItems.length === 0) {
+      return;
     }
-  };
+
+    const payloadMasivo = {
+      tipo: 'SALIDA',
+      usuarioId: usuario?.id ? Number(usuario.id) : 1,
+      nota: String(notaVenta),
+      items: carritoItems.map(item => ({
+        productoId: Number(item.id || item.productoId),
+        cantidad: Number(item.isSerialized ? (item.serials?.length || 1) : (item.cantidad || 1)),
+        // 👈 Pasamos el nombre exacto del almacén en texto (ej: "ALMACEN OFICINA")
+        almacen: String(item.almacen || item.almacenNombre || item.ubicacion?.almacen || "ALMACEN OFICINA"),
+        serials: Array.isArray(item.serials) ? item.serials : []
+      }))
+    };
+
+    const res = await fetch(`${API_BASE_URL}/movements/bulk-receive`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payloadMasivo)
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      let errorMessage = 'Error al descontar stock';
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = Array.isArray(errorJson.message) 
+          ? errorJson.message.join(', ') 
+          : errorJson.message;
+      } catch {
+        errorMessage = errorText;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await res.json();
+    setRefreshIndex(prev => prev + 1);
+    return data;
+  } catch (err) {
+    console.error("Error al descontar stock:", err);
+    throw err;
+  }
+};
   // --- GESTIÓN DE CONTEO FÍSICO (Auditoría) ---
   const cargarConteos = useCallback(async (almacen = '') => {
     try {

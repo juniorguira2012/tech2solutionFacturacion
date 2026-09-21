@@ -277,46 +277,47 @@ const ProductoModal = ({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {isEditing ? (
-                        formData.serialesExistentes.filter(serial => serial.status === 'disponible').map((serial, index) => (
-                          <tr key={serial.id} className="text-xs">
-                            <td className="px-4 py-2 text-slate-400 font-sans font-bold">{index + 1}</td>
-                            <td className="px-4 py-2 font-bold text-slate-700 font-mono">{serial.serialNumber}</td>
-                            <td className="px-4 py-2">
-                              <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
-                                serial.status === 'disponible' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                              }`}>
-                                {serial.status.replace('_', ' ')}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2 font-bold text-slate-500 uppercase text-[9px]">{serial.almacen}</td>
-                            <td className="px-4 py-2 text-right">
-                              {serial.status === 'disponible' && canDeleteSerial && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nuevo = window.prompt('Introduce el nuevo número de serie:', serial.serialNumber);
-                                    if (nuevo && nuevo.trim() !== serial.serialNumber) {
-                                      handleInternalUpdateSerial(serial.id, nuevo.trim());
-                                    }
-                                  }}
-                                  className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
-                                  <Edit3 size={14}/>
-                                </button>
-                              )}
-                              {/* -- 2. Botón de Eliminar -- */}
-                              {serial.status === 'disponible' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteSerial(serial.id)}
-                                  className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Eliminar este serial del producto">
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
+                        formData.serialesExistentes.map((serial, index) => (
+                            <tr key={serial.id || index} className="text-xs">
+                              <td className="px-4 py-2 text-slate-400 font-sans font-bold">{index + 1}</td>
+                              <td className="px-4 py-2 font-bold text-slate-700 font-mono">{serial.serialNumber}</td>
+                              <td className="px-4 py-2">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                                  serial.status === 'disponible' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {serial.status.replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2 font-bold text-slate-500 uppercase text-[9px]">{serial.almacen}</td>
+                              <td className="px-4 py-2 text-right">
+                                {serial.status === 'disponible' && canDeleteSerial && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nuevo = window.prompt('Introduce el nuevo número de serie:', serial.serialNumber);
+                                      if (nuevo && nuevo.trim() !== serial.serialNumber) {
+                                        handleInternalUpdateSerial(serial.id, nuevo.trim());
+                                      }
+                                    }}
+                                    className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
+                                    <Edit3 size={14}/>
+                                  </button>
+                                )}
+                                
+                                {/* Solo permitimos borrar si está disponible */}
+                                {serial.status === 'disponible' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSerial(serial.id)}
+                                    className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Eliminar este serial del producto">
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
                         formData.serialsInput.split(/[\n,]+/).filter(Boolean).map((serial, index) => (
                           <tr key={index} className="text-xs font-mono">
                             <td className="px-4 py-1.5 text-slate-400 font-sans font-bold">{index + 1}</td>

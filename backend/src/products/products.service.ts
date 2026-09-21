@@ -273,19 +273,15 @@ async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams =
         }
 
         // 2. Identificar y crear nuevos seriales
-        // Filtramos para ignorar los seriales que ya existen en la base de datos para este producto.
-        // Esto evita errores de duplicados y permite añadir nuevos seriales a una lista existente sin problemas.
         const serialesACrear = serialesNuevosStr
           .filter(s => !serialesActualesStr.includes(s))
           .map(serialNumber => queryRunner.manager.create(ProductSerial, {
             productoId: id,
             serialNumber,
             status: SerialStatus.DISPONIBLE,
-            // Usamos el almacén que viene en la actualización, o el que ya tenía el producto.
             almacen: productData.almacen ?? producto.almacen ?? 'Principal',
           }));
 
-        // 💡 ALERTA DE DUPLICADOS (ACTUALIZACIÓN): Verificamos si los nuevos seriales ya existen en OTRO producto.
         if (serialesACrear.length > 0) {
           const numerosDeSerialesACrear = serialesACrear.map(s => s.serialNumber);
           const serialesExistentesEnDB = await queryRunner.manager
@@ -298,18 +294,22 @@ async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams =
           }
         }
 
-        // Solo intentamos guardar si realmente hay seriales nuevos que añadir.
         if (serialesACrear.length > 0) {
-          const nuevosSerialesGuardados = await queryRunner.manager.save(ProductSerial, serialesACrear);
-          producto.seriales = [...(producto.seriales || []), ...nuevosSerialesGuardados];
+          await queryRunner.manager.save(ProductSerial, serialesACrear);
         }
-        
-        // 💡 CORRECCIÓN: Calculamos el stock contando únicamente los seriales disponibles.
-        // Esto evita que seriales vendidos, en reparación, etc., se sumen al stock.
-        const serialesDisponiblesActuales = serialesActuales.filter(s => s.status === SerialStatus.DISPONIBLE).length;
-        const serialesDisponiblesNuevos = serialesACrear.length; // Los nuevos siempre son 'DISPONIBLE'
-        const serialesDisponiblesAEliminar = serialesAEliminar.filter(s => s.status === SerialStatus.DISPONIBLE).length;
-        producto.stock = serialesDisponiblesActuales + serialesDisponiblesNuevos - serialesDisponiblesAEliminar;
+
+        // 💡 LA SOLUCIÓN DEFINITIVA: 
+        // En lugar de sumar y restar manualmente con variables locales que pueden fallar,
+        // consultamos directamente a la BD cuántos seriales 'DISPONIBLE' exactos tiene este producto ahora mismo.
+        const stockRealCalculado = await queryRunner.manager.count(ProductSerial, {
+          where: {
+            productoId: id,
+            status: SerialStatus.DISPONIBLE,
+          },
+        });
+
+        // Asignamos el stock real basado en la base de datos
+        producto.stock = stockRealCalculado;
       }
 
       // Si hubo cambio de almacén, ajustamos el stock desglosado

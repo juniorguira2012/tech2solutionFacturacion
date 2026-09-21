@@ -330,15 +330,8 @@ export class MovementsService {
         const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION_FACTURA'];
         const tiposDecremento = ['SALIDA', 'DESPACHAR', 'DESCARTAR', 'DEVOLUCION']; 
 
-        if (tiposIncremento.includes(tipoNormalizado)) {
-          nuevoStock += cantidadNumerica;
-          await this.updateWarehouseStock(queryRunner.manager, producto.id, targetAlmacen, cantidadNumerica);
-          batchGenerated = await this.generateAndSaveBatch(queryRunner.manager, producto.id, cantidadNumerica, targetAlmacen, lote);
-
-        } else if (tiposDecremento.includes(tipoNormalizado)) {
-          
-          // 🌟 AÑADIR ESTO: Si el producto maneja seriales, los marcamos como VENDIDOS
-          if (producto.isSerialized) {
+        // 🌟 VALIDAR Y CAMBIAR LOS SERIALES A 'VENDIDO' AQUÍ MISMO ANTES DE DESCONTAR NADA
+          if (tiposDecremento.includes(tipoNormalizado) && producto.isSerialized) {
             if (!Array.isArray(serials) || serials.length === 0) {
               throw new BadRequestException(`Debe proporcionar una lista de seriales para este producto serializado.`);
             }
@@ -359,8 +352,8 @@ export class MovementsService {
               serialADespachar.status = SerialStatus.VENDIDO; 
               await queryRunner.manager.save(ProductSerial, serialADespachar);
             }
-          }
-          // --------------------------------------------------------------------------
+          
+              // --------------------------------------------------------------------------
 
           const stockEnAlmacen = await queryRunner.manager.findOne(ProductWarehouseStock, {
             where: { productoId: producto.id, almacen: targetAlmacen }

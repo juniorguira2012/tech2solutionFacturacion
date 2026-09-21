@@ -240,9 +240,6 @@ const Ventas = () => {
         items: carrito.map(item => ({
           productoId: Number(item.id),
           precio: Number(item.precio),
-          // 💡 La cantidad siempre se envía como número. 
-          // Si es serializado, la cantidad es igual a cuántos seriales lleva en su array (ej. 1, 2...). 
-          // Si es normal, usa su cantidad numérica habitual.
           cantidad: Number(item.isSerialized ? (item.serials?.length || 1) : item.cantidad),
         })),
         vendedorId: usuario?.id?.toString(),
@@ -461,30 +458,38 @@ const Ventas = () => {
     inputBusquedaRef.current?.focus();
   };
 
-  // Función para guardar los seriales desde el modal
-  const handleGuardarSeriales = () => {
-    if (!productoParaSeriales) return;
+  // --- MANEJO DE SERIALES ---
+    const handleGuardarSeriales = () => {
+      if (!productoParaSeriales) return;
 
-    const serialsArray = serialesInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-    
-    // Validación para no vender más seriales que el stock disponible
-    if (serialsArray.length > productoParaSeriales.stock) {
-      alert(`Stock insuficiente. Solo hay ${productoParaSeriales.stock} unidades disponibles.`);
-      return;
-    }
+      const serialsArray = serialesInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      
+      // Validación para no vender más seriales que el stock disponible
+      if (serialsArray.length > productoParaSeriales.stock) {
+        alert(`Stock insuficiente. Solo hay ${productoParaSeriales.stock} unidades disponibles.`);
+        return;
+      }
 
-    const itemExistente = carrito.find(i => i.id === productoParaSeriales.id);
+      const itemExistente = carrito.find(i => i.id === productoParaSeriales.id);
 
-    if (itemExistente) {
-      setCarrito(carrito.map(item => item.id === productoParaSeriales.id ? { ...item, serials: serialsArray } : item));
-    } else {
-      setCarrito([...carrito, { ...productoParaSeriales, serials: serialsArray }]);
-    }
+      if (itemExistente) {
+        setCarrito(carrito.map(item => 
+          item.id === productoParaSeriales.id 
+            ? { ...item, serials: serialsArray, cantidad: serialsArray.length } // 👈 Actualizamos seriales y cantidad
+            : item
+        ));
+      } else {
+        setCarrito([...carrito, { 
+          ...productoParaSeriales, 
+          serials: serialsArray, 
+          cantidad: serialsArray.length // 👈 Definimos la cantidad inicial según los seriales
+        }]);
+      }
 
-    setSerialModalOpen(false);
-    setProductoParaSeriales(null);
-    setSerialesInput('');
-  };
+      setSerialModalOpen(false);
+      setProductoParaSeriales(null);
+      setSerialesInput('');
+    };
   const guardarEnAbiertas = () => {
     // 🛡️ Verificación de permiso de creación antes de pausar una venta
     if (!permisos.create) {
