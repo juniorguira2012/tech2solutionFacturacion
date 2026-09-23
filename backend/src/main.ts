@@ -29,7 +29,7 @@ async function bootstrap() {
     'http://127.0.0.1:5174',
   ].filter(Boolean);
 
-  console.log('Allowed CORS origins:', allowedOrigins);
+  //console.log('Allowed CORS origins:', allowedOrigins);
 
   app.enableCors({
     origin: (origin, callback) => {

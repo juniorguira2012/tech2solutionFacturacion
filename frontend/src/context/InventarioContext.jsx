@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useCallback, use
 import { useAuth } from './AuthContext';
 
 const InventarioContext = createContext();
-
+ 
 export const InventarioProvider = ({ children }) => {
   const [productos, setProductos] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
@@ -38,6 +38,10 @@ export const InventarioProvider = ({ children }) => {
   const [proveedores, setProveedores] = useState([]);
 
   const [unidadesMedida, setUnidadesMedida] = useState([]);
+
+  const [terminosBusqueda, setTerminosBusqueda] = useState('');
+
+ 
 
   const getInventoryPermission = useCallback(() => {
     if (usuario?.rol === 'admin') return 'full';
@@ -81,19 +85,18 @@ export const InventarioProvider = ({ children }) => {
   
   return headers;
 }, [usuario?.id, usuario?.rol, getInventoryPermission]); // Solo depende de los estados reales de sesión
-
+const [terminoBusqueda, setTerminoBusqueda] = useState('');
  //LA FUNCIÓN FUERA DEL USEEFFECT (A nivel del Provider)
-  const cargarProductosPrioritarios = async (page = 1, terminoBusqueda = '') => {
+  const cargarProductosPrioritarios = async (page = 1, query = terminoBusqueda) => {
     setLoading(true);
     setErrorConexion(null);
     try {
       const headers = getAuthHeaders();
       const estadoFiltro = verEliminados === 'all' ? 'all' : verEliminados ? 'false' : 'true';
       
-      // 💡 Añadimos el parámetro de búsqueda a la URL si el usuario escribió algo
       let productsUrl = `${API_URL}?page=${page}&limit=20&isActive=${estadoFiltro}`;
-      if (terminoBusqueda.trim() !== '') {
-        productsUrl += `&search=${encodeURIComponent(terminoBusqueda)}`;
+      if (query && query.trim() !== '') {
+        productsUrl += `&search=${encodeURIComponent(query)}`;
       }
       
       const res = await fetch(productsUrl, { headers });
@@ -101,11 +104,15 @@ export const InventarioProvider = ({ children }) => {
       
       const responseData = await res.json();
       const listaProductos = responseData.data || (Array.isArray(responseData) ? responseData : []);
-      
+      const meta = responseData.meta || {};
+
       setProductos(listaProductos);
-      setPaginaActual(responseData.page || page);
-      setTotalPaginas(responseData.lastPage || 1);
-      setTotalRegistros(responseData.total || listaProductos.length);
+      
+      // 💡 Se leen correctamente desde el objeto 'meta' que sí trae la API
+      setPaginaActual(Number(meta.page || page));
+      setTotalPaginas(Number(meta.lastPage || 1));
+      setTotalRegistros(Number(meta.total || listaProductos.length));
+      
     } catch (error) {
       console.error("Error crítico al buscar productos:", error);
       setErrorConexion(error.message);
@@ -131,6 +138,7 @@ export const InventarioProvider = ({ children }) => {
         { url: `${API_BASE_URL}/units-of-measure`, setter: setUnidadesMedida },
         { url: `${API_BASE_URL}/movements/technicians`, setter: setTecnicos },
         { url: `${API_BASE_URL}/categories`, setter: setCategorias },
+        { url: `${API_BASE_URL}/movements`, setter: setMovimientos },
       ];
 
       const promesas = recursos.map((r) =>
@@ -1230,6 +1238,23 @@ const obtenerProductos = async (id) => {
     }
   };
 
+   // --- Funciones de Paginación Seguras ---
+    const handlePaginaSiguiente = () => {
+      if (Number(paginaActual) < Number(totalPaginas)) {
+      
+        cargarProductosPrioritarios(Number(paginaActual) + 1, terminosBusqueda);
+      } else {
+        console.warn("⚠️ No se puede avanzar más. Estás en la última página.");
+      }
+    };
+
+    const handlePaginaAnterior = () => {
+        if (Number(paginaActual) > 1) {
+          cargarProductosPrioritarios(Number(paginaActual) - 1, terminosBusqueda);
+        }
+      };
+
+
   return (
     <InventarioContext.Provider value={{ 
       productos,
@@ -1298,9 +1323,13 @@ const obtenerProductos = async (id) => {
       actualizarTecnico,
       eliminarTecnico,
       registrarTransferencia, 
+      setTerminosBusqueda,
+      terminosBusqueda,
       registrarMovimientosMasivos,
       cargarMovimientos,
       cargarConteos,
+      handlePaginaSiguiente, 
+      handlePaginaAnterior,
       recargarInventario: () => setRefreshIndex(prev => prev + 1)
     }}>
       {children}

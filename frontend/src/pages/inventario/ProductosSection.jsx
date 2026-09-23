@@ -58,6 +58,13 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { //Re
   //Extraemos los permisos específicos para esta sección
   const permisosProductos = permisos?.subModulos?.productos ?? permisos;
 
+  useEffect(() => {
+    if (typeof setTerminoBusqueda === 'function') {
+      setTerminoBusqueda('');
+      cargarProductosPrioritarios(1, '');
+    }
+  }, []);
+
   const {
     productos,
     loading,
@@ -79,7 +86,10 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { //Re
     setVerEliminados,
     actualizarSerial, // <-- Importamos la nueva función del contexto
     eliminarSerial,
+    handlePaginaSiguiente,
+    handlePaginaAnterior,
   } = useInventario();
+  
   const { usuario } = useAuth();
   const canDeleteSerial = String(
     usuario?.rol?.nombre || usuario?.rol || usuario?.role || '',
@@ -402,24 +412,40 @@ const handleSave = async (e) => {
     vendidos, 
     serialsInput, 
     serialesExistentes, 
+    seriales, // Se remueve por si venía de la DB con esta clave
+    serials,  // Se remueve por si venía de la DB con esta clave
     ...datosBase 
   } = formData;
 
   // 2. Procesamos los seriales de forma segura
   let listaSeriales = undefined;
+
   if (formData.isSerialized) {
+    // Extraer seriales nuevos ingresados en el textarea
     const serialesDelInput = (serialsInput || '')
       .split(/[\n,]+/)
       .map(s => s.trim().toUpperCase())
       .filter(Boolean);
-    const serialesExistentesNormalizados = serialesExistentes
-      .map(s => String(s.serialNumber || '').trim().toUpperCase())
+
+    // Aseguramos que serialesExistentes sea un array y leemos cualquier estructura (objeto o string)
+    const arrayExistentes = Array.isArray(serialesExistentes) 
+      ? serialesExistentes 
+      : (Array.isArray(formData.seriales) ? formData.seriales : (Array.isArray(formData.serials) ? formData.serials : []));
+
+    const serialesExistentesNormalizados = arrayExistentes
+      .map(s => {
+        if (typeof s === 'object' && s !== null) {
+          return String(s.serialNumber || s.serial || '').trim().toUpperCase();
+        }
+        return String(s || '').trim().toUpperCase();
+      })
       .filter(Boolean);
 
-    // --- VALIDACIÓN DE SERIALES DUPLICADOS ---
+    // --- COMBINAR SERIALES Y VALIDAR DUPLICADOS ---
     const listaSerialesNormalizada = isEditing
       ? [...serialesExistentesNormalizados, ...serialesDelInput]
       : serialesDelInput;
+
     const serialesUnicos = [...new Set(listaSerialesNormalizada)];
 
     if (serialesUnicos.length !== listaSerialesNormalizada.length) {
@@ -431,23 +457,29 @@ const handleSave = async (e) => {
       return;
     }
 
-    // Validar contra todos los seriales existentes en la base de datos.
+    // Validar contra todos los seriales existentes en la base de datos global
     const serialesGlobales = new Set(
-      seriales.map(s => String(s.serialNumber || '').trim().toUpperCase()),
+      (seriales || []).map(s => {
+        if (typeof s === 'object' && s !== null) {
+          return String(s.serialNumber || s.serial || '').trim().toUpperCase();
+        }
+        return String(s || '').trim().toUpperCase();
+      }),
     );
     const serialesPropios = new Set(serialesExistentesNormalizados);
+
     const serialRepetidoEnBD = serialesDelInput.find(
       serial => serialesGlobales.has(serial) && !serialesPropios.has(serial),
     );
+
     if (serialRepetidoEnBD) {
       mostrarToast?.(`El serial "${serialRepetidoEnBD}" ya está registrado en el sistema.`, 'error');
       setIsSaving(false);
       return;
     }
 
-    if (isEditing) {
-      listaSeriales = serialesUnicos;
-    }
+    // 👈 ASIGNACIÓN CORREGIDA: Funciona tanto para creación como para edición
+    listaSeriales = serialesUnicos;
   }
 
   // 3. Estructuramos la data final
@@ -461,9 +493,6 @@ const handleSave = async (e) => {
     precio: parseFloat(formData.precio) || 0,    
     stockMinimo: parseInt(formData.stockMinimo, 10) || 0, 
 
-    // 🚀 ¡AQUÍ ESTÁ EL FIX PARA EL PROVEEDOR!
-    // Forzamos que sea un número real, y si viene vacío (""), lo enviamos como undefined
-    // para que NestJS lo ignore por completo y no falle el ValidationPipe.
     proveedorId: datosBase.proveedorId ? Number(datosBase.proveedorId) : undefined,
 
     ...(!formData.isSerialized && { stock: parseInt(formData.stock) || 0 }),
@@ -566,18 +595,18 @@ const handleEliminar = (prod) => {
   return coincideBusqueda && coincideAlmacen && coincideEstado && coincideTipo;
     }), [productos, searchTerm, almacenFiltro, filtroProducto]);
 
-  // Manejadores seguros para la paginación
-  const handlePaginaAnterior = () => {
-    if (typeof cargarProductosPrioritarios === 'function' && paginaActual > 1) {
-      cargarProductosPrioritarios(paginaActual - 1);
-    }
-  };
+  // // Manejadores seguros para la paginación
+  // const handlePaginaAnterior = () => {
+  //   if (typeof cargarProductosPrioritarios === 'function' && paginaActual > 1) {
+  //     cargarProductosPrioritarios(paginaActual - 1);
+  //   }
+  // };
 
-  const handlePaginaSiguiente = () => {
-    if (typeof cargarProductosPrioritarios === 'function' && paginaActual < totalPaginas) {
-      cargarProductosPrioritarios(paginaActual + 1);
-    }
-  };
+  // const handlePaginaSiguiente = () => {
+  //   if (typeof cargarProductosPrioritarios === 'function' && paginaActual < totalPaginas) {
+  //     cargarProductosPrioritarios(paginaActual + 1);
+  //   }
+  // };
 
   return (
     <div className="space-y-4">

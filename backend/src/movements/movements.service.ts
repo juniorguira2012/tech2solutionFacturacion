@@ -330,8 +330,20 @@ export class MovementsService {
         const tiposIncremento = ['ENTRADA', 'RECIBIR', 'DEVOLUCION_FACTURA'];
         const tiposDecremento = ['SALIDA', 'DESPACHAR', 'DESCARTAR', 'DEVOLUCION']; 
 
-        // 🌟 VALIDAR Y CAMBIAR LOS SERIALES A 'VENDIDO' AQUÍ MISMO ANTES DE DESCONTAR NADA
-          if (tiposDecremento.includes(tipoNormalizado) && producto.isSerialized) {
+        if (tiposIncremento.includes(tipoNormalizado)) {
+          // --------------------------------------------------------------------------
+          // LÓGICA DE INCREMENTO (ENTRADAS)
+          // --------------------------------------------------------------------------
+          nuevoStock += cantidadNumerica;
+          await this.updateWarehouseStock(queryRunner.manager, producto.id, targetAlmacen, cantidadNumerica);
+
+        } else if (tiposDecremento.includes(tipoNormalizado)) {
+          // --------------------------------------------------------------------------
+          // LÓGICA DE DECREMENTO (SALIDAS / DESPACHOS)
+          // --------------------------------------------------------------------------
+          
+          // 1. Si es serializado, validamos y pasamos los seriales a 'VENDIDO'
+          if (producto.isSerialized) {
             if (!Array.isArray(serials) || serials.length === 0) {
               throw new BadRequestException(`Debe proporcionar una lista de seriales para este producto serializado.`);
             }
@@ -352,9 +364,9 @@ export class MovementsService {
               serialADespachar.status = SerialStatus.VENDIDO; 
               await queryRunner.manager.save(ProductSerial, serialADespachar);
             }
-          
-              // --------------------------------------------------------------------------
+          }
 
+          // 2. Validar stock en el almacén correspondiente (aplica para serializados y normales)
           const stockEnAlmacen = await queryRunner.manager.findOne(ProductWarehouseStock, {
             where: { productoId: producto.id, almacen: targetAlmacen }
           });
@@ -371,6 +383,9 @@ export class MovementsService {
           await this.updateWarehouseStock(queryRunner.manager, producto.id, targetAlmacen, -cantidadNumerica);
 
         } else if (tipoNormalizado === 'AJUSTE' || tipoNormalizado === 'AJUSTAR') {
+          // --------------------------------------------------------------------------
+          // LÓGICA DE AJUSTE
+          // --------------------------------------------------------------------------
           if (cantidadNumerica < 0) throw new BadRequestException('El stock no puede ser negativo tras un ajuste');
           
           await this.updateWarehouseStock(queryRunner.manager, producto.id, targetAlmacen, cantidadNumerica, true);

@@ -119,66 +119,49 @@ export class ProductsService {
 
 
 // Obtener todos los productos con paginación, filtrado y búsqueda
-async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams = {}) {
-  const skip = (page - 1) * limit;
+    async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams = {}) {
+      const take = Math.min(Number(limit) || 20, 50);
+      const skip = (Math.max(Number(page), 1) - 1) * take;
 
-  const query = this.productRepository
-    .createQueryBuilder('producto')
-    .select([
-      'producto.id',
-      'producto.nombre',
-      'producto.codigo',
-      'producto.modelo',
-      'producto.serie',
-      'producto.categoria',
-      'producto.precio',
-      'producto.stock',
-      'producto.stockMinimo',
-      'producto.imagen', 
-      'producto.almacen',
-      'producto.pasillo',
-      'producto.fila',
-      'producto.ubicacion',
-      'producto.unidadMedida',
-      'producto.isActive',
-      'producto.isComodato',
-      'producto.isSerialized',
-      'producto.createdAt',
-      'producto.proveedorId',
-    ])
-    .leftJoinAndSelect('producto.proveedor', 'proveedor')
-    .leftJoinAndSelect(
-      'producto.seriales',
-      'serialDisponible',
-      'serialDisponible.status = :serialStatus',
-      { serialStatus: SerialStatus.DISPONIBLE },
-    )
-    .orderBy('producto.createdAt', 'DESC')
-    .skip(skip)
-    .take(limit);
+      const query = this.productRepository
+        .createQueryBuilder('producto')
+        .leftJoinAndSelect('producto.proveedor', 'proveedor')
+        .leftJoinAndSelect(
+          'producto.seriales',
+          'serialDisponible',
+          'serialDisponible.status = :serialStatus',
+          { serialStatus: SerialStatus.DISPONIBLE },
+        )
+        .orderBy('producto.createdAt', 'DESC')
+        .take(take)
+        .skip(skip);
 
-  // Filtro de activos/inactivos
-  if (isActive !== 'all') {
-    query.andWhere('producto.isActive = :isActive', { isActive });
-  }
+      // Filtro de activos/inactivos seguro
+      if (isActive !== 'all' && isActive !== undefined) {
+        const isTrue = String(isActive) === 'true';
+        query.andWhere('producto.isActive = :isActive', { isActive: isTrue });
+      }
 
-  // Buscador rápido integrado directamente en la DB
-  if (search) {
-    query.andWhere(
-      '(LOWER(producto.nombre) LIKE LOWER(:search) OR LOWER(producto.codigo) LIKE LOWER(:search))',
-      { search: `%${search}%` },
-    );
-  }
+      // Búsqueda por nombre o código
+      if (search && search.trim() !== '') {
+        const term = `%${search.trim().toLowerCase()}%`;
+        query.andWhere(
+          '(LOWER(producto.nombre) LIKE :term OR LOWER(producto.codigo) LIKE :term)',
+          { term },
+        );
+      }
 
-  const [data, total] = await query.getManyAndCount();
+      const [items, total] = await query.getManyAndCount();
 
-  return {
-    data,
-    total,
-    page,
-    lastPage: Math.ceil(total / limit),
-  };
-}
+      return {
+        data: items,
+        meta: {
+          total,
+          page: Number(page),
+          lastPage: Math.ceil(total / take) || 1,
+        },
+      };
+    }
 
   // Obtener uno solo
   async findOne(id: number) {
@@ -213,6 +196,7 @@ async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams =
 
       const serie = productData.serie?.trim();
       const isSerializedFinal = productData.isSerialized ?? producto.isSerialized;
+
       if (!isSerializedFinal && serie) {
         const productoConSerie = await queryRunner.manager
           .getRepository(Product)
@@ -236,71 +220,88 @@ async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams =
       const almacenNuevo = productData.almacen;
       const cambioDeAlmacen = almacenNuevo && almacenOriginal !== almacenNuevo;
 
-      // Actualiza los datos del producto principal en la entidad cargada
+      // Actualiza los datos del producto principal
       queryRunner.manager.merge(Product, producto, productData);
-
-      // Si el producto no es serializado y cambia de almacén, transferimos el stock.
-      if (!producto.isSerialized && cambioDeAlmacen && producto.stock > 0) {
-        // Lógica de transferencia de stock que añadiremos
-      }
 
       if (producto.isSerialized) {
         const serialesActuales = producto.seriales || [];
         const serialesNuevos = serials ?? [];
-        const serialesNuevosStr = [...new Set(serialesNuevos
-          .map(s => String(s).trim().toUpperCase())
-          .filter(Boolean))];
+        const serialesNuevosStr = [
+          ...new Set(
+            serialesNuevos
+              .map((s) => String(s).trim().toUpperCase())
+              .filter(Boolean),
+          ),
+        ];
 
         if (serials && serialesNuevosStr.length !== serials.length) {
           throw new BadRequestException('La lista de seriales contiene duplicados.');
         }
 
-        const serialesActualesStr = serialesActuales.map(s => s.serialNumber.trim().toUpperCase());
+        const serialesActualesStr = serialesActuales.map((s) =>
+          s.serialNumber.trim().toUpperCase(),
+        );
 
         // 1. Identificar seriales a eliminar
         const serialesAEliminar = serialesActuales.filter(
-          s => !serialesNuevosStr.includes(s.serialNumber.trim().toUpperCase()),
+          (s) => !serialesNuevosStr.includes(s.serialNumber.trim().toUpperCase()),
         );
 
         for (const serial of serialesAEliminar) {
           if (serial.status !== SerialStatus.DISPONIBLE) {
-            throw new BadRequestException(`No se puede eliminar el serial '${serial.serialNumber}' porque su estado es '${serial.status}'.`);
+            throw new BadRequestException(
+              `No se puede eliminar el serial '${serial.serialNumber}' porque su estado es '${serial.status}'.`,
+            );
           }
         }
-        
+
         if (serialesAEliminar.length > 0) {
           await queryRunner.manager.remove(serialesAEliminar);
         }
 
         // 2. Identificar y crear nuevos seriales
         const serialesACrear = serialesNuevosStr
-          .filter(s => !serialesActualesStr.includes(s))
-          .map(serialNumber => queryRunner.manager.create(ProductSerial, {
-            productoId: id,
-            serialNumber,
-            status: SerialStatus.DISPONIBLE,
-            almacen: productData.almacen ?? producto.almacen ?? 'Principal',
-          }));
+          .filter((s) => !serialesActualesStr.includes(s))
+          .map((serialNumber) =>
+            queryRunner.manager.create(ProductSerial, {
+              productoId: id,
+              serialNumber,
+              status: SerialStatus.DISPONIBLE,
+              almacen: productData.almacen ?? producto.almacen ?? 'Principal',
+            }),
+          );
 
         if (serialesACrear.length > 0) {
-          const numerosDeSerialesACrear = serialesACrear.map(s => s.serialNumber);
+          const numerosDeSerialesACrear = serialesACrear.map((s) => s.serialNumber);
           const serialesExistentesEnDB = await queryRunner.manager
             .getRepository(ProductSerial)
             .createQueryBuilder('serial')
-            .where('UPPER(TRIM(serial.serialNumber)) IN (:...serials)', { serials: numerosDeSerialesACrear })
+            .where('UPPER(TRIM(serial.serialNumber)) IN (:...serials)', {
+              serials: numerosDeSerialesACrear,
+            })
             .getMany();
-          if (serialesExistentesEnDB.length > 0) {
-            throw new BadRequestException(`No se puede añadir, los seriales ya existen: ${serialesExistentesEnDB.map(s => s.serialNumber).join(', ')}`);
-          }
-        }
 
-        if (serialesACrear.length > 0) {
+          if (serialesExistentesEnDB.length > 0) {
+            throw new BadRequestException(
+              `No se puede añadir, los seriales ya existen: ${serialesExistentesEnDB
+                .map((s) => s.serialNumber)
+                .join(', ')}`,
+            );
+          }
+
           await queryRunner.manager.save(ProductSerial, serialesACrear);
         }
 
-        // 💡 LA SOLUCIÓN DEFINITIVA: 
-        // En lugar de sumar y restar manualmente con variables locales que pueden fallar,
-        // consultamos directamente a la BD cuántos seriales 'DISPONIBLE' exactos tiene este producto ahora mismo.
+        // 3. Actualizar almacén de los seriales restantes si hubo cambio de almacén
+        if (cambioDeAlmacen) {
+          await queryRunner.manager.update(
+            ProductSerial,
+            { productoId: id, status: SerialStatus.DISPONIBLE },
+            { almacen: almacenNuevo },
+          );
+        }
+
+        // 4. Recalcular el stock real de la base de datos
         const stockRealCalculado = await queryRunner.manager.count(ProductSerial, {
           where: {
             productoId: id,
@@ -308,25 +309,28 @@ async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams =
           },
         });
 
-        // Asignamos el stock real basado en la base de datos
         producto.stock = stockRealCalculado;
+
+        //Eliminamos la propiedad de la relación antes del save
+        // para evitar que TypeORM intente poner NULL en la tabla product_serials.
+        delete (producto as any).seriales;
       }
 
-      // Si hubo cambio de almacén, ajustamos el stock desglosado
+      // Lógica para productos NO serializados cuando cambian de almacén
       if (!producto.isSerialized && cambioDeAlmacen && producto.stock > 0) {
         const stockATransferir = Number(producto.stock);
-        // Restar del origen
+
         await queryRunner.manager.query(
           `UPDATE product_warehouse_stock SET cantidad = cantidad - $1 WHERE "productoId" = $2 AND almacen = $3`,
-          [stockATransferir, id, almacenOriginal]
+          [stockATransferir, id, almacenOriginal],
         );
-        // Sumar al destino (o crearlo si no existe)
+
         await queryRunner.manager.query(
           `INSERT INTO product_warehouse_stock ("productoId", almacen, cantidad) VALUES ($1, $2, $3)
-           ON CONFLICT ("productoId", almacen) DO UPDATE SET cantidad = product_warehouse_stock.cantidad + $3`,
-          [id, almacenNuevo, stockATransferir]
+          ON CONFLICT ("productoId", almacen) DO UPDATE SET cantidad = product_warehouse_stock.cantidad + $3`,
+          [id, almacenNuevo, stockATransferir],
         );
-        // Registrar movimiento en Kardex
+
         const movementLog = queryRunner.manager.create(Movement, {
           productoId: id,
           tipo: 'TRANSFERENCIA',
@@ -335,16 +339,24 @@ async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams =
           almacenOrigen: almacenOriginal,
           almacenDestino: almacenNuevo,
         } as any);
+
         await queryRunner.manager.save(movementLog);
       }
 
-      // 3. Guardamos la entidad 'producto' completa.
-      // El método 'save' respeta las relaciones y cascadas, asegurando que todo se sincronice.
+      // Guardamos la entidad principal
       const productoActualizado = await queryRunner.manager.save(Product, producto);
 
-      await queryRunner.commitTransaction();
-      return productoActualizado;
+      const productoConRelaciones = await queryRunner.manager.findOne(Product, {
+        where: { id },
+        relations: ['seriales'],
+      });
 
+      await queryRunner.commitTransaction();
+
+
+      return productoConRelaciones;
+
+      // return productoActualizado;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

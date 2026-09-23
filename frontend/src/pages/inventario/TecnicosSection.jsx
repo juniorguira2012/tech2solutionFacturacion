@@ -20,7 +20,9 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
     cargarMovimientos,
     recargarInventario,
     productos,
-    almacenesDetallados
+    almacenesDetallados,
+    API_URL,
+    getAuthHeaders,
   } = useInventario();
   const { usuario } = useAuth();
 
@@ -42,7 +44,7 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
   const entregasRecientes = useMemo(() => {
     const listaMovimientos = normalizarArray(movimientos, 'movimientos');
     return listaMovimientos
-      .filter(m => ['DESPACHAR', 'ASIGNACION_TECNICO'].includes(m?.tipo) &&
+      .filter(m => ['SALIDA', 'ASIGNACION_TECNICO'].includes(m?.tipo) &&
         (m.technicianId || m.nota?.startsWith('Entrega a técnico:')))
       .slice(0, 8);
   }, [movimientos]);
@@ -53,7 +55,13 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
     return [...listaTecnicos].sort((a, b) => String(a?.nombre || '').localeCompare(String(b?.nombre || '')));
   }, [tecnicos]);
 
+  // Estados para la búsqueda de productos
   const [busquedaProducto, setBusquedaProducto] = useState('');
+  const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
+  const [cargandoBusqueda, setCargandoBusqueda] = useState(false);
+  const [mostrarDropdown, setMostrarDropdown] = useState(false);
+
+
   const [form, setForm] = useState({
     productoId: '',
     cantidad: 1,
@@ -81,18 +89,59 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
   const [devolucionLoading, setDevolucionLoading] = useState(false);
   const [expandedTechnician, setExpandedTechnician] = useState(null);
 
-  // 4. Productos filtrados seguros
-  const productosFiltrados = useMemo(() => {
-    const query = busquedaProducto.trim().toLowerCase();
-    if (!query) return [];
-    const listaProductos = normalizarArray(productos, 'productos');
-    return listaProductos
-      .filter(p => (
-        p?.nombre?.toLowerCase().includes(query) ||
-        p?.codigo?.toLowerCase().includes(query)
-      ))
-      .slice(0, 8);
-  }, [busquedaProducto, productos]);
+useEffect(() => {
+  if (!busquedaProducto.trim()) {
+    setResultadosBusqueda([]);
+    setMostrarDropdown(false);
+    return;
+  }
+
+  const timer = setTimeout(async () => {
+    try {
+      setCargandoBusqueda(true);
+      
+      // 💡 Ajustamos para usar la URL completa o la variable de entorno de Vite
+      const urlBase = API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const cleanBase = urlBase.replace(/\/$/, '');
+      const endpoint = cleanBase.endsWith('/products') ? cleanBase : `${cleanBase}/products`;
+      
+      const headers = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+
+      const res = await fetch(
+        `${endpoint}?page=1&limit=10&isActive=true&search=${encodeURIComponent(busquedaProducto)}`,
+        { headers }
+      );
+      
+      const responseData = await res.json().catch(() => ({}));
+
+      const lista = Array.isArray(responseData)
+        ? responseData
+        : (responseData.data || responseData.items || responseData.productos || []);
+
+      setResultadosBusqueda(lista);
+      setMostrarDropdown(true);
+    } catch (error) {
+      console.error('Error al buscar productos para despacho:', error);
+    } finally {
+      setCargandoBusqueda(false);
+    }
+  }, 300);
+
+  return () => clearTimeout(timer);
+}, [busquedaProducto, API_URL, getAuthHeaders]);
+
+  // // 4. Productos filtrados seguros
+  // const productosFiltrados = useMemo(() => {
+  //   const query = busquedaProducto.trim().toLowerCase();
+  //   if (!query) return [];
+  //   const listaProductos = normalizarArray(productos, 'productos');
+  //   return listaProductos
+  //     .filter(p => (
+  //       p?.nombre?.toLowerCase().includes(query) ||
+  //       p?.codigo?.toLowerCase().includes(query)
+  //     ))
+  //     .slice(0, 8);
+  // }, [busquedaProducto, productos]);
 
   const seleccionarProducto = (producto) => {
     if (productosEntrega.some(item => Number(item.producto.id) === Number(producto.id))) {
@@ -294,79 +343,50 @@ const handleDevolverSerial = async (serialNumber) => {
     }
   };
   const entregarProducto = async (e) => {
-    e.preventDefault();
-    if (!permisosTecnicos?.create) {
-      return mostrarToast('No tienes permiso para registrar entregas', 'error');
-    }
+      e.preventDefault();
+      if (productosEntrega.length === 0) return;
 
-    if (productosEntrega.length === 0) {
-      mostrarToast?.('Agrega al menos un producto', 'error');
-      return;
-    }
+      try {
+        setGuardando(true);
 
-    setGuardando(true);
+        for (const item of productosEntrega) {
+          // Convertir el textarea de seriales por línea en un arreglo de strings
+          const serialsArray = item.producto.isSerialized 
+            ? item.serialsInput.split('\n').map(s => s.trim()).filter(Boolean)
+            : undefined;
 
-    const nombreTecnico = obtenerNombreTecnico();
-    if (!nombreTecnico) {
-      mostrarToast?.('Selecciona o escribe el técnico responsable', 'error');
-      setGuardando(false);
-      return;
-    }
+            const notaFinal = [
+            form.nota,
+            form.tecnicoManual ? `Técnico manual: ${form.tecnicoManual}` : null
+          ].filter(Boolean).join(' | ');
 
-    if (!form.almacen) {
-      mostrarToast?.('Selecciona el almacén de salida', 'error');
-      return;
-    }
+          const payload = {
+          productoId: item.producto.id,
+          tipo: 'SALIDA', // O 'DESPACHAR', según prefieras
+          cantidad: item.producto.isSerialized ? serialsArray.length : Number(item.cantidad),
+          almacenOrigen: form.almacen, // 👈 Usa 'almacenOrigen' en lugar de 'almacen'
+          technicianId: form.tecnicoId ? Number(form.tecnicoId) : undefined, // 👈 Usa 'technicianId' en lugar de 'tecnicoId'
+          tecnicoManual: form.tecnicoManual || undefined,
+          referencia: form.referencia || undefined,
+          nota: form.nota || undefined,
+          serials: serialsArray
+        };
 
-    try {
-      const nota = [
-        `Entrega a técnico: ${nombreTecnico}`,
-        form.referencia ? `Referencia: ${form.referencia}` : '',
-        form.nota ? `Nota: ${form.nota}` : ''
-      ].filter(Boolean).join(' | ');
-
-      const tecnicoId = form.tecnicoId ? Number(form.tecnicoId) : undefined;
-      for (const item of productosEntrega) {
-        if (item.producto.isSerialized) {
-          const serials = item.serialsInput.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-          if (!tecnicoId || serials.length === 0) {
-            throw new Error(`Completa el técnico y los seriales de ${item.producto.nombre}`);
-          }
-          await asignarSerialesTecnico({
-            technicianId: tecnicoId,
-            serials,
-            usuarioId: Number(usuario?.id),
-            nota
-          });
-        } else {
-          const cantidad = Number(item.cantidad);
-          if (!Number.isFinite(cantidad) || cantidad <= 0) {
-            throw new Error(`La cantidad de ${item.producto.nombre} debe ser mayor a 0`);
-          }
-          await registrarMovimiento({
-            productoId: Number(item.producto.id),
-            tipo: 'DESPACHAR',
-            cantidad,
-            almacenOrigen: form.almacen,
-            almacenDestino: form.almacen,
-            technicianId: tecnicoId,
-            technicianName: tecnicoId ? undefined : nombreTecnico,
-            referencia: form.referencia || undefined,
-            nota,
-            usuarioId: usuario?.id ? String(usuario.id) : undefined
-          });
+          await registrarMovimiento(payload);
         }
-      }
 
-      mostrarToast?.(`${productosEntrega.length} producto(s) entregado(s) a ${nombreTecnico}`, 'success');
-      recargarInventario();
-      resetForm();
-    } catch (error) {
-      mostrarToast?.(error.message || 'No se pudo registrar la entrega', 'error');
-    } finally {
-      setGuardando(false);
-    }
-  };
+        // Limpiar formulario tras éxito
+        setProductosEntrega([]);
+        setForm({ almacen: '', tecnicoId: '', tecnicoManual: '', referencia: '', nota: '' });
+        setBusquedaProducto('');
+      } catch (error) {
+        console.error("Error al registrar la entrega:", error);
+        alert(error.message || "Hubo un error al registrar la entrega");
+      } finally {
+        setGuardando(false);
+      }
+    };
+
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
@@ -490,6 +510,8 @@ const handleDevolverSerial = async (serialNumber) => {
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4">
         <form onSubmit={entregarProducto} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            
+            {/* Input de Búsqueda Dinámica al Backend */}
             <div className="space-y-1 relative lg:col-span-2">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Producto</label>
               <div className="relative">
@@ -497,44 +519,66 @@ const handleDevolverSerial = async (serialNumber) => {
                 <input
                   type="text"
                   value={busquedaProducto}
-                  onChange={(e) => {
-                    setBusquedaProducto(e.target.value);
-                    setForm(prev => ({ ...prev, productoId: '' }));
+                  onChange={(e) => setBusquedaProducto(e.target.value)}
+                  onFocus={() => {
+                    if (resultadosBusqueda.length > 0) setMostrarDropdown(true);
                   }}
                   placeholder="Buscar por nombre o código..."
                   className="w-full h-12 pl-10 pr-11 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white"
                 />
-                {productosEntrega.length > 0 && (
+                
+                {cargandoBusqueda && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 animate-pulse uppercase">
+                    Buscando...
+                  </span>
+                )}
+
+                {busquedaProducto && !cargandoBusqueda && (
                   <button type="button" onClick={limpiarProducto} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-red-500">
                     <X size={16} />
                   </button>
                 )}
               </div>
-              {productosFiltrados.length > 0 && !form.productoId && (
-                <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 p-2 max-h-56 overflow-y-auto">
-                  {productosFiltrados.map(producto => (
-                    <button
-                      key={producto.id}
-                      type="button"
-                      onClick={() => seleccionarProducto(producto)}
-                      className="w-full flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 rounded-xl text-left transition-colors"
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-[10px] font-black text-slate-700 uppercase truncate">{producto.nombre}</span>
-                        <span className="block text-[8px] font-bold text-slate-400 uppercase">{producto.codigo || 'Sin código'}</span>
-                      </span>
-                      <span className="text-[9px] font-black text-brand shrink-0">Stock: {producto.stock}</span>
-                    </button>
-                  ))}
+
+              {/* Dropdown flotante con resultados dinámicos */}
+              {mostrarDropdown && busquedaProducto.trim() !== '' && (
+                <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 p-2 max-h-56 overflow-y-auto divide-y divide-slate-100">
+                  {resultadosBusqueda.length > 0 ? (
+                    resultadosBusqueda.map(producto => (
+                      <button
+                        key={producto.id}
+                        type="button"
+                        onClick={() => seleccionarProducto(producto)}
+                        className="w-full flex items-center justify-between gap-3 p-2.5 hover:bg-slate-50 rounded-xl text-left transition-colors"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-[10px] font-black text-slate-700 uppercase truncate">{producto.nombre}</span>
+                          <span className="block text-[8px] font-bold text-slate-400 uppercase">{producto.codigo || 'Sin código'}</span>
+                        </span>
+                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-md shrink-0 ${
+                          producto.stock > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'
+                        }`}>
+                          Stock: {producto.stock}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    !cargandoBusqueda && (
+                      <div className="p-3 text-center text-[10px] font-black text-slate-400 uppercase">
+                        No se encontraron productos coincidentes
+                      </div>
+                    )
+                  )}
                 </div>
               )}
             </div>
 
+            {/* Lista de productos seleccionados */}
             {productosEntrega.length > 0 && (
               <div className="lg:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Productos para entregar</label>
                 {productosEntrega.map(item => (
-                  <div key={item.producto.id} className="grid grid-cols-[minmax(0,1fr)_minmax(140px,220px)_auto] items-center gap-3 rounded-xl border border-slate-200 p-3">
+                  <div key={item.producto.id} className="grid grid-cols-[minmax(0,1fr)_minmax(140px,220px)_auto] items-center gap-3 rounded-xl border border-slate-200 p-3 bg-slate-50/30">
                     <div className="min-w-0">
                       <p className="text-[10px] font-black text-slate-700 uppercase truncate">{item.producto.nombre}</p>
                       <p className="text-[9px] font-bold text-slate-400 uppercase">{item.producto.codigo || 'Sin código'} | Stock: {item.producto.stock}</p>
@@ -545,7 +589,7 @@ const handleDevolverSerial = async (serialNumber) => {
                         value={item.serialsInput}
                         onChange={e => actualizarProductoEntrega(item.producto.id, { serialsInput: e.target.value })}
                         placeholder="Seriales, uno por línea"
-                        className="w-full min-h-12 p-2 rounded-lg border border-slate-200 outline-none focus:border-brand font-mono text-[10px] resize-y"
+                        className="w-full min-h-12 p-2 rounded-lg border border-slate-200 outline-none focus:border-brand font-mono text-[10px] resize-y bg-white"
                       />
                     ) : (
                       <input
@@ -554,7 +598,7 @@ const handleDevolverSerial = async (serialNumber) => {
                         required
                         value={item.cantidad}
                         onChange={e => actualizarProductoEntrega(item.producto.id, { cantidad: e.target.value })}
-                        className="w-full h-10 px-3 rounded-lg border border-slate-200 outline-none focus:border-brand font-black text-xs"
+                        className="w-full h-10 px-3 rounded-lg border border-slate-200 outline-none focus:border-brand font-black text-xs bg-white"
                       />
                     )}
                     <button type="button" onClick={() => quitarProductoEntrega(item.producto.id)} className="p-2 text-slate-400 hover:text-rose-500" aria-label={`Quitar ${item.producto.nombre}`}>
@@ -708,6 +752,8 @@ const handleDevolverSerial = async (serialNumber) => {
             </div>
           </div>
         )}
+
+        {/* Panel lateral de Entregas Recientes */}
         <aside className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
             <UserCheck size={18} className="text-brand" />

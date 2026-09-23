@@ -10,8 +10,8 @@ export class InventoryWriteGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
 
-    console.log("🚀 [GUARD] ¡Entrando a la validación de inventario en producción!");
-    console.log("🚀 [GUARD] Header Authorization presente:", !!request.headers.authorization);
+    // console.log("🚀 [GUARD] ¡Entrando a la validación de inventario en producción!");
+    // console.log("🚀 [GUARD] Header Authorization presente:", !!request.headers.authorization);
     
     let user = request.user;
 
@@ -33,12 +33,12 @@ export class InventoryWriteGuard implements CanActivate {
 
     // 🛡️ VALIDACIÓN 1: Evaluar los permisos mediante los datos reales del Token
     if (user) {
-      console.log("🚀 [GUARD] Datos del usuario en el token:", user);
+      //console.log("🚀 [GUARD] Datos del usuario en el token:", user);
 
       // 💡 CORRECCIÓN 1: Extraer el rol de forma segura
       const userRole = user.role || (typeof user.rol === 'string' ? user.rol : user.rol?.nombre);
       
-      console.log("🚀 [GUARD] Rol final detectado:", userRole);
+      //console.log("🚀 [GUARD] Rol final detectado:", userRole);
 
       // 💡 CORRECCIÓN 2: Permitir acceso directo a roles autorizados a escribir en inventario
       const normalizedRole = String(userRole).toLowerCase();
@@ -48,7 +48,7 @@ export class InventoryWriteGuard implements CanActivate {
         normalizedRole === 'almacenista' || 
         normalizedRole === 'almacen'
       ) {
-        console.log(`✅ [GUARD] Acceso concedido por Rol Autorizado: ${userRole}`);
+        //console.log(`✅ [GUARD] Acceso concedido por Rol Autorizado: ${userRole}`);
         return true;
       }
 
@@ -60,7 +60,7 @@ export class InventoryWriteGuard implements CanActivate {
 
       if (config) {
         const method = request.method; // 'POST', 'PATCH', 'DELETE'
-        console.log(`🔍 [GUARD] Evaluando permisos específicos de módulo para método: ${method}`);
+        //console.log(`🔍 [GUARD] Evaluando permisos específicos de módulo para método: ${method}`);
 
         if (method === 'POST' && config.create) return true;
         if (method === 'PATCH' && config.edit) return true;
@@ -79,7 +79,7 @@ export class InventoryWriteGuard implements CanActivate {
       roleHeader === 'prueba' || 
       permissionHeader === 'full'
     ) {
-      console.log("✅ [GUARD] Acceso concedido mediante Headers de Backup");
+      //console.log("✅ [GUARD] Acceso concedido mediante Headers de Backup");
       return true;
     }
 

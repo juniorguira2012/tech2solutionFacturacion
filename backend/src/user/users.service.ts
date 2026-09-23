@@ -22,7 +22,7 @@ export class UsersService implements OnModuleInit {
       try {
         const user = await this.findByEmail(adminEmail);
         if (!user) {
-          console.log('--- SEEDING: Creando usuario administrador de pruebas ---');
+         // console.log('--- SEEDING: Creando usuario administrador de pruebas ---');
           await this.create({
             nombre: 'Admin Test',
             email: adminEmail,
