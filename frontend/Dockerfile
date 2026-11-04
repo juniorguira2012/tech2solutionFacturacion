@@ -2,7 +2,7 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Variables públicas que Vite debe recibir durante la compilación.
-ARG VITE_API_URL=https://inventario.oneredrd.com/api
+ARG VITE_API_URL=https://ventas.muebleshabitat.com
 ARG VITE_GOOGLE_CLIENT_ID=874032250165-2ghib55116sp86fsicpsds99uvmja33i.apps.googleusercontent.com
 
 ENV VITE_API_URL=$VITE_API_URL

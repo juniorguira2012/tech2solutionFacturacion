@@ -72,7 +72,7 @@ const Configuracion = ({ mostrarToast }) => {
   });
 
   // Sincronizamos la URL con la lógica global del sistema
-  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('ventas.muebleshabitat.com') 
     ? '/api' 
     : (import.meta.env.VITE_API_URL || '/api');
 

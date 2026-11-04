@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Scope, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
 import { InjectRepository } from '@nestjs/typeorm'; 
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, ObjectLiteral } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -16,19 +18,64 @@ export interface FindAllParams {
   search?: string;
 }
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class ProductsService {
   constructor(
-    @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>,
-    @InjectRepository(Provider)
-    private readonly providerRepository: Repository<Provider>,
+    @Inject(REQUEST) private readonly request: Request,
     private readonly dataSource: DataSource,
   ) {}
 
+  // Método auxiliar para obtener el DataSource activo (del tenant actual o el principal)
+  private getActiveDataSource(): DataSource {
+    return this.request['tenantDataSource'] || this.dataSource;
+  }
+  // Método auxiliar para obtener el repositorio apuntando a la base de datos del tenant actual
+  private async getRepository<T extends ObjectLiteral>(entity: new (...args: any[]) => T): Promise<Repository<T>> {
+    const tenantDataSource = this.getActiveDataSource();
+    return tenantDataSource.getRepository(entity);
+  
+  }
+
+  private async getTenantDataSource(dbName: string): Promise<DataSource> {
+    if (!global['tenantDataSources']) {
+      global['tenantDataSources'] = {};
+    }
+
+    // 💡 Blindaje local: si entra el nombre por defecto de prod en entorno de desarrollo, lo redirigimos a tu BD local
+    const targetDb = (process.env.NODE_ENV !== 'production' && dbName === 'tech_two_solution_db') 
+      ? 'tech2_prueba_db' 
+      : dbName;
+
+    if (!global['tenantDataSources'][targetDb]) {
+      const mainOptions = this.dataSource.options as any;
+      const tenantOptions = {
+        ...mainOptions,
+        database: targetDb,
+        name: `tenant_${targetDb}_${Date.now()}`,
+        synchronize: false,
+        entities: mainOptions.entities,
+      };
+      
+      const newDataSource = new DataSource(tenantOptions);
+      await newDataSource.initialize(); // 🚀 ¡Esperamos a que carguen los metadatos!
+      global['tenantDataSources'][targetDb] = newDataSource;
+    } else {
+      const ds = global['tenantDataSources'][targetDb];
+      if (!ds.isInitialized) {
+        await ds.initialize();
+      }
+    }
+
+    return global['tenantDataSources'][targetDb];
+  }
+
+
   // Crear un producto
   async create(createProductDto: CreateProductDto) {
-    const queryRunner = this.dataSource.createQueryRunner();
+    // Usamos el DataSource del tenant actual para las transacciones
+    const tenantDataSourceInstance = this.getActiveDataSource();
+    
+    const queryRunner = tenantDataSourceInstance.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -42,12 +89,11 @@ export class ProductsService {
         }
       }
 
-      // 💡 CORRECCIÓN: Aseguramos que siempre haya un almacén por defecto.
       const datosConAlmacen = {
         ...productData,
         isSerialized: productData.isSerialized || false,
         almacen: productData.almacen || 'Principal',
-        nota: nota, // <-- Añadimos la nota al objeto del producto
+        nota: nota,
       };
 
       const serie = datosConAlmacen.serie?.trim();
@@ -70,19 +116,16 @@ export class ProductsService {
       }
       const nuevoProducto = queryRunner.manager.create(Product, datosConAlmacen);
 
-
       if (nuevoProducto.isSerialized && serials && serials.length > 0) {
         const serialesNormalizados = serials
           .map(serial => String(serial).trim())
           .filter(Boolean);
         const uniqueSerials = [...new Set(serialesNormalizados.map(serial => serial.toUpperCase()))];
 
-        // Validar duplicados dentro de la misma lista antes de crear
         if (uniqueSerials.length !== serials.length) {
           throw new BadRequestException('La lista contiene números de serie duplicados.');
         }
 
-        // 💡 ALERTA DE DUPLICADOS: Verificamos si alguno de los seriales ya existe en la DB
         const serialesExistentes = await queryRunner.manager
           .getRepository(ProductSerial)
           .createQueryBuilder('serial')
@@ -101,8 +144,6 @@ export class ProductsService {
             almacen: nuevoProducto.almacen || 'Principal',
           });
         });
-        // El stock para productos serializados SIEMPRE se calcula en el backend
-        // para ser la fuente de la verdad, ignorando lo que envíe el frontend.
         nuevoProducto.stock = nuevoProducto.seriales.length;
       }
 
@@ -117,32 +158,44 @@ export class ProductsService {
     }
   }
 
+  // 🌟 Método para consultar los seriales disponibles de un producto específico bajo demanda
+  async findSerialsByProduct(productId: number) {
+    // 💡 Añadimos await aquí para esperar que el repositorio esté listo
+    const productSerialRepo = await this.getRepository(ProductSerial);
+    
+    return productSerialRepo.find({
+      where: { 
+        productoId: productId, 
+        status: SerialStatus.DISPONIBLE 
+      },
+      select: ['id', 'serialNumber', 'status', 'createdAt'] // Selecciona solo lo necesario de forma ultra ligera
+    });
+  }
 
-// Obtener todos los productos con paginación, filtrado y búsqueda
-    async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams = {}) {
+  // Obtener todos los productos con paginación, filtrado y búsqueda (Súper ligero sin el join masivo de seriales)
+  async findAll({ page = 1, limit = 20, isActive = true, search }: FindAllParams = {}) {
+      const productRepo = await this.getRepository(Product);
       const take = Math.min(Number(limit) || 20, 50);
       const skip = (Math.max(Number(page), 1) - 1) * take;
 
-      const query = this.productRepository
+      const query = productRepo
         .createQueryBuilder('producto')
         .leftJoinAndSelect('producto.proveedor', 'proveedor')
-        .leftJoinAndSelect(
+        .loadRelationCountAndMap(
+          'producto.totalSerialesDisponibles',
           'producto.seriales',
           'serialDisponible',
-          'serialDisponible.status = :serialStatus',
-          { serialStatus: SerialStatus.DISPONIBLE },
+          (qb) => qb.where('serialDisponible.status = :status', { status: SerialStatus.DISPONIBLE })
         )
         .orderBy('producto.createdAt', 'DESC')
         .take(take)
         .skip(skip);
 
-      // Filtro de activos/inactivos seguro
       if (isActive !== 'all' && isActive !== undefined) {
         const isTrue = String(isActive) === 'true';
         query.andWhere('producto.isActive = :isActive', { isActive: isTrue });
       }
 
-      // Búsqueda por nombre o código
       if (search && search.trim() !== '') {
         const term = `%${search.trim().toLowerCase()}%`;
         query.andWhere(
@@ -162,10 +215,12 @@ export class ProductsService {
         },
       };
     }
-
-  // Obtener uno solo
+ 
+ // Obtener uno solo
   async findOne(id: number) {
-    const producto = await this.productRepository.findOne({
+    const productRepo = await this.getRepository(Product);
+    
+    const producto = await productRepo.findOne({
       where: { id },
       relations: ['proveedor'] // Incluye las relaciones que necesites
     });
@@ -223,18 +278,18 @@ export class ProductsService {
       // Actualiza los datos del producto principal
       queryRunner.manager.merge(Product, producto, productData);
 
-      if (producto.isSerialized) {
+      // 🛡️ BLINDAJE DE SERIALES: Solo procesamos si el DTO incluyó explícitamente la propiedad 'serials'
+      if (producto.isSerialized && serials !== undefined) {
         const serialesActuales = producto.seriales || [];
-        const serialesNuevos = serials ?? [];
         const serialesNuevosStr = [
           ...new Set(
-            serialesNuevos
+            serials
               .map((s) => String(s).trim().toUpperCase())
               .filter(Boolean),
           ),
         ];
 
-        if (serials && serialesNuevosStr.length !== serials.length) {
+        if (serialesNuevosStr.length !== serials.length) {
           throw new BadRequestException('La lista de seriales contiene duplicados.');
         }
 
@@ -242,24 +297,18 @@ export class ProductsService {
           s.serialNumber.trim().toUpperCase(),
         );
 
-        // 1. Identificar seriales a eliminar
+        // 1. Eliminar solo los que ya no vienen Y están disponibles
         const serialesAEliminar = serialesActuales.filter(
-          (s) => !serialesNuevosStr.includes(s.serialNumber.trim().toUpperCase()),
+          (s) => 
+            !serialesNuevosStr.includes(s.serialNumber.trim().toUpperCase()) &&
+            s.status === SerialStatus.DISPONIBLE
         );
-
-        for (const serial of serialesAEliminar) {
-          if (serial.status !== SerialStatus.DISPONIBLE) {
-            throw new BadRequestException(
-              `No se puede eliminar el serial '${serial.serialNumber}' porque su estado es '${serial.status}'.`,
-            );
-          }
-        }
 
         if (serialesAEliminar.length > 0) {
           await queryRunner.manager.remove(serialesAEliminar);
         }
 
-        // 2. Identificar y crear nuevos seriales
+        // 2. Crear nuevos seriales que no existían en este producto
         const serialesACrear = serialesNuevosStr
           .filter((s) => !serialesActualesStr.includes(s))
           .map((serialNumber) =>
@@ -273,35 +322,26 @@ export class ProductsService {
 
         if (serialesACrear.length > 0) {
           const numerosDeSerialesACrear = serialesACrear.map((s) => s.serialNumber);
-          const serialesExistentesEnDB = await queryRunner.manager
+          
+          // Verificar duplicados globales en otros productos
+          const serialesGlobalesExistentes = await queryRunner.manager
             .getRepository(ProductSerial)
             .createQueryBuilder('serial')
-            .where('UPPER(TRIM(serial.serialNumber)) IN (:...serials)', {
-              serials: numerosDeSerialesACrear,
-            })
+            .where('UPPER(TRIM(serial.serialNumber)) IN (:...serials)', { serials: numerosDeSerialesACrear })
+            .andWhere('serial.productoId != :id', { id })
             .getMany();
 
-          if (serialesExistentesEnDB.length > 0) {
+          if (serialesGlobalesExistentes.length > 0) {
+            const serialDuplicado = serialesGlobalesExistentes[0].serialNumber;
             throw new BadRequestException(
-              `No se puede añadir, los seriales ya existen: ${serialesExistentesEnDB
-                .map((s) => s.serialNumber)
-                .join(', ')}`,
+              `La serie '${serialDuplicado}' ya está registrada en otro producto y no se puede repetir.`
             );
           }
 
           await queryRunner.manager.save(ProductSerial, serialesACrear);
         }
 
-        // 3. Actualizar almacén de los seriales restantes si hubo cambio de almacén
-        if (cambioDeAlmacen) {
-          await queryRunner.manager.update(
-            ProductSerial,
-            { productoId: id, status: SerialStatus.DISPONIBLE },
-            { almacen: almacenNuevo },
-          );
-        }
-
-        // 4. Recalcular el stock real de la base de datos
+        // 3. Recalcular stock real
         const stockRealCalculado = await queryRunner.manager.count(ProductSerial, {
           where: {
             productoId: id,
@@ -310,11 +350,10 @@ export class ProductsService {
         });
 
         producto.stock = stockRealCalculado;
-
-        //Eliminamos la propiedad de la relación antes del save
-        // para evitar que TypeORM intente poner NULL en la tabla product_serials.
-        delete (producto as any).seriales;
       }
+
+      // Si no se mandó 'seriales' (viene undefined), simplemente limpiamos la propiedad temporalmente para que merge/save no falle
+      delete (producto as any).seriales;
 
       // Lógica para productos NO serializados cuando cambian de almacén
       if (!producto.isSerialized && cambioDeAlmacen && producto.stock > 0) {
@@ -343,8 +382,7 @@ export class ProductsService {
         await queryRunner.manager.save(movementLog);
       }
 
-      // Guardamos la entidad principal
-      const productoActualizado = await queryRunner.manager.save(Product, producto);
+      await queryRunner.manager.save(Product, producto);
 
       const productoConRelaciones = await queryRunner.manager.findOne(Product, {
         where: { id },
@@ -353,10 +391,7 @@ export class ProductsService {
 
       await queryRunner.commitTransaction();
 
-
       return productoConRelaciones;
-
-      // return productoActualizado;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -364,39 +399,39 @@ export class ProductsService {
       await queryRunner.release();
     }
   }
-
+  
   async remove(id: number) {
-    // 1. Verificamos que el producto exista primero
     const producto = await this.findOne(id);
     
     if (!producto.isActive) {
       throw new BadRequestException(`El producto con ID ${id} ya se encuentra inactivo.`);
     }
 
-    // 2. Usamos .update() directo apuntando al ID. 
-    // Esto modifica ÚNICAMENTE la tabla 'products' e ignora por completo el 'cascade: true'
-    await this.productRepository.update(id, { isActive: false });
+    // 🚀 Obtenemos el repositorio primero usando await
+    const productRepo = await this.getRepository(Product);
+    await productRepo.update(id, { isActive: false });
     
-    // 3. Retornamos el objeto actualizado de forma segura para la respuesta del controlador
     return { ...producto, isActive: false };
   }
 
-  // Restaurar producto (Borrado lógico inverso)
   async restore(id: number) {
-    const producto = await this.findOne(id); // Valida que exista (incluso si está inactivo)
+    const producto = await this.findOne(id);
     
     if (producto.isActive) {
       throw new BadRequestException(`El producto con ID ${id} ya está activo.`);
     }
 
     producto.isActive = true;
-    return await this.productRepository.save(producto);
+    // 🚀 Obtenemos el repositorio primero usando await
+    const productRepo = await this.getRepository(Product);
+    return await productRepo.save(producto);
   }
 
-  // --- NUEVO MÉTODO PARA EL RESUMEN DE INVENTARIO ---
   async getInventorySummary() {
-    // 1. Calcular el valor total del inventario (solo de productos activos)
-    const totalValueResult = await this.productRepository
+    // 🚀 Obtenemos el repositorio primero usando await
+    const productRepo = await this.getRepository(Product);
+
+    const totalValueResult = await productRepo
       .createQueryBuilder('product')
       .select('SUM(product.stock * product.precio)', 'totalValue')
       .where('product.isActive = :isActive', { isActive: true })
@@ -404,8 +439,7 @@ export class ProductsService {
 
     const totalValue = parseFloat(totalValueResult.totalValue) || 0;
 
-    // 2. Contar productos por categoría (solo de productos activos)
-    const productsPerCategory = await this.productRepository
+    const productsPerCategory = await productRepo
       .createQueryBuilder('product')
       .select('product.categoria', 'category')
       .addSelect('COUNT(product.id)', 'count')
@@ -414,8 +448,7 @@ export class ProductsService {
       .orderBy('count', 'DESC')
       .getRawMany();
 
-    // 3. Contar el total de productos y el stock total (solo de productos activos)
-    const totalsResult = await this.productRepository
+    const totalsResult = await productRepo
       .createQueryBuilder('product')
       .select('COUNT(product.id)', 'totalProducts')
       .addSelect('SUM(product.stock)', 'totalStock')

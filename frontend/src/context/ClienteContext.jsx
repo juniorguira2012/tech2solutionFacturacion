@@ -2,6 +2,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import axiosClient from '../api/axiosClient';
 
 const ClienteContext = createContext();
 
@@ -11,7 +12,7 @@ export const ClienteProvider = ({ children }) => {
   const { usuario } = useAuth();
 
   // Construimos la URL de la API basándonos en la configuración de entorno o fallback local
-  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('ventas.muebleshabitat.com') 
     ? '/api' 
     : (import.meta.env.VITE_API_URL || '/api');
 
@@ -37,10 +38,8 @@ export const ClienteProvider = ({ children }) => {
     if (!usuario) return;
     setLoading(true);
     try {
-      const res = await fetch(API_URL, { headers: getAuthHeaders() });
-      if (!res.ok) throw new Error('Error al obtener clientes del servidor');
-      const data = await res.json();
-      const clientesActivos = Array.isArray(data) ? data.filter(c => c.isActive !== false) : [];
+      const res = await axiosClient.get(API_URL, { headers: getAuthHeaders() });
+      const clientesActivos = Array.isArray(res.data) ? res.data.filter(c => c.isActive !== false) : [];
       setClientes(clientesActivos);
     } catch (err) {
       console.error("Error en cargarClientes:", err);
@@ -56,11 +55,7 @@ export const ClienteProvider = ({ children }) => {
   // 2. Agregar cliente en la DB
   const agregarCliente = async (nuevo) => {
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(nuevo)
-      });
+      const res = await axiosClient.post(API_URL, nuevo, { headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Error al crear cliente');
       const data = await res.json();
       setClientes(prev => [...prev, data].sort((a, b) => a.nombre.localeCompare(b.nombre)));

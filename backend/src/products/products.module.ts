@@ -3,18 +3,19 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProductsService } from './products.service';
 import { ProductsController } from './products.controller';
 import { Product } from './entities/product.entity';
-import { ProvidersModule } from '../providers/providers.module'; // <-- Importamos el módulo completo
-import { UsersModule } from '../user/users.module';
-//import { LowStockAlertService } from './low-stock-alert.service';
+import { ProductSerial } from './entities/product-serial.entity'; // 🌟 1. Asegúrate de importarlo
+import { Provider } from '../providers/entities/provider.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Product]), // Aquí solo dejamos la entidad nativa de este módulo
-    ProvidersModule, // <-- ¡AQUÍ! Al importar el módulo, NestJS hereda el ProviderRepository automáticamente
-    UsersModule,
+    TypeOrmModule.forFeature([
+      Product, 
+      ProductSerial,
+      Provider
+    ])
   ],
   controllers: [ProductsController],
   providers: [ProductsService],
-  exports: [ProductsService, TypeOrmModule], 
+  exports: [ProductsService],
 })
 export class ProductsModule {}

@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import axiosClient from '../api/axiosClient';
 
 const VentasContext = createContext();
 // El VentasProvider se encarga de manejar el historial de ventas y registrar nuevas ventas.
@@ -9,7 +10,7 @@ export const VentasProvider = ({ children }) => {
   const [historialVentas, setHistorialVentas] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('ventas.muebleshabitat.com') 
     ? '/api' 
     : (import.meta.env.VITE_API_URL || '/api');
     
@@ -21,19 +22,17 @@ export const VentasProvider = ({ children }) => {
 
     setLoading(true);
     try {
-      const res = await fetch(API_SALES_URL, {
+      // 💡 Axios ya adjunta el token y el tenant automáticamente mediante el interceptor de axiosClient
+      const res = await axiosClient.get(API_SALES_URL, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('posfactura_token')}`,
-          'Content-Type': 'application/json',
           'x-user-id': usuario?.id || '',
         },
       });
-      if (!res.ok) throw new Error('No se pudo cargar el historial de ventas.');
-      const data = await res.json();
-      setHistorialVentas(Array.isArray(data) ? data : []);
+      // 💡 En Axios los datos vienen directamente en `res.data`
+      setHistorialVentas(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error("Error cargando historial de ventas:", error);
-      setHistorialVentas([]); // En caso de error, asegurar que sea un array vacío
+      setHistorialVentas([]); 
     } finally {
       setLoading(false);
     }

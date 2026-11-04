@@ -27,7 +27,7 @@ const Proyectos = () => {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com')
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('ventas.muebleshabitat.com')
     ? '/api' : (import.meta.env.VITE_API_URL || '/api');
 
   const headers = () => ({

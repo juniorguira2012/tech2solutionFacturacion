@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Lock, ArrowLeft, CheckCircle, ShieldCheck } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com')
+const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('ventas.muebleshabitat.com')
   ? '/api'
   : (import.meta.env.VITE_API_URL || '/api');
 

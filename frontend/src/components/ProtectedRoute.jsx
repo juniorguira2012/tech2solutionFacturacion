@@ -8,7 +8,7 @@ const ProtectedRoute = ({ children, moduloRequerido }) => {
   if (loading) return null; // O un spinner de carga
 
   if (!usuario) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/admin/login" />;
   }
 
   // Si es admin, siempre tiene acceso.

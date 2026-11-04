@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { modulos as listaModulos } from '../pages/RolesManager'; // Importamos la lista de módulos
+import axiosClient from '../api/axiosClient'; // Importamos el cliente de Axios configurado
 
 const AuthContext = createContext();
 
@@ -25,7 +26,7 @@ export const AuthProvider = ({ children }) => {
   // Si no está definida, se usará una ruta relativa, ideal para producción.
   const API_BASE_URL = import.meta.env.VITE_API_URL || '';
   
-  const cargarPermisos = useCallback(async (rolName, forceReload = false) => {
+const cargarPermisos = useCallback(async (rolName, forceReload = false) => {
     let rolesConfig = null;
     if (!forceReload) {
       try {
@@ -43,19 +44,11 @@ export const AuthProvider = ({ children }) => {
       }
     }
 
-    // Si no está en caché o se fuerza la recarga, vamos a la API
+    // Si no está en caché o se fuerza la recarga, vamos a la API con axiosClient
     try {
-      const res = await fetch(`${API_BASE_URL}/roles`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('posfactura_token')}` // Aseguramos que se envíe el token
-        }
-      });
-      if (!res.ok) {
-        console.error(`Error al cargar roles: ${res.status} ${res.statusText}`);
-        return null;
-      }
-      const roles = await res.json();
+      // 💡 Usamos axiosClient para heredar automáticamente el token y las cabeceras del tenant (x-tenant-id / x-tenant-subdomain)
+      const res = await axiosClient.get('/roles');
+      const roles = res.data; // En axios los datos vienen directamente en .data
 
       const newRolesMap = Object.fromEntries(roles.map(r => [r.name, r.config]));
       localStorage.setItem('posfactura_roles_config', JSON.stringify(newRolesMap));
@@ -65,7 +58,8 @@ export const AuthProvider = ({ children }) => {
       if (miRol) {
         return miRol.config;
       }
-      // Fallback: Si no hay roles en la DB pero es admin, dar permisos full (solo si no se encontró en DB)
+      
+      // Fallback: Si no hay roles en la DB pero es admin, dar permisos full
       if (rolName === 'admin' && listaModulos && !miRol) {
         const adminPermissions = {};
         listaModulos.forEach(modulo => {
@@ -80,7 +74,6 @@ export const AuthProvider = ({ children }) => {
           }
           adminPermissions[modulo.id] = modulePerms;
         });
-        // 🚨 CORRECCIÓN: Devolvemos el objeto de permisos directamente, sin anidarlo en 'modules'.
         return { modules: adminPermissions, viewScope: 'all' };
       }
       
@@ -89,7 +82,7 @@ export const AuthProvider = ({ children }) => {
       console.error("Error cargando permisos:", error);
       return null;
     }
-  }, [API_BASE_URL]);
+  }, []); // Asegúrate de quitar API_BASE_URL de las dependencias si axiosClient ya maneja la URL base
   
   //verificar el estado de autenticación al cargar la app
   const checkAuthStatus = useCallback(async () => {
@@ -222,40 +215,25 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Función de Login mejorada
-  const login = useCallback(async (identifier, password) => {
+ const login = useCallback(async (identifier, password) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: identifier,
-          identifier: identifier, //CORRECCIÓN: Usamos 'identifier' que es lo que el backend espera.
-          password,
-        }),
+      // 1. Forzamos el subdominio 'onered' para que el interceptor lo tome y conecte con tech2_prueba_db
+      localStorage.setItem('current_tenant_subdomain', 'onered');
+
+      // 2. Reemplazamos fetch por axiosClient.post
+      const response = await axiosClient.post('/auth/login', {
+        email: identifier,
+        identifier: identifier, // Lo que tu backend espera
+        password,
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let msg = 'Error de autenticación';
-        try {
-          const errorJson = JSON.parse(errorText);
-          msg = errorJson.message || msg;
-        } catch (e) {}
-
-        return {
-          success: false,
-          message: response.status === 500 ? 'Error interno en el servidor de pruebas' : msg,
-        };
-      }
-
-      const data = await response.json();
+      // 3. Axios guarda la respuesta automáticamente en .data
+      const data = response.data;
 
       if (data.user || data.id || data.access_token || data.token) { 
         const user = data.user || (data.token || data.access_token ? data : data);
         
-        // 🚀 CAPTURA DEL TOKEN (Soporta si viene como access_token o token)
+        // Captura del token
         const tokenReal = data.access_token || data.token || user.token || user.access_token;
 
         if (user.estado === 'inactivo' || user.isActive === false) {
@@ -265,22 +243,20 @@ export const AuthProvider = ({ children }) => {
           };
         }
 
-        // Limpiamos cualquier propiedad extraña si el user vino mezclado con el token
         if(user.access_token) delete user.access_token;
         if(user.token) delete user.token;
 
         setUsuario(user);
 
-        //Al hacer login, cargamos los permisos y actualizamos el caché de roles.
+        // Cargamos permisos y roles
         const config = await cargarPermisos(user.rol);
         setPermisos(config);
 
-        //GUARDAR ALMA Y CUERPO EN EL NAVEGADOR
-        //Guardamos el usuario y el token por separado.
+        // Guardamos en el navegador
         localStorage.setItem('posfactura_user', JSON.stringify(user));
         
         if (tokenReal) {
-          localStorage.setItem('posfactura_token', tokenReal); // 👈 ¡GUARDAMOS EL PASAPORTE!
+          localStorage.setItem('posfactura_token', tokenReal);
         } else {
           console.warn("⚠️ ¡Ojo! El backend no devolvió ningún token en la respuesta.");
         }
@@ -292,14 +268,19 @@ export const AuthProvider = ({ children }) => {
         success: false,
         message: 'Credenciales incorrectas.',
       };
+
     } catch (error) {
       console.error('Error en Login:', error);
+      
+      // Axios atrapa los errores HTTP (como el 400 o 401) en error.response
+      const errorMsg = error.response?.data?.message || 'Error de conexión con la base de datos.';
+      
       return {
         success: false,
-        message: 'Error de conexión con la base de datos.',
+        message: errorMsg,
       };
     }
-  }, [API_BASE_URL, cargarPermisos]);
+  }, [cargarPermisos]);
 
   // Función para el login con Google
   const loginWithGoogle = useCallback(async (googleToken) => {

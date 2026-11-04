@@ -77,6 +77,9 @@ export class MovementsController {
       @Query('limit') limit?: string,
       @Query('usuarioId') usuarioId?: string,
       @Query('productoId') productoId?: string,
+      @Query('tipo') tipo?: string,          
+      @Query('fechaInicio') fechaInicio?: string,
+      @Query('fechaFin') fechaFin?: string
     ) {
       if (productoId) {
         return this.movementsService.findByProductId(Number(productoId));
@@ -86,6 +89,9 @@ export class MovementsController {
         page: page ? Number(page) : 1,
         limit: limit ? Number(limit) : 20,
         usuarioId,
+        tipo,
+        fechaInicio,
+        fechaFin
       });
     }
 

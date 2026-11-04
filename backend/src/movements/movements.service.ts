@@ -763,42 +763,55 @@ export class MovementsService {
     }
   }
 
-  async findAll(query?: { page?: number; limit?: number; usuarioId?: string }) {
-    // Si el Frontend no pide paginación explícita, devuelve un Array plano (máximo 50)
-    if (!query?.page && !query?.limit) {
-      const queryOptions: any = {
-        relations: ['producto', 'technician', 'usuario'],
-        order: { createdAt: 'DESC' },
-        take: 50, // Límite de seguridad
-      };
+async findAll(query: { page?: number; limit?: number; tipo?: string; fechaInicio?: string; fechaFin?: string; productoId?: number; usuarioId?: string }) {
+  const page = Number(query.page) || 1;
+  const limit = Number(query.limit) || 20;
+  const skip = (page - 1) * limit;
 
-      if (query?.usuarioId) {
-        queryOptions.where = { usuarioId: query.usuarioId };
-      }
+  const queryBuilder = this.dataSource.getRepository(Movement)
+    .createQueryBuilder('movement')
+    .leftJoinAndSelect('movement.producto', 'producto')
+    .leftJoinAndSelect('movement.usuario', 'usuario')
+    .leftJoinAndSelect('movement.technician', 'technician')
+    .orderBy('movement.createdAt', 'DESC');
 
-      return await this.movementRepository.find(queryOptions);
-    }
-
-    // Si se solicita paginación, devuelve el objeto estructurado
-    const page = Math.max(1, Number(query.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
-    const skip = (page - 1) * limit;
-
-    const queryOptions: any = {
-      relations: ['producto', 'technician', 'usuario'],
-      order: { createdAt: 'DESC' },
-      take: limit,
-      skip: skip,
-    };
-
-    if (query?.usuarioId) {
-      queryOptions.where = { usuarioId: query.usuarioId };
-    }
-
-    const [data, total] = await this.movementRepository.findAndCount(queryOptions);
-
-    return { data, meta: { total, page, limit } };
+  if (query.productoId) {
+    queryBuilder.andWhere('movement.productoId = :productoId', { productoId: query.productoId });
   }
+
+  if (query.usuarioId) {
+    queryBuilder.andWhere('movement.usuarioId = :usuarioId', { usuarioId: query.usuarioId });
+  }
+
+  // 💡 Filtro por tipo de movimiento directamente en la base de datos
+  if (query.tipo && query.tipo !== 'todos') {
+    queryBuilder.andWhere('movement.tipo = :tipo', { tipo: query.tipo });
+  }
+
+  // 💡 Filtrado de fechas robusto
+  if (query.fechaInicio) {
+    queryBuilder.andWhere('movement.createdAt >= :fechaInicio', { fechaInicio: `${query.fechaInicio}T00:00:00` });
+  }
+
+  if (query.fechaFin) {
+    queryBuilder.andWhere('movement.createdAt <= :fechaFin', { fechaFin: `${query.fechaFin}T23:59:59` });
+  }
+
+  const [result, total] = await queryBuilder
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data: result,
+    meta: {
+      total,
+      page,
+      lastPage: Math.ceil(total / limit) || 1,
+      limit,
+    }
+  };
+}
 
   async findByProductId(productoId: number, limit: number = 50) {
     return await this.movementRepository.find({

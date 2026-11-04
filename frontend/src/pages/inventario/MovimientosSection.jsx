@@ -21,7 +21,8 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   const { 
     productos, movimientos, proveedores, tecnicos, seriales, registrarMovimiento, loading,
     registrarTransferencia, registrarMovimientosMasivos, asignarSerialesTecnico, 
-    cargarMovimientos, recargarInventario, almacenesDetallados 
+    cargarMovimientos, recargarInventario, almacenesDetallados, paginaMovimientos, totalPaginasMovimientos,    
+    totalRegistrosMovimientos, handlePaginaSiguienteMovimientos, handlePaginaAnteriorMovimientos 
   } = useInventario();
   
   const { historialVentas } = useVentas();
@@ -48,6 +49,7 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   const [fechaFin, setFechaFin] = useState('');
   const [filtroTecnico, setFiltroTecnico] = useState('todos'); 
   const [filtroUsuario, setFiltroUsuario] = useState('todos');
+ 
 
   const [expandedRowId, setExpandedRowId] = useState(null);
 
@@ -117,13 +119,12 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   setResultadosBusquedaFactura(filtradas);
 }, [busquedaFactura, historialVentas]);
 
-  useEffect(() => {
+// Disparar carga cada vez que cambien las fechas o filtros principales
+useEffect(() => {
     if (permisosMovimiento?.view) {
-      cargarMovimientos();
-    } else {
-      mostrarToast?.('No tienes permisos para visualizar el historial de movimientos', 'error');
+      cargarMovimientos(1, filtroTipo, fechaInicio, fechaFin);
     }
-  }, [permisosMovimiento?.view, usuario?.id, cargarMovimientos]);
+  }, [permisosMovimiento?.view, filtroTipo, fechaInicio, fechaFin, cargarMovimientos]);
 
   // Efecto para ejecutar una acción inicial (ej: desde una notificación)
   useEffect(() => {
@@ -679,6 +680,43 @@ return (
           </div>
         )}
       </div>
+      {/* 💡 COLOQUEMOS AQUÍ LA BOTONERA DE PAGINACIÓN */}
+      {/* BOTONERA DE PAGINACIÓN */}
+      <div className="flex flex-col sm:flex-row items-center justify-between bg-white px-5 py-4 rounded-2xl border border-slate-200 shadow-sm gap-4">
+        {/* Lado izquierdo: Número de página actual y total de registros */}
+        <div className="flex items-center gap-3">
+          <div className="px-3.5 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl">
+            <span className="text-[10px] font-black uppercase tracking-wider text-brand">
+              Pág. <span className="font-black text-slate-900">{paginaMovimientos || 1}</span> de <span className="font-black text-slate-900">{totalPaginasMovimientos || 1}</span>
+            </span>
+          </div>
+          <span className="text-xs font-bold text-slate-400">
+            ({totalRegistrosMovimientos || 0} movimientos)
+          </span>
+        </div>
+
+        {/* Lado derecho: Botones Anterior y Siguiente */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={paginaMovimientos <= 1}
+            onClick={() => handlePaginaAnteriorMovimientos(filtroTipo, fechaInicio, fechaFin)}
+            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
+          >
+            Anterior
+          </button>
+
+          {/* Botón Siguiente */}
+          <button
+            type="button"
+            disabled={paginaMovimientos >= totalPaginasMovimientos}
+            onClick={() => handlePaginaSiguienteMovimientos(filtroTipo, fechaInicio, fechaFin)}
+            className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
+          >
+            Siguiente
+          </button>
+        </div>
+      </div>
 
       {/* 💡 NUEVO: Modal para mostrar los seriales de un movimiento */}
       {modalSeriales.isOpen && modalSeriales.movimiento && (
@@ -714,6 +752,8 @@ return (
           </div>
         </div>
       )}
+
+      
 
       {/* MODAL ÚNICO DE FLUJOS DINÁMICOS */}
       {modalOpen && (
@@ -771,8 +811,11 @@ return (
                       <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 shadow-xl rounded-xl z-[60] p-1">
                         {resultadosBusquedaFactura.map(f => (
                           <div key={f.id} onClick={() => cargarItemsDeFactura(f)} className="px-4 py-2 hover:bg-brand/5 rounded-lg cursor-pointer transition-colors border-b last:border-0">
-                            <p className="text-[10px] font-black text-slate-700">FACTURA #{f.id}</p>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase">{f.cliente} - {f.total.toLocaleString()} USD</p>
+                            <div className="flex justify-between items-center">
+                              <p className="text-[10px] font-black text-slate-700">FACTURA #{f.id}</p>
+                              <span className="text-[9px] font-bold text-brand">{f.total.toLocaleString()} USD</span>
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase">{f.cliente}</p>
                           </div>
                         ))}
                       </div>

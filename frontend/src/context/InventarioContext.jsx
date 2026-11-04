@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
+import axiosClient from '../api/axiosClient';
 
 const InventarioContext = createContext();
  
@@ -26,7 +27,7 @@ export const InventarioProvider = ({ children }) => {
   
   // Si VITE_API_URL no está definido o es absoluto hacia producción, 
   // forzamos el uso de la ruta relativa para que use el subdominio actual.
-  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') ? '/api' : (import.meta.env.VITE_API_URL || '/api');
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('ventas.muebleshabitat.com') ? '/api' : (import.meta.env.VITE_API_URL || '/api');
 
   const API_URL = `${API_BASE_URL}/products`;
 
@@ -40,6 +41,11 @@ export const InventarioProvider = ({ children }) => {
   const [unidadesMedida, setUnidadesMedida] = useState([]);
 
   const [terminosBusqueda, setTerminosBusqueda] = useState('');
+
+  // --- Estados de paginación para Movimientos ---
+  const [paginaMovimientos, setPaginaMovimientos] = useState(1);
+  const [totalPaginasMovimientos, setTotalPaginasMovimientos] = useState(1);
+  const [totalRegistrosMovimientos, setTotalRegistrosMovimientos] = useState(0);
 
  
 
@@ -86,36 +92,42 @@ export const InventarioProvider = ({ children }) => {
   return headers;
 }, [usuario?.id, usuario?.rol, getInventoryPermission]); // Solo depende de los estados reales de sesión
 const [terminoBusqueda, setTerminoBusqueda] = useState('');
+
  //LA FUNCIÓN FUERA DEL USEEFFECT (A nivel del Provider)
   const cargarProductosPrioritarios = async (page = 1, query = terminoBusqueda) => {
     setLoading(true);
     setErrorConexion(null);
     try {
-      const headers = getAuthHeaders();
       const estadoFiltro = verEliminados === 'all' ? 'all' : verEliminados ? 'false' : 'true';
       
-      let productsUrl = `${API_URL}?page=${page}&limit=20&isActive=${estadoFiltro}`;
-      if (query && query.trim() !== '') {
-        productsUrl += `&search=${encodeURIComponent(query)}`;
-      }
+      // 💡 Usamos axiosClient pasándole los parámetros de forma limpia en un objeto `params`
+      const res = await axiosClient.get('/products', {
+        params: {
+          page: page,
+          limit: 20,
+          isActive: estadoFiltro,
+          ...(query && query.trim() !== '' ? { search: query.trim() } : {})
+        },
+        headers: {
+          'x-user-id': usuario?.id || '',
+          'x-inventory-permission': 'true', // Incluimos la cabecera personalizada que permite CORS
+        }
+      });
       
-      const res = await fetch(productsUrl, { headers });
-      if (!res.ok) throw new Error(`Error ${res.status} al cargar productos`);
-      
-      const responseData = await res.json();
+      // 💡 En Axios la respuesta viene en `res.data`
+      const responseData = res.data;
       const listaProductos = responseData.data || (Array.isArray(responseData) ? responseData : []);
       const meta = responseData.meta || {};
 
       setProductos(listaProductos);
       
-      // 💡 Se leen correctamente desde el objeto 'meta' que sí trae la API
       setPaginaActual(Number(meta.page || page));
       setTotalPaginas(Number(meta.lastPage || 1));
       setTotalRegistros(Number(meta.total || listaProductos.length));
       
     } catch (error) {
       console.error("Error crítico al buscar productos:", error);
-      setErrorConexion(error.message);
+      setErrorConexion(error.response?.data?.message || error.message);
       setProductos([]);
     } finally {
       setLoading(false);
@@ -142,7 +154,7 @@ const [terminoBusqueda, setTerminoBusqueda] = useState('');
       ];
 
       const promesas = recursos.map((r) =>
-        fetch(r.url, { headers }).then((res) => {
+        axiosClient.get(r.url, { headers }).then((res) => {
           if (!res.ok) throw new Error(`Fallo en ${r.url}`);
           return res.json();
         })
@@ -243,42 +255,70 @@ const [terminoBusqueda, setTerminoBusqueda] = useState('');
       throw err;
     }
   };
-
- const cargarMovimientos = useCallback(async (productoId = null) => {
-  if (!usuario || movimientosCargandoRef.current) return;
   
-  movimientosCargandoRef.current = true;
+const cargarMovimientos = useCallback(async (page = 1, tipo = 'todos', fechaInicio = '', fechaFin = '', productoId = null) => {
+    if (!usuario) return;
 
-  try {
-    let url = `${API_BASE_URL}/movements`;
-    const params = new URLSearchParams();
-    
-    // Paginación opcional: No traigas miles de registros para la campanita
-    if (!productoId) params.append('limit', '20'); 
-    if (productoId) params.append('productoId', productoId);
-    if (usuario.rol?.toLowerCase() !== 'admin') params.append('usuarioId', usuario.id);
+    try {
+      let url = `${API_BASE_URL}/movements`;
+      const params = new URLSearchParams();
+      
+      params.append('page', page); // <--- Aquí viajará el 2 cuando sea la página siguiente
+      params.append('limit', '20'); 
+      if (productoId) params.append('productoId', productoId);
+      if (tipo && tipo !== 'todos') params.append('tipo', tipo);
+      if (fechaInicio) params.append('fechaInicio', fechaInicio);
+      if (fechaFin) params.append('fechaFin', fechaFin);
+      if (usuario.rol?.toLowerCase() !== 'admin') params.append('usuarioId', usuario.id);
 
-    if (params.toString()) url += `?${params.toString()}`;
+      url += `?${params.toString()}`;
 
-    const res = await fetch(url, { headers: getAuthHeaders() });
-    if (!res.ok) return;
-    
-    const data = await res.json();
-    const lista = Array.isArray(data) ? data : (data?.data || []);
+      // console.log("Enviando petición a URL:", url); // Para verificar que vaya page=2
 
-    // Solo actualizamos el estado si es la lista general de la campanita
-    if (!productoId) {
-      setMovimientos(lista);
+      const res = await fetch(url, { headers: getAuthHeaders() });
+      if (!res.ok) return;
+      
+      const responseData = await res.json();
+      const lista = Array.isArray(responseData) ? responseData : (responseData?.data || []);
+      const meta = responseData.meta || { total: lista.length, page: 1, lastPage: 1 };
+
+      // console.log("Respuesta del Backend - Meta:", meta, "Página solicitada en función:", page);
+
+      if (!productoId) {
+        setMovimientos(lista);
+        // Actualizamos de manera estricta con lo que respondió el backend o lo que pedimos
+        setPaginaMovimientos(Number(meta.page || page)); 
+        setTotalPaginasMovimientos(Number(meta.lastPage || 1));
+        setTotalRegistrosMovimientos(Number(meta.total || lista.length));
+      }
+      
+      return lista;
+    } catch (err) {
+      console.error("Error al cargar movimientos:", err);
     }
-    
-    return lista;
-  } catch (err) {
-    console.error("Error al cargar movimientos:", err);
-  } finally {
-    movimientosCargandoRef.current = false;
-  }
-}, [API_BASE_URL, getAuthHeaders, usuario?.id, usuario?.rol]);
+  }, [API_BASE_URL, getAuthHeaders, usuario?.id, usuario?.rol]);
 
+ // Funciones de control auto-gestionadas (Ya no necesitan recibir parámetros de página)
+ const handlePaginaSiguienteMovimientos = (tipo, inicio, fin) => {
+    // Calculamos explícitamente la página siguiente sumando 1 al estado actual
+    const nuevaPagina = paginaMovimientos + 1;
+    
+    if (nuevaPagina > totalPaginasMovimientos) return; // Si nos pasamos del límite, no hacemos nada
+    
+    //console.log("Avanzando a página solicitada:", nuevaPagina);
+    setPaginaMovimientos(nuevaPagina);
+    cargarMovimientos(nuevaPagina, tipo, inicio, fin);
+  };
+
+  const handlePaginaAnteriorMovimientos = (tipo, inicio, fin) => {
+    const nuevaPagina = paginaMovimientos - 1;
+    
+    if (nuevaPagina < 1) return; // Si bajamos de 1, no hacemos nada
+    
+    console.log("Retrocediendo a página solicitada:", nuevaPagina);
+    setPaginaMovimientos(nuevaPagina);
+    cargarMovimientos(nuevaPagina, tipo, inicio, fin);
+  };
   // Cargar Seriales
   const cargarSeriales = useCallback(async () => {
     if (!usuario) return;
@@ -802,9 +842,13 @@ const registrarMovimientosMasivos = async (payload) => {
     // 1. 🔑 Obtenemos los headers de autenticación
     const headers = getAuthHeaders(); 
 
-    // 🚀 NUEVO: Sacamos el id y las fechas para que NestJS no rebote con Error 400
-    // Usamos '_ ' para ignorar el id porque ya lo tenemos como parámetro en la función
-    const { id: _, createdAt, updatedAt, ...datosLimpios } = productoEditado;
+    // 🚀 Sacamos el id, fechas y extraemos 'serials' para evaluarlo
+    const { id: _, createdAt, updatedAt, serials, ...datosLimpios } = productoEditado;
+    const payloadEnvio = { ...datosLimpios };
+    
+    if (serials && Array.isArray(serials)) {
+      payloadEnvio.serials = [...new Set(serials)];
+    }
 
     // 2. Enviamos la petición PATCH incluyendo los headers del token
     const res = await fetch(`${API_BASE_URL}/products/${id}`, {
@@ -813,11 +857,10 @@ const registrarMovimientosMasivos = async (payload) => {
         ...headers, 
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(datosLimpios), // 👈 ¡AHORA ENVIAMOS SOLO LOS DATOS LIMPIOS!
+      body: JSON.stringify(payloadEnvio), 
     });
 
     if (!res.ok) {
-      // Si el backend responde con un error, extraemos el mensaje
       const errorData = await res.json();
       const message = Array.isArray(errorData.message)
         ? errorData.message.join(', ')
@@ -836,12 +879,11 @@ const registrarMovimientosMasivos = async (payload) => {
   }
 };
 
-const obtenerProductos = async (id) => {
+const obtenerProductos = async () => {
   try {
     const token = localStorage.getItem('token');
     
-    // 💡 Quita el '/products' extra de la URL:
-    const res = await fetch(`${API_URL}/${id}`, {
+    const res = await fetch(`${API_URL}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -849,10 +891,26 @@ const obtenerProductos = async (id) => {
       }
     });
 
-    if (!res.ok) throw new Error('Error al consultar el detalle del producto');
+    if (!res.ok) throw new Error('Error al consultar los productos');
 
-    const data = await res.json();
-    return data;
+    const responseJson = await res.json();
+    
+    // 🛡️ BLINDAJE ADAPTADO A TU BACKEND:
+    let listaProductos = [];
+
+    if (Array.isArray(responseJson)) {
+      listaProductos = responseJson;
+    } else if (responseJson && Array.isArray(responseJson.data)) {
+      // 👈 Esta es la estructura que te está devolviendo tu API ({ data: [...], meta: {...} })
+      listaProductos = responseJson.data;
+    } else if (responseJson && Array.isArray(responseJson.productos)) {
+      listaProductos = responseJson.productos;
+    } else {
+      console.warn("La API no devolvió una estructura reconocida:", responseJson);
+    }
+
+    setProductos(listaProductos);
+    return listaProductos;
   } catch (error) {
     console.error("Error en obtenerProductos:", error);
     throw error;
@@ -869,7 +927,7 @@ const obtenerProductos = async (id) => {
       method: 'POST',
       headers: {
         ...authHeaders,
-        'Content-Type': 'application/json', // 👈 ¡Obligatorio para que NestJS procese el @Body!
+        'Content-Type': 'application/json', //¡Obligatorio para que NestJS procese el @Body!
       },
       body: JSON.stringify(categoriaData), // Envía { nombre: '...', descripcion: '...' }
     });
@@ -1330,6 +1388,12 @@ const obtenerProductos = async (id) => {
       cargarConteos,
       handlePaginaSiguiente, 
       handlePaginaAnterior,
+      handlePaginaSiguienteMovimientos,
+      handlePaginaAnteriorMovimientos,
+      setPaginaActual,
+      paginaMovimientos,
+      totalPaginasMovimientos,
+      totalRegistrosMovimientos,
       recargarInventario: () => setRefreshIndex(prev => prev + 1)
     }}>
       {children}

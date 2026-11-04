@@ -11,7 +11,7 @@ import {
   Query,
   UseGuards,
   UseInterceptors,
-  UploadedFile, // 📸 Agregado
+  UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express'; // 📸 Agregado
 import { ProductsService } from './products.service';
@@ -22,7 +22,7 @@ import { InventoryWriteGuard } from './guards/inventory-write.guard';
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
-
+  
   // ─── 1. CREAR PRODUCTO (AHORA SOPORTA IMAGEN) ─────────────────────────
   @Post()
   @UseGuards(InventoryWriteGuard)
@@ -31,7 +31,6 @@ export class ProductsController {
     @Body() createProductDto: CreateProductDto,
     @UploadedFile() file?: any 
   ) {
-  
     return this.productsService.create(createProductDto);
   }
 
@@ -41,23 +40,34 @@ export class ProductsController {
   }
 
   // ─── 3. OBTENER TODOS ──────────────────────────────────────────────────
-  @Get()
+  // src/products/products.controller.ts
+@Get()
   async findAll(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20,
+    @Query('page') page?: string | number,
+    @Query('limit') limit?: string | number,
     @Query('isActive') isActive?: string,
     @Query('search') search?: string,
   ) {
+    // 1. Transformamos de forma segura los parámetros que vienen como string desde la URL
+    const pageNum = page !== undefined ? Number(page) : 1;
+    const limitNum = limit !== undefined ? Number(limit) : 20;
+
     let activeFilter: boolean | 'all' = true;
     if (isActive === 'false') activeFilter = false;
     if (isActive === 'all') activeFilter = 'all';
+    if (isActive === 'true') activeFilter = true;
 
-    return this.productsService.findAll({
-      page: Number(page),
-      limit: Number(limit),
+    return await this.productsService.findAll({
+      page: isNaN(pageNum) ? 1 : pageNum,
+      limit: isNaN(limitNum) ? 20 : limitNum,
       isActive: activeFilter,
       search,
     });
+  }
+
+  @Get(':id/serials')
+  async getProductSerials(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.findSerialsByProduct(id);
   }
 
   // ─── 4. OBTENER UNO POR ID ─────────────────────────────────────────────

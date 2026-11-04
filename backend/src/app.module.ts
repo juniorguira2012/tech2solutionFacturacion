@@ -1,5 +1,6 @@
 // src/app.module.ts
-import { Module, Logger } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer, RequestMethod, Logger } from '@nestjs/common';
+import { TenantMiddleware } from './common/middlewares/tenant.middleware';
 import * as path from 'path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
@@ -23,6 +24,8 @@ import { CategoriesModule } from './categories/categories.module';
 import { DatabaseModule } from './database/database.module'; 
 import { InventoryBatchesModule } from './inventory-batches/inventory-batches.module';
 import { ProjectsModule } from './projects/projects.module';
+import { TenantsModule } from './tenants/tenants.module';
+import { TenantsService } from './tenants/tenants.service';
 
 @Module({
   imports: [
@@ -40,7 +43,6 @@ import { ProjectsModule } from './projects/projects.module';
       useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
         const logger = new Logger('TypeOrmModule');
         
-        // Conversión estricta a booleano real
         const rawSync = configService.get('DATABASE_SYNCHRONIZE');
         const synchronize = String(rawSync).toLowerCase() === 'true';
 
@@ -54,7 +56,7 @@ import { ProjectsModule } from './projects/projects.module';
           port: configService.get<number>('DATABASE_PORT', 5432),
           username: configService.get<string>('DATABASE_USER', 'postgres'),
           password: configService.get<string>('DATABASE_PASSWORD', 'postgres'),
-          database: configService.get<string>('DATABASE_NAME', 'tech_two_solution_db'),
+          database: configService.get<string>('DATABASE_NAME') || (configService.get<string>('NODE_ENV') === 'production' ? 'tech_two_solution_db' : 'tech2_prueba_db'),
           autoLoadEntities: true,
           synchronize,
           logging: configService.get<string>('NODE_ENV') !== 'production',
@@ -78,8 +80,25 @@ import { ProjectsModule } from './projects/projects.module';
     DatabaseModule, 
     InventoryBatchesModule,
     ProjectsModule,
+    TenantsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(TenantMiddleware)
+      .exclude(
+        'admin/tenants',
+        'admin/tenants/*',
+        'api/admin/tenants',
+        'api/admin/tenants/*',
+        'admin/auth',
+        'admin/auth/*',
+        'api/admin/auth',
+        'api/admin/auth/*',
+      )
+      .forRoutes('*');
+  }
+}

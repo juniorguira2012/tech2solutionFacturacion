@@ -61,7 +61,7 @@ const RolesManager = () => {
 
   const defaultPermissions = { view: false, create: false, edit: false, delete: false };
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('inventario.oneredrd.com') 
+  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('ventas.muebleshabitat.com') 
     ? '/api' 
     : (import.meta.env.VITE_API_URL || '/api');
 

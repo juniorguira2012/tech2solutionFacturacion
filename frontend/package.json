@@ -1,7 +1,7 @@
 {
   "name": "Tech2solution",
   "private": true,
-  "version": "2.3.5",
+  "version": "2.8.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
   "dependencies": {
     "@react-oauth/google": "^0.13.5",
     "@tailwindcss/vite": "^4.2.1",
+    "@tanstack/react-query": "^5.104.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.577.0",

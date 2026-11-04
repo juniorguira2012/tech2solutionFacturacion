@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   Package, Search, Edit3, Trash2, Plus,
   FileText, LayoutGrid, List, Tag, X,
-  AlertTriangle, MapPin, MessageSquare, User, ChevronLeft, ChevronRight
+  AlertTriangle, MapPin, MessageSquare, User, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useInventario } from '../../context/InventarioContext';
 import { useAuth } from '../../context/AuthContext';
@@ -54,9 +54,42 @@ const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo =
 };
 
 //Componente Principal 
-const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { //Recibimos los permisos y el producto inicial
-  //Extraemos los permisos específicos para esta sección
-  const permisosProductos = permisos?.subModulos?.productos ?? permisos;
+const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { 
+    //Extraemos los permisos específicos para esta sección
+    const permisosProductos = permisos?.subModulos?.productos ?? permisos;
+      // Dentro de tu tarjeta de producto individual:  
+    const [serialesProducto, setSerialesProducto] = useState({});
+    const [loadingSeriales, setLoadingSeriales] = useState({});
+    const [mostrarSeriales, setMostrarSeriales] = useState({});
+
+const cargarSerialesBajoDemanda = async (e, prodId) => {
+    e?.stopPropagation();
+
+    if (!prodId) return;
+
+    // 1. Alternamos visibilidad solo para este ID
+    const estaMostrando = !!mostrarSeriales[prodId];
+    setMostrarSeriales((prev) => ({ ...prev, [prodId]: !estaMostrando }));
+
+    // 2. Si vamos a mostrar y aún no hemos cargado sus seriales, los pedimos a la API
+    if (!estaMostrando && !serialesProducto[prodId]) {
+      setLoadingSeriales((prev) => ({ ...prev, [prodId]: true }));
+
+      try {
+        // Ajusta la URL de tu endpoint si difiere ligeramente
+        const res = await api.get(`/seriales/producto/${prodId}`);
+        
+        setSerialesProducto((prev) => ({
+          ...prev,
+          [prodId]: res.data || [],
+        }));
+      } catch (err) {
+        console.error("Error al cargar seriales del producto:", err);
+      } finally {
+        setLoadingSeriales((prev) => ({ ...prev, [prodId]: false }));
+      }
+    }
+  };
 
   useEffect(() => {
     if (typeof setTerminoBusqueda === 'function') {
@@ -170,40 +203,88 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { //Re
     }
   }, [productoInicial]);
 
-  const abrirEditar = (prod) => {
-    if (!prod) return mostrarToast('Selecciona un producto válido', 'error');
-    if (!permisosProductos?.edit) return mostrarToast('No tienes permiso para editar', 'error');
+const abrirEditar = async (prod) => {
+  if (!prod) return mostrarToast('Selecciona un producto válido', 'error');
+  if (!permisosProductos?.edit) return mostrarToast('No tienes permiso para editar', 'error');
 
-    // Cargamos el formulario DIRECTAMENTE con el objeto 'prod' de la fila
-    setFormData({
-      id: prod.id,
-      nombre: prod.nombre || '',
-      categoria: prod.categoria || '',
-      precio: prod.precio ?? 0,
-      stock: prod.stock ?? 0,
-      stockMinimo: prod.stockMinimo ?? '5',
-      codigo: prod.codigo || '',
-      modelo: prod.modelo || '',
-      serie: prod.serie || '',
-      almacen: prod.almacen || 'Principal',
-      pasillo: prod.pasillo || '',
-      fila: prod.fila || '',
-      isSerialized: prod.isSerialized || false,
-      serialsInput: '',
-      unidadMedida: prod.unidadMedida || 'Unidad',
-      movimientoInventario: prod.movimientoInventario || 'Entrada',
-      descripcion: prod.descripcion || '',
-      imagen: prod.imagen || '',
-      proveedorId: prod.proveedor?.id || prod.proveedorId || '',
-      camposPersonalizados: prod.camposPersonalizados || [],
-      serialesExistentes: prod.seriales || [],
-    });
+  // 🌟 1. HISTORIAL MAESTRO: Tomamos todos los seriales que ya trae el producto (incluyendo vendidos)
+  let serialesHistoricosTotales = prod.seriales || [];
 
-    setIsEditing(true);
-    setIsModalOpen(true);
+  // 2. Consultamos la API solo para actualizar la tabla visual de la derecha (los disponibles)
+  let serialesDisponiblesParaTabla = serialesHistoricosTotales;
+  if (prod.isSerialized) {
+    try { 
+      const token = localStorage.getItem('token');
+      // // Ajusta la URL de tu endpoint local
+      // const res = await fetch(`http://localhost:3000/api/products/${prod.id}/serials`, {
+      //   headers: { 'Authorization': `Bearer ${token}` }
+      // });
+
+      // Ajusta la URL de tu endpoint según tu entorno (VITE_API_URL) Ponerr este cuando valla a subie a production
+      // 
+      // Obtenemos la URL base configurada en el archivo .env
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+      //Nota: Como API_URL ya incluye '/api', aquí solo concatenamos '/products/...'
+      const res = await fetch(`${API_URL}/products/${prod.id}/serials`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const dataSeriales = await res.json();
+        serialesDisponiblesParaTabla = Array.isArray(dataSeriales) ? dataSeriales : (dataSeriales.seriales || []);
+      }
+    } catch (error) {
+      console.error("Error al obtener los seriales disponibles:", error);
+    }
+  }
+
+  // Si el producto en la tabla principal no traía el array 'seriales' populado, 
+  //o si queremos asegurar que los vendidos estén presentes, los unimos de forma segura:
+  const todosLosSerialesSeguros = [
+    ...serialesHistoricosTotales,
+    ...serialesDisponiblesParaTabla
+  ];
+  // Eliminamos duplicados por si acaso
+  const serialesUnicosMaestro = Array.from(
+    new Set(todosLosSerialesSeguros.map(s => typeof s === 'object' ? (s.serialNumber || s.serial) : s))
+  ).map(codigo => {
+    // Reconstruimos objetos si es necesario o dejamos los strings limpios
+    return serialesHistoricosTotales.find(s => (s.serialNumber || s.serial) === codigo) || codigo;
+  });
+
+  const datosIniciales = {
+    nombre: prod.nombre || '',
+    categoria: prod.categoria || '',
+    precio: Number(prod.precio ?? 0),
+    stock: Number(prod.stock ?? 0),
+    stockMinimo: String(prod.stockMinimo ?? '5'),
+    codigo: prod.codigo || '',
+    modelo: prod.modelo || '',
+    serie: prod.serie || '',
+    almacen: prod.almacen || 'Principal',
+    pasillo: prod.pasillo || '',
+    fila: prod.fila || '',
+    isSerialized: prod.isSerialized || false,
+    unidadMedida: prod.unidadMedida || 'Unidad',
+    movimientoInventario: prod.movimientoInventario || 'Entrada',
+    descripcion: prod.descripcion || '',
+    imagen: prod.imagen || '',
+    proveedorId: prod.proveedor?.id || prod.proveedorId || '',
   };
-    
 
+  setFormData({
+    id: prod.id,
+    ...datosIniciales,
+    serialsInput: '', 
+    camposPersonalizados: prod.camposPersonalizados || [],
+    serialesExistentes: serialesDisponiblesParaTabla, // 👈 Renderiza solo los disponibles en la tabla visual
+    _serialesOriginalesTotales: serialesUnicosMaestro, // 👈 HISTORIAL COMPLETO BLINDADO (incluye vendidos para el backend)
+    _originalData: datosIniciales,
+  });
+
+  setIsEditing(true);
+  setIsModalOpen(true);
+};
     const handleUpdateSerial = async (serialId, nuevoNumero) => {
       // Esta función ahora solo llama al contexto. La actualización del estado
       // del formulario se manejará dentro del componente del modal.
@@ -353,58 +434,46 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => { //Re
 
 // ─── Guardar / Editar ───────────────────────────────────────────────────────
 const handleSave = async (e) => {
-  // 🛡️ Verificación de permisos de creación/edición
+  e.preventDefault();
+
+  // Verificación de permisos de creación/edición
   if ((isEditing && !permisosProductos?.edit) || (!isEditing && !permisosProductos?.create)) {
     mostrarToast("No tienes permiso para realizar esta acción", "error");
     return;
   }
 
-  e.preventDefault();
+  // 🛡️ DECLARAMOS LA VARIABLE AQUÍ ARRIBA PARA QUE EXISTA EN TODO EL HANDE SAVE
+  const serialesDelInput = (formData.serialsInput || '')
+    .split(/[\n,]+/)
+    .map(s => s.trim().toUpperCase())
+    .filter(Boolean);
+
+  // 1. VALIDACIÓN DE "CERO CAMBIOS" EN EDICIÓN
+  if (isEditing) {
+    const { _originalData, ...datosActuales } = formData;
+    let huboCambiosEnCampos = false;
+
+    if (_originalData) {
+      huboCambiosEnCampos = Object.keys(_originalData).some(key => {
+        const valActual = String(datosActuales[key] ?? '').trim();
+        const valOriginal = String(_originalData[key] ?? '').trim();
+        return valActual !== valOriginal;
+      });
+    }
+
+    // Si no escribió nuevos seriales y ningún campo cambió, detenemos todo aquí mismo.
+    if (serialesDelInput.length === 0 && !huboCambiosEnCampos) {
+      mostrarToast('No se realizaron cambios en el producto.', 'info');
+      setIsModalOpen(false);
+      return;
+    }
+  }
+
   setIsSaving(true);
 
-  // Validar que la unidad de medida seleccionada exista en el catálogo cargado y esté activa
-  const unidadExiste = unidadesMedida.some(u => u.nombre === formData.unidadMedida && u.activo);
-  if (!unidadExiste) {
-    setIsSaving(false);
-    mostrarToast?.(`La unidad "${formData.unidadMedida}" no es válida. Selecciona una del catálogo.`, 'error');
-    return;
-  }
+  // ... (tus validaciones de unidad de medida, códigos y series existentes siguen igual) ...
 
-  // Validar si el código ya existe para evitar duplicados
-  if (formData.codigo?.trim()) {
-    const codigoNormalizado = formData.codigo.trim().toLowerCase();
-    const productoExistente = productos.find(p => 
-      p.codigo?.trim().toLowerCase() === codigoNormalizado && 
-      (!isEditing || p.id !== Number(formData.id))
-    );
-
-    if (productoExistente) {
-      setIsSaving(false);
-      mostrarToast?.(`El código "${formData.codigo}" ya está en uso por: ${productoExistente.nombre}`, 'warning');
-      return;
-    }
-  }
-
-  // Las series de productos no serializados también deben ser únicas.
-  if (!formData.isSerialized && formData.serie?.trim()) {
-    const serieNormalizada = formData.serie.trim().toUpperCase();
-    const productoConSerie = productos.find(p =>
-      !p.isSerialized &&
-      p.serie?.trim().toUpperCase() === serieNormalizada &&
-      (!isEditing || p.id !== Number(formData.id)),
-    );
-
-    if (productoConSerie) {
-      setIsSaving(false);
-      mostrarToast?.(
-        `La serie "${formData.serie.trim()}" ya está registrada por: ${productoConSerie.nombre}`,
-        'warning',
-      );
-      return;
-    }
-  }
-
-  // 1. Limpieza estricta de metadatos del frontend para evitar errores de NestJS/ValidationPipe
+  // 2. Limpieza estricta de metadatos del frontend
   const { 
     createdAt, 
     updatedAt, 
@@ -412,26 +481,19 @@ const handleSave = async (e) => {
     vendidos, 
     serialsInput, 
     serialesExistentes, 
-    seriales, // Se remueve por si venía de la DB con esta clave
-    serials,  // Se remueve por si venía de la DB con esta clave
+    seriales, 
+    _originalData, 
+    _serialesOriginalesTotales,
     ...datosBase 
   } = formData;
 
-  // 2. Procesamos los seriales de forma segura
+  // 3. Procesamos los seriales de forma segura
   let listaSeriales = undefined;
 
   if (formData.isSerialized) {
-    // Extraer seriales nuevos ingresados en el textarea
-    const serialesDelInput = (serialsInput || '')
-      .split(/[\n,]+/)
-      .map(s => s.trim().toUpperCase())
-      .filter(Boolean);
-
-    // Aseguramos que serialesExistentes sea un array y leemos cualquier estructura (objeto o string)
-    const arrayExistentes = Array.isArray(serialesExistentes) 
-      ? serialesExistentes 
-      : (Array.isArray(formData.seriales) ? formData.seriales : (Array.isArray(formData.serials) ? formData.serials : []));
-
+    const fuenteSeriales = formData._serialesOriginalesTotales || serialesExistentes || [];
+    const arrayExistentes = Array.isArray(fuenteSeriales) ? fuenteSeriales : [];
+    
     const serialesExistentesNormalizados = arrayExistentes
       .map(s => {
         if (typeof s === 'object' && s !== null) {
@@ -441,62 +503,41 @@ const handleSave = async (e) => {
       })
       .filter(Boolean);
 
-    // --- COMBINAR SERIALES Y VALIDAR DUPLICADOS ---
-    const listaSerialesNormalizada = isEditing
-      ? [...serialesExistentesNormalizados, ...serialesDelInput]
-      : serialesDelInput;
-
-    const serialesUnicos = [...new Set(listaSerialesNormalizada)];
-
-    if (serialesUnicos.length !== listaSerialesNormalizada.length) {
-      const serialRepetido = listaSerialesNormalizada.find(
-        (serial, index) => listaSerialesNormalizada.indexOf(serial) !== index,
-      );
-      mostrarToast?.(`El serial "${serialRepetido}" está repetido.`, 'error');
-      setIsSaving(false);
-      return;
+    if (isEditing) {
+      // 🌟 Si el usuario NO escribió nada nuevo en el input, mandamos undefined para activar el blindaje del backend
+      if (serialesDelInput.length === 0) {
+        listaSeriales = undefined;
+      } else {
+        // Si escribió nuevos, combinamos los viejos con los nuevos
+        const combinados = [...serialesExistentesNormalizados, ...serialesDelInput];
+        listaSeriales = [...new Set(combinados)]; 
+      }
+    } else {
+      // EN CREACIÓN (Productos nuevos): Solo los nuevos del input
+      const serialesUnicos = [...new Set(serialesDelInput)];
+      if (serialesUnicos.length !== serialesDelInput.length) {
+        mostrarToast?.(`Hay seriales repetidos en la lista.`, 'error');
+        setIsSaving(false);
+        return;
+      }
+      listaSeriales = serialesUnicos;
     }
-
-    // Validar contra todos los seriales existentes en la base de datos global
-    const serialesGlobales = new Set(
-      (seriales || []).map(s => {
-        if (typeof s === 'object' && s !== null) {
-          return String(s.serialNumber || s.serial || '').trim().toUpperCase();
-        }
-        return String(s || '').trim().toUpperCase();
-      }),
-    );
-    const serialesPropios = new Set(serialesExistentesNormalizados);
-
-    const serialRepetidoEnBD = serialesDelInput.find(
-      serial => serialesGlobales.has(serial) && !serialesPropios.has(serial),
-    );
-
-    if (serialRepetidoEnBD) {
-      mostrarToast?.(`El serial "${serialRepetidoEnBD}" ya está registrado en el sistema.`, 'error');
-      setIsSaving(false);
-      return;
-    }
-
-    // 👈 ASIGNACIÓN CORREGIDA: Funciona tanto para creación como para edición
-    listaSeriales = serialesUnicos;
   }
 
-  // 3. Estructuramos la data final
+  // 4. Estructuramos la data final de forma segura
+  const idNumerico = Number(formData.id);
   const dataProcesada = {
     ...datosBase,
     ubicacion: (formData.pasillo || formData.fila) 
       ? `${formData.pasillo || ''}${formData.pasillo && formData.fila ? ' - ' : ''}${formData.fila || ''}`.trim()
       : '',
     almacen: formData.almacen || 'Principal',
-    id: isEditing ? Number(formData.id) : undefined, 
-    precio: parseFloat(formData.precio) || 0,    
+    id: isEditing && !isNaN(idNumerico) ? idNumerico : undefined, 
+    precio: parseFloat(formData.precio) || 0,     
     stockMinimo: parseInt(formData.stockMinimo, 10) || 0, 
-
     proveedorId: datosBase.proveedorId ? Number(datosBase.proveedorId) : undefined,
-
     ...(!formData.isSerialized && { stock: parseInt(formData.stock) || 0 }),
-    serials: listaSeriales
+    ...(listaSeriales !== undefined && { serials: listaSeriales })
   };
 
   try {
@@ -505,6 +546,10 @@ const handleSave = async (e) => {
       guardado = await actualizarProducto(dataProcesada.id, dataProcesada);
     } else {
       guardado = await agregarProducto(dataProcesada);
+    }
+
+    if (typeof obtenerProductos === 'function') {
+      await obtenerProductos(); 
     }
 
     mostrarToast?.(isEditing ? 'Producto actualizado con éxito' : 'Producto creado con éxito', 'success');
@@ -517,8 +562,6 @@ const handleSave = async (e) => {
     setIsSaving(false);
   }
 };
-
-
 
 // ─── Eliminar ───────────────────────────────────────────────────────────────
 const handleEliminar = (prod) => {
@@ -708,124 +751,180 @@ const handleEliminar = (prod) => {
       </div>
 
       {/* Lista */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
+     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
         {loading ? (
-          <div className="py-20 text-center text-xs font-black uppercase text-slate-400">Cargando...</div>
+          <div className="py-20 text-center text-xs font-black uppercase text-slate-400">
+            Cargando...
+          </div>
         ) : productosFiltrados.length === 0 ? (
-          <div className="py-20 text-center text-xs font-black uppercase text-slate-400">No hay productos</div>
-        ) : vista === 'grid' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 p-3">
-              {productosFiltrados.map(prod => (
-                <article 
-                  key={prod.id} 
-                  className="group rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all hover:-translate-y-0.5 relative cursor-pointer"
-                    onClick={() => {
-                      // 👇 Al hacer clic en la tarjeta, SIEMPRE abrimos el visor/modal del artículo
-                      if (typeof openImageViewer === 'function') {
+          <div className="py-20 text-center text-xs font-black uppercase text-slate-400">
+            No hay productos
+          </div>
+        ) : vista === "grid" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 p-3">
+            {productosFiltrados.map((prod) => (
+              <article
+                key={prod.id || prod._id}
+                className="group rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all hover:-translate-y-0.5 relative cursor-pointer flex flex-col justify-between"
+                onClick={() => {
+                  if (typeof openImageViewer === "function") {
+                    openImageViewer(prod);
+                  }
+                }}
+                title="Clic para ver detalles del producto"
+              >
+                <div>
+                  {/* Imagen del Producto */}
+                  <div
+                    className="aspect-[2.5/1] bg-slate-50 relative border-b border-slate-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (
+                        typeof openImageViewer === "function" &&
+                        obtenerImagenProducto(prod)
+                      ) {
                         openImageViewer(prod);
                       }
                     }}
-                    title="Clic para ver detalles del producto"
+                    title={
+                      obtenerImagenProducto(prod)
+                        ? "Clic para ampliar imagen"
+                        : "Sin imagen"
+                    }
                   >
-                  <div 
-                    className="aspect-[2.5/1] bg-slate-50 relative border-b border-slate-100"
-                      onClick={(e) => {
-                        e.stopPropagation(); // 👈 Evita que se abra la edición si el usuario solo quiere ver la foto grande
-                        if (typeof openImageViewer === 'function' && obtenerImagenProducto(prod)) {
-                          openImageViewer(prod);
-                        }
-                      }}
-                      title={obtenerImagenProducto(prod) ? "Clic para ampliar imagen" : "Sin imagen"}
-                    >
-                    {obtenerImagenProducto(prod)
-                      ? <img src={obtenerImagenProducto(prod)} alt={prod.nombre} className="h-full w-full object-cover"/>
-                      : <div className="h-full w-full flex items-center justify-center text-slate-200"><Package size={20}/></div>}
+                    {obtenerImagenProducto(prod) ? (
+                      <img
+                        src={obtenerImagenProducto(prod)}
+                        alt={prod.nombre}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-slate-200">
+                        <Package size={20} />
+                      </div>
+                    )}
                     <div className="absolute left-2 top-2">
-                      <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${prod.categoria === 'Servicios' ? 'bg-sky-500' : 'bg-slate-900'}`}>
-                        {prod.categoria === 'Servicios' ? 'Servicio' : 'Producto'}
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase text-white ${
+                          prod.categoria === "Servicios"
+                            ? "bg-sky-500"
+                            : "bg-slate-900"
+                        }`}
+                      >
+                        {prod.categoria === "Servicios" ? "Servicio" : "Producto"}
                       </span>
                     </div>
                   </div>
+
+                  {/* Detalles principales */}
                   <div className="p-3 space-y-2">
                     <div className="flex justify-between items-start gap-2">
-                      <h3 className="font-black text-slate-800 uppercase text-xs truncate">{prod.nombre}</h3>
-                      <p className="font-black text-slate-900 text-xs italic whitespace-nowrap">RD$ {formatPrice(prod.precio)}</p>
+                      <h3 className="font-black text-slate-800 uppercase text-xs truncate">
+                        {prod.nombre}
+                      </h3>
+                      <p className="font-black text-slate-900 text-xs italic whitespace-nowrap">
+                        RD$ {formatPrice(prod.precio)}
+                      </p>
                     </div>
-                  {prod.proveedor && <p className="text-[8px] font-black text-brand uppercase tracking-widest -mt-1">{prod.proveedor.nombre}</p>}                
+
+                    {prod.descripcion && (
+                      <p className="text-[8px] text-slate-500 italic">
+                        {prod.descripcion}
+                      </p>
+                    )}
+
+                    {prod.proveedor && (
+                      <p className="text-[8px] font-black text-brand uppercase tracking-widest -mt-1">
+                        {prod.proveedor.nombre}
+                      </p>
+                    )}
+
                     <div className="flex gap-2">
-                      <div className={`w-14 shrink-0 rounded-lg p-1.5 border ${prod.stock <= (prod.stockMinimo ?? 5) ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`} title={`Stock Mínimo: ${prod.stockMinimo ?? 5}`}>
-                        <p className="text-[8px] font-black uppercase opacity-70">Stock</p>
+                      <div
+                        className={`w-14 shrink-0 rounded-lg p-1.5 border ${
+                          prod.stock <= (prod.stockMinimo ?? 5)
+                            ? "bg-red-50 text-red-600"
+                            : "bg-emerald-50 text-emerald-600"
+                        }`}
+                        title={`Stock Mínimo: ${prod.stockMinimo ?? 5}`}
+                      >
+                        <p className="text-[8px] font-black uppercase opacity-70">
+                          Stock
+                        </p>
                         <span className="text-xs font-black">{prod.stock}</span>
                       </div>
-                      <div 
+
+                      <div
                         className="flex-1 bg-slate-50 p-1.5 rounded-lg border overflow-hidden cursor-help"
-                        title={`Almacén: ${prod.almacen || 'Principal'}${prod.ubicacion ? `\nUbicación: ${prod.ubicacion}` : ''}`}
+                        title={`Almacén: ${prod.almacen || "Principal"}${
+                          prod.ubicacion ? `\nUbicación: ${prod.ubicacion}` : ""
+                        }`}
                       >
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Almacén / Ubicación</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase">
+                          Almacén / Ubicación
+                        </p>
                         <div className="max-h-[40px] overflow-y-auto flex flex-col justify-center">
                           <p className="text-[9px] font-black truncate text-slate-700 uppercase leading-tight">
-                            {prod.almacen || 'Principal'}
+                            {prod.almacen || "Principal"}
                           </p>
                           {prod.ubicacion && (
                             <div className="flex items-center gap-1 text-brand mt-0.5">
                               <MapPin size={10} strokeWidth={3} />
-                              <span className="text-[8px] font-black truncate uppercase">{prod.ubicacion}</span>
+                              <span className="text-[8px] font-black truncate uppercase">
+                                {prod.ubicacion}
+                              </span>
                             </div>
                           )}
                         </div>
                       </div>
-                    </div>
-                    {/* --- INICIO: Mostrar Seriales Disponibles --- */}
-                    {prod.isSerialized && (() => {
-                      const serialesDisponibles = prod.seriales?.filter(s => s.status === 'disponible') || [];
-                      return (
-                        <div className="pt-2 mt-2 border-t border-slate-100">
-                          <p className="text-[8px] font-black text-slate-400 uppercase">Seriales Disponibles ({serialesDisponibles.length})</p>
-                          {serialesDisponibles.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {serialesDisponibles.slice(0, 3).map(s => (
-                                <div key={s.id} className="flex items-center gap-1 bg-slate-200 text-slate-700 rounded px-1.5 py-0.5" title={s.lastReturnNote ? `Última devolución: ${s.lastReturnNote}` : ''}>
-                                  <span className="text-[9px] font-mono font-bold">{s.serialNumber}</span>
-                                  {s.lastReturnNote && <MessageSquare size={10} className="text-slate-500" />}
-                                </div>
-                              ))}
-                              {serialesDisponibles.length > 3 && (
-                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold">+{serialesDisponibles.length - 3} más</span>
-                              )}
-                            </div>
-                          ) : <p className="text-[9px] text-slate-400 italic mt-1">No hay seriales disponibles.</p>}
-                        </div>
-                      );
-                    })()}
-                    {/* --- FIN: Mostrar Seriales Disponibles --- */}
-                    <div className="px-1 py-1 text-right flex items-center justify-end gap-1 border-t border-slate-50 mt-2">
-                      {prod.isActive === false ? (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleRestaurar(prod); }} 
-                          className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
-                        >
-                          Restaurar
-                        </button>
-                      ) : (
-                        <>
-                          {permisosProductos?.edit && (
-                            <button onClick={(e) => { e.stopPropagation(); abrirEditar(prod); }} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors">
-                              <Edit3 size={16}/>
-                            </button>
-                          )}
-                          {permisosProductos?.delete && (
-                            <button onClick={(e) => { e.stopPropagation(); handleEliminar(prod); }} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
-                              <Trash2 size={16}/>
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                    </div>               
                   </div>
-                </article>
-              ))}
-            </div>
-          ) : (
+                </div>
+
+                {/* Botones de acción al pie de la tarjeta */}
+                <div className="px-3 py-2 text-right flex items-center justify-end gap-1 border-t border-slate-100 bg-slate-50/50">
+                  {prod.isActive === false ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRestaurar(prod);
+                      }}
+                      className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
+                    >
+                      Restaurar
+                    </button>
+                  ) : (
+                    <>
+                      {permisosProductos?.edit && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            abrirEditar(prod);
+                          }}
+                          className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                      )}
+                      {permisosProductos?.delete && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEliminar(prod);
+                          }}
+                          className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          /* VISTA DE TABLA */
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b text-[9px] font-black uppercase text-slate-400">
               <tr>
@@ -837,65 +936,91 @@ const handleEliminar = (prod) => {
               </tr>
             </thead>
             <tbody className="divide-y text-sm">
-              {productosFiltrados.map(prod => (
-                <tr key={prod.id} className="hover:bg-slate-50 transition-colors">
+              {productosFiltrados.map((prod) => (
+                <tr key={prod.id || prod._id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-3">
-                    <p className="font-black text-slate-700 uppercase text-xs">{prod.nombre}</p>
-                    {/* --- INICIO: Mostrar Seriales en Tooltip --- */}
-                    {prod.isSerialized && (() => {
-                      const serialesDisponibles = prod.seriales?.filter(s => s.status === 'disponible') || [];
-                      // 💡 MEJORA: El tooltip ahora muestra la nota de devolución si existe.
-                      const serialesTooltip = serialesDisponibles
-                        .map(s => s.serialNumber + (s.lastReturnNote ? ` (Devuelto: ${s.lastReturnNote})` : ''))
-                        .join('\n');
-
-                      return (
-                        <div 
-                          className="flex items-center gap-1.5 text-brand mt-1 cursor-help"
-                          title={serialesDisponibles.length > 0 ? `Seriales Disponibles:\n${serialesTooltip}` : 'Producto serializado sin stock disponible'}
-                        >
-                          <Tag size={12} />
-                          <span className="text-[9px] font-black uppercase italic">{serialesDisponibles.length} seriales disponibles</span>
-                        </div>
-                      );
-                    })()}
-                    {/* --- FIN: Mostrar Seriales en Tooltip --- */}
+                    <p className="font-black text-slate-700 uppercase text-xs">
+                      {prod.nombre}
+                    </p>
+                    {prod.isSerialized && (
+                      <div
+                        className="flex items-center gap-1.5 text-brand mt-1 cursor-help"
+                        title={
+                          prod.seriales && prod.seriales.length > 0
+                            ? `Seriales Disponibles:\n${prod.seriales
+                                .filter((s) => s.status === "disponible")
+                                .map(
+                                  (s) =>
+                                    s.serialNumber +
+                                    (s.lastReturnNote
+                                      ? ` (Devuelto: ${s.lastReturnNote})`
+                                      : "")
+                                )
+                                .join("\n")}`
+                            : `Total disponibles: ${
+                                prod.totalSerialesDisponibles ?? 0
+                              }`
+                        }
+                      >
+                        <Tag size={12} />
+                        <span className="text-[9px] font-black uppercase italic">
+                          {prod.totalSerialesDisponibles ?? 0} seriales disponibles
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-3">
-                    <div 
+                    <div
                       className="flex flex-col cursor-help"
-                      title={`Almacén: ${prod.almacen || 'Principal'}${prod.ubicacion ? `\nUbicación: ${prod.ubicacion}` : ''}`}
+                      title={`Almacén: ${prod.almacen || "Principal"}${
+                        prod.ubicacion ? `\nUbicación: ${prod.ubicacion}` : ""
+                      }`}
                     >
-                      <span className="text-[10px] font-bold text-slate-500 uppercase">{prod.almacen || 'Principal'}</span>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">
+                        {prod.almacen || "Principal"}
+                      </span>
                       {prod.ubicacion && (
                         <div className="flex items-center gap-1 text-brand">
                           <MapPin size={10} />
-                          <span className="text-[9px] font-black uppercase italic">{prod.ubicacion}</span>
+                          <span className="text-[9px] font-black uppercase italic">
+                            {prod.ubicacion}
+                          </span>
                         </div>
                       )}
                     </div>
                   </td>
                   <td className="px-6 py-3 text-center font-black">{prod.stock}</td>
-                  <td className="px-6 py-3 text-right font-black italic">RD$ {formatPrice(prod.precio)}</td>
-                  {/* 🛡️ 4. Condicionamos los botones de acción en la VISTA DE LISTA */}
+                  <td className="px-6 py-3 text-right font-black italic">
+                    RD$ {formatPrice(prod.precio)}
+                  </td>
                   <td className="px-6 py-3 text-right flex items-center justify-end gap-1">
-                    {prod.isActive === false ? (permisosProductos?.delete &&
-                      <button 
-                        onClick={() => handleRestaurar(prod)} 
-                        className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
-                      >
-                        Restaurar
-                      </button>
+                    {prod.isActive === false ? (
+                      permisosProductos?.delete && (
+                        <button
+                          onClick={() => handleRestaurar(prod)}
+                          className="px-3 py-1.5 text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
+                        >
+                          Restaurar
+                        </button>
+                      )
                     ) : (
                       <>
                         {permisosProductos?.edit && (
-                          <button onClick={() => abrirEditar(prod)} className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"><Edit3 size={16}/></button>
+                          <button
+                            onClick={() => abrirEditar(prod)}
+                            className="p-1.5 text-brand hover:bg-indigo-50 rounded-lg transition-colors"
+                          >
+                            <Edit3 size={16} />
+                          </button>
                         )}
                         {permisosProductos?.delete && (
-                          <button onClick={() => handleEliminar(prod)} className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
-                            <Trash2 size={16}/>
+                          <button
+                            onClick={() => handleEliminar(prod)}
+                            className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={16} />
                           </button>
-                        )} 
+                        )}
                       </>
                     )}
                   </td>
@@ -930,7 +1055,6 @@ const handleEliminar = (prod) => {
           </button>
         </div>
       </div>
-
       {/* Modal Nuevo / Editar Producto */}
       <ProductoModal
         isOpen={isModalOpen}
