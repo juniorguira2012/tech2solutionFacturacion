@@ -7,7 +7,7 @@ import {
 import { useInventario } from '../../context/InventarioContext';
 import { useAuth } from '../../context/AuthContext';
 import ProductoModal from './ProductoModal';
-import axiosClient from '../../api/axiosClient'; // Ajusta la ruta según tu estructura
+import axiosClient, { getTenantFromSubdomain } from '../../api/axiosClient';
 //Modal de Confirmación
 const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo = 'danger' }) => {
   if (!isOpen) return null;
@@ -220,7 +220,7 @@ const abrirEditar = async (prod) => {
       //Nota: Como API_URL ya incluye '/api', aquí solo concatenamos '/products/...'
       const res = await fetch(`${API_URL}/product-serials/product/${prod.id}`, {
         headers: {
-          'x-tenant-id': localStorage.getItem('current_tenant_subdomain') || localStorage.getItem('posfactura_tenant') || 'onered',
+          'x-tenant-id': getTenantFromSubdomain(),
           'Authorization': `Bearer ${token}`,
         }
       });

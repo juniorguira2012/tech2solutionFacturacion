@@ -12,16 +12,15 @@ export class TenantMiddleware implements NestMiddleware {
 
     let dbName: string;
 
-    // 💡 Si estamos en entorno local de desarrollo, usamos tu BD de pruebas local
-    if (process.env.NODE_ENV !== 'production' || tenantId === 'localhost' || tenantId === 'tech_two_solution_db') {
-      dbName = 'tech2_prueba_db'; // <--- Tu base de datos local actual
+    // 💡 Si es localhost genérico o la central sin tenant específico, usamos la de pruebas por defecto
+    if (tenantId === 'localhost' || tenantId === 'tech_two_solution_db' || tenantId === 'onered') {
+      dbName = 'tech2_prueba_db';
     } else {
-      // 🚀 En producción, mapea dinámicamente el tenant a su base de datos correspondiente (ej: muebles_habitat -> muebles_habitat_db)
-      // Si el x-tenant-id ya viene como "muebles_habitat_db", lo respetamos, de lo contrario le añadimos "_db"
+      // 🚀 Mapeo dinámico para cualquier tenant (ej: muebleshabitat -> muebleshabitat_db)
       dbName = tenantId.endsWith('_db') ? tenantId : `${tenantId}_db`;
     }
 
-    // Guardamos el nombre de la base de datos en la petición para que los servicios la lean
+    // Guardamos el nombre de la base de datos en la petición
     req['tenantDatabase'] = dbName;
     next();
   }

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from './dto/entities/user.entity';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import * as crypto from 'crypto';
@@ -12,6 +12,10 @@ export class UsersService implements OnModuleInit {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
   ) {}
+
+  private getRepository(dataSource?: DataSource): Repository<User> {
+    return dataSource ? dataSource.getRepository(User) : this.usersRepository;
+  }
 
   async onModuleInit() {
     // Creamos un usuario inicial para pruebas si la base de datos está vacía o el correo no existe
@@ -42,37 +46,39 @@ export class UsersService implements OnModuleInit {
     return await bcrypt.hash(password, 10);
   }
 
-  findAll(): Promise<User[]> {
+  findAll(dataSource?: DataSource): Promise<User[]> {
     // No seleccionamos el password para el listado general por seguridad
-    return this.usersRepository.find({
+    return this.getRepository(dataSource).find({
       select: ['id', 'nombre', 'email', 'rol', 'isActive', 'createdAt']
     });
   }
 
-  async findOne(id: number): Promise<User | null> {
-    return this.usersRepository.findOne({
+  async findOne(id: number, dataSource?: DataSource): Promise<User | null> {
+    return this.getRepository(dataSource).findOne({
       where: { id },
       select: ['id', 'nombre', 'email', 'rol', 'isActive']
     });
   }
 
-  async remove(id: number): Promise<User> {
-    const user = await this.usersRepository.findOneBy({ id });
+  async remove(id: number, dataSource?: DataSource): Promise<User> {
+    const usersRepository = this.getRepository(dataSource);
+    const user = await usersRepository.findOneBy({ id });
 
     if (!user) {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
     }
 
     user.isActive = false;
-    return this.usersRepository.save(user);
+    return usersRepository.save(user);
   }
 
-  async create(createUserDto: CreateUserDto): Promise<User> {
+  async create(createUserDto: CreateUserDto, dataSource?: DataSource): Promise<User> {
+    const usersRepository = this.getRepository(dataSource);
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(createUserDto.password, salt);
     const email = createUserDto.email.trim().toLowerCase();
 
-    const existingUser = await this.usersRepository.findOne({
+    const existingUser = await usersRepository.findOne({
       where: { email },
     });
 
@@ -86,30 +92,31 @@ export class UsersService implements OnModuleInit {
       existingUser.rol = createUserDto.rol;
       existingUser.isActive = createUserDto.isActive ?? true;
 
-      const restoredUser = await this.usersRepository.save(existingUser);
+      const restoredUser = await usersRepository.save(existingUser);
       delete (restoredUser as Partial<User>).password;
       return restoredUser;
     }
     
-    const newUser = this.usersRepository.create({
+    const newUser = usersRepository.create({
       ...createUserDto,
       email,
       password: hashedPassword,
     });
     
-    const savedUser = await this.usersRepository.save(newUser);
+    const savedUser = await usersRepository.save(newUser);
     delete (savedUser as Partial<User>).password;
     return savedUser;
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
+  async update(id: number, updateUserDto: UpdateUserDto, dataSource?: DataSource): Promise<User> {
+    const usersRepository = this.getRepository(dataSource);
     // Si se está actualizando el password, hay que encriptarlo
     if (updateUserDto.password) {
       const salt = await bcrypt.genSalt(10);
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, salt);
     }
 
-    const user = await this.usersRepository.preload({
+    const user = await usersRepository.preload({
       id: id,
       ...updateUserDto,
     });
@@ -118,20 +125,21 @@ export class UsersService implements OnModuleInit {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
     }
 
-    const savedUser = await this.usersRepository.save(user);
+    const savedUser = await usersRepository.save(user);
     delete (savedUser as Partial<User>).password;
     return savedUser;
   }
 
-  async findByEmail(email: string) {
-    return this.usersRepository.findOne({
-      where: { email },
+  async findByEmail(email: string, dataSource?: DataSource) {
+    return this.getRepository(dataSource).findOne({
+      where: { email: email.trim().toLowerCase() },
       select: ['id', 'nombre', 'email', 'password', 'rol', 'isActive'],
     });
   }
 
-  async generateResetToken(email: string) {
-    const user = await this.usersRepository.findOne({ where: { email } });
+  async generateResetToken(email: string, dataSource?: DataSource) {
+    const usersRepository = this.getRepository(dataSource);
+    const user = await usersRepository.findOne({ where: { email } });
     if (!user) {
       throw new NotFoundException('Usuario no registrado');
     }
@@ -139,24 +147,24 @@ export class UsersService implements OnModuleInit {
     user.resetToken = crypto.randomBytes(32).toString('hex');
     user.resetTokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
 
-    await this.usersRepository.save(user);
+    await usersRepository.save(user);
     return user.resetToken;
   }
 
-  async findByResetToken(token: string) {
-    return this.usersRepository
+  async findByResetToken(token: string, dataSource?: DataSource) {
+    return this.getRepository(dataSource)
       .createQueryBuilder('user')
       .addSelect(['user.resetToken', 'user.resetTokenExpiresAt'])
       .where('user.resetToken = :token', { token })
       .getOne();
   }
 
-  async resetPassword(token: string, password: string) {
+  async resetPassword(token: string, password: string, dataSource?: DataSource) {
     if (!token || !password) {
       throw new BadRequestException('Token y nueva contraseña requeridos');
     }
 
-    const user = await this.findByResetToken(token);
+    const user = await this.findByResetToken(token, dataSource);
     if (!user) {
       throw new NotFoundException('Token inválido o expirado');
     }
@@ -172,6 +180,6 @@ export class UsersService implements OnModuleInit {
     user.resetToken = undefined;
     user.resetTokenExpiresAt = undefined;
 
-    await this.usersRepository.save(user);
+    await this.getRepository(dataSource).save(user);
   }
 }

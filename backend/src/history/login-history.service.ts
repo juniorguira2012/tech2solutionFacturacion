@@ -1,15 +1,21 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
+import { DataSource, Repository } from 'typeorm';
 import { LoginHistory } from './entities/login-history.entity';
 import { CreateLoginHistoryDto } from './dto/create-login-history.dto';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class LoginHistoryService {
   constructor(
-    @InjectRepository(LoginHistory)
-    private readonly loginHistoryRepository: Repository<LoginHistory>,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private get loginHistoryRepository(): Repository<LoginHistory> {
+    return getTenantDataSource(this.request).getRepository(LoginHistory);
+  }
 
   async create(createLoginHistoryDto: CreateLoginHistoryDto): Promise<LoginHistory> {
     const newRecord = this.loginHistoryRepository.create(createLoginHistoryDto);

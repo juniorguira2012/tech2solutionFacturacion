@@ -9,6 +9,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { Provider } from '../providers/entities/provider.entity';
 import { ProductSerial, SerialStatus } from './entities/product-serial.entity'; 
 import { Movement } from '../movements/entities/movement.entity';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
 // Define an interface for the parameters of the findAll method
 export interface FindAllParams {
@@ -33,7 +34,7 @@ export class ProductsService {
 
   // Método auxiliar para obtener el DataSource activo (del tenant actual o el principal)
   private getActiveDataSource(): DataSource {
-    return this.request['tenantDataSource'] || this.dataSource;
+    return getTenantDataSource(this.request);
   }
   // Método auxiliar para obtener el repositorio apuntando a la base de datos del tenant actual
   private async getRepository<T extends ObjectLiteral>(entity: new (...args: any[]) => T): Promise<Repository<T>> {

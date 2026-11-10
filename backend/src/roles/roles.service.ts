@@ -3,6 +3,7 @@ import { REQUEST } from '@nestjs/core';
 import { DataSource, Repository } from 'typeorm';
 import { Role } from '../roles/entities/role.entity';
 import type { Request } from 'express'; // 👈 Corrección aplicada aquí
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
 @Injectable({ scope: Scope.REQUEST })
 export class RolesService {
@@ -12,7 +13,7 @@ export class RolesService {
   ) {}
 
   private getActiveDataSource(): DataSource {
-    return this.request['tenantDataSource'] || this.dataSource;
+    return getTenantDataSource(this.request);
   }
 
   private async getRoleRepository(): Promise<Repository<Role>> {

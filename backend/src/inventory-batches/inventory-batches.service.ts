@@ -1,21 +1,28 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable, NotFoundException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
+import { DataSource, Repository } from 'typeorm';
 
 import { InventoryBatch } from './entities/inventory-batch.entity'; 
 import { Product } from '../products/entities/product.entity'; 
 import { CreateInventoryBatchDto } from './dto/create-inventory-batch.dto';
 import { UpdateInventoryBatchDto } from './dto/update-inventory-batch.dto';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class InventoryBatchesService {
   constructor(
-    @InjectRepository(InventoryBatch)
-    private readonly inventoryBatchRepository: Repository<InventoryBatch>,
-
-    @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private get inventoryBatchRepository(): Repository<InventoryBatch> {
+    return getTenantDataSource(this.request).getRepository(InventoryBatch);
+  }
+
+  private get productRepository(): Repository<Product> {
+    return getTenantDataSource(this.request).getRepository(Product);
+  }
 
   // --- GESTIÓN DE LOTES (INVENTORY BATCHES) ---
 

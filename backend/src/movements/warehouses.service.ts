@@ -1,14 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable, NotFoundException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
+import { DataSource, Repository } from 'typeorm';
 import { Warehouse } from './entities/warehouse.entity';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class WarehousesService {
   constructor(
-    @InjectRepository(Warehouse)
-    private repository: Repository<Warehouse>,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private get repository(): Repository<Warehouse> {
+    return getTenantDataSource(this.request).getRepository(Warehouse);
+  }
 
   findAll() {
     return this.repository.find({ order: { nombre: 'ASC' } });

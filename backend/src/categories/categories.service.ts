@@ -1,16 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable, NotFoundException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
+import { DataSource, Repository } from 'typeorm';
 import { Category } from './category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class CategoriesService {
   constructor(
-    @InjectRepository(Category)
-    private repository: Repository<Category>,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private get repository(): Repository<Category> {
+    return getTenantDataSource(this.request).getRepository(Category);
+  }
 
   create(createCategoryDto: CreateCategoryDto) {
     const category = this.repository.create(createCategoryDto);

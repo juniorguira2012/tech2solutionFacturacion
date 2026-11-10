@@ -1,34 +1,23 @@
 // src/api/axiosClient.js
 import axios from 'axios';
 
-const getTenantFromSubdomain = () => {
-  // 1. Prioridad: Tenant en localStorage
-  const tenantGuardado = localStorage.getItem('current_tenant_subdomain') || localStorage.getItem('posfactura_tenant');
-  if (tenantGuardado) {
-    return tenantGuardado;
+export const getTenantFromSubdomain = () => {
+  const hostname = window.location.hostname.toLowerCase();
+  const parts = hostname.split('.');
+
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'onered';
   }
 
-  const hostname = window.location.hostname; // Ej: "onered.localhost" o "localhost"
-  const parts = hostname.split('.');
-  
-  // 2. Desarrollo local puro
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'onered'; 
-  }
-  
-  // 3. Subdominios locales (ej. "onered.localhost") -> extrae "onered"
   if (parts.length >= 2 && parts[parts.length - 1] === 'localhost') {
     return parts[0];
   }
-  
-  // 4. Producción en techtwosolution.com
-  if (hostname.includes('techtwosolution.com')) {
-    if (parts.length >= 3 && parts[0] !== 'www') {
-      return parts[0];
-    }
+
+  if (parts.length >= 3 && !['www', 'app', 'api'].includes(parts[0])) {
+    return parts[0];
   }
-  
-  return 'onered';
+
+  return '';
 };
 
 const axiosClient = axios.create({
@@ -48,7 +37,12 @@ axiosClient.interceptors.request.use(
     }
 
     // 2. 🚀 Tenant ID multi-tenancy dinámico (Usamos la función que ya tenías creada)
-    config.headers['x-tenant-id'] = getTenantFromSubdomain();
+    const tenantSubdomain = getTenantFromSubdomain();
+    if (tenantSubdomain) {
+      config.headers['x-tenant-id'] = tenantSubdomain;
+    } else {
+      delete config.headers['x-tenant-id'];
+    }
 
     // 3. Datos del usuario y permisos que exige el backend de NestJS
     try {

@@ -36,7 +36,7 @@ const MargenesRentabilidadSection = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState('');
   const [exportError, setExportError] = useState('');
 
   useEffect(() => {
@@ -70,12 +70,17 @@ const MargenesRentabilidadSection = () => {
       { length: Math.max((firstPage.meta?.lastPage ?? 1) - 1, 0) },
       (_, index) => index + 2,
     );
-    const otherPages = await Promise.all(remainingPages.map(async (currentPage) => {
-      const { data } = await axiosClient.get('/products/profitability', {
-        params: { ...params, page: currentPage },
-      });
-      return data.data || [];
-    }));
+    const otherPages = [];
+    for (let index = 0; index < remainingPages.length; index += 5) {
+      const pageBatch = remainingPages.slice(index, index + 5);
+      const results = await Promise.all(pageBatch.map(async (currentPage) => {
+        const { data } = await axiosClient.get('/products/profitability', {
+          params: { ...params, page: currentPage },
+        });
+        return data.data || [];
+      }));
+      otherPages.push(...results);
+    }
 
     return {
       summary: firstPage.summary,
@@ -84,7 +89,7 @@ const MargenesRentabilidadSection = () => {
   };
 
   const exportarExcel = async () => {
-    setExporting(true);
+    setExporting('excel');
     setExportError('');
     try {
       const { summary: totals, products } = await cargarProductosParaExportar();
@@ -117,12 +122,12 @@ const MargenesRentabilidadSection = () => {
       setExportError(message || 'No se pudo generar el archivo Excel.');
       console.error('Error al exportar márgenes a Excel:', message);
     } finally {
-      setExporting(false);
+      setExporting('');
     }
   };
 
   const exportarPdf = async () => {
-    setExporting(true);
+    setExporting('pdf');
     setExportError('');
     try {
       const { summary: totals, products } = await cargarProductosParaExportar();
@@ -171,7 +176,7 @@ const MargenesRentabilidadSection = () => {
       setExportError(message || 'No se pudo generar el archivo PDF.');
       console.error('Error al exportar márgenes a PDF:', message);
     } finally {
-      setExporting(false);
+      setExporting('');
     }
   };
 
@@ -211,21 +216,21 @@ const MargenesRentabilidadSection = () => {
           <button
             type="button"
             onClick={exportarExcel}
-            disabled={exporting || loading || Boolean(error)}
+            disabled={Boolean(exporting) || loading || Boolean(error)}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Descargar reporte Excel"
           >
-            <FileSpreadsheet size={16} />
+            {exporting === 'excel' ? <Download size={16} className="animate-bounce" /> : <FileSpreadsheet size={16} />}
             Excel
           </button>
           <button
             type="button"
             onClick={exportarPdf}
-            disabled={exporting || loading || Boolean(error)}
+            disabled={Boolean(exporting) || loading || Boolean(error)}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Descargar reporte PDF"
           >
-            {exporting ? <Download size={16} className="animate-bounce" /> : <FileText size={16} />}
+            {exporting === 'pdf' ? <Download size={16} className="animate-bounce" /> : <FileText size={16} />}
             PDF
           </button>
         </div>

@@ -1,16 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable, NotFoundException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
+import { DataSource, Repository } from 'typeorm';
 import { Project } from './entities/project.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class ProjectsService {
   constructor(
-    @InjectRepository(Project)
-    private readonly projectRepository: Repository<Project>,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private get projectRepository(): Repository<Project> {
+    return getTenantDataSource(this.request).getRepository(Project);
+  }
 
   findAll() {
     return this.projectRepository.find({ order: { createdAt: 'DESC' } });

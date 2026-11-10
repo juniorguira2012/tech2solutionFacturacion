@@ -1,19 +1,31 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable, NotFoundException, BadRequestException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
+import { DataSource, Repository } from 'typeorm';
 import { Comodato } from './entities/comodato.entity';
 import { CreateComodatoDto } from './dto/create-comodato.dto';
 import { UpdateComodatoDto } from './dto/update-comodato.dto';
 import { Product } from '../products/entities/product.entity';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class ComodatosService {
   constructor(
-    @InjectRepository(Comodato)
-    private comodatosRepository: Repository<Comodato>,
-    @InjectRepository(Product)
-    private productsRepository: Repository<Product>,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private get activeDataSource(): DataSource {
+    return getTenantDataSource(this.request);
+  }
+
+  private get comodatosRepository(): Repository<Comodato> {
+    return this.activeDataSource.getRepository(Comodato);
+  }
+
+  private get productsRepository(): Repository<Product> {
+    return this.activeDataSource.getRepository(Product);
+  }
 
   async create(createComodatoDto: CreateComodatoDto): Promise<Comodato> {
     // Verificar que el producto existe

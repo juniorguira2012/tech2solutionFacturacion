@@ -1,5 +1,6 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Inject, Injectable, BadRequestException, NotFoundException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
 import { Repository, DataSource, EntityManager, Not, In } from 'typeorm';
 import { Movement } from './entities/movement.entity';
 import { CreateBulkMovementDto } from './dto/create-bulk-movement.dto';
@@ -13,20 +14,34 @@ import { InventoryBatch } from './entities/inventory-batch.entity';
 import { Technician } from './entities/technician.entity';
 import { CreateInventoryBatchDto } from '../inventory-batches/dto/create-inventory-batch.dto';
 import { UpdateInventoryBatchDto } from '../inventory-batches/dto/update-inventory-batch.dto';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class MovementsService {
   constructor(
-    @InjectRepository(Movement)
-    private movementRepository: Repository<Movement>,
-    @InjectRepository(Product)
-    private productRepository: Repository<Product>,
-    @InjectRepository(Technician)
-    private technicianRepository: Repository<Technician>,
-    @InjectRepository(InventoryBatch)
-    private inventoryBatchRepository: Repository<InventoryBatch>,
-    private dataSource: DataSource,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly rootDataSource: DataSource,
   ) {}
+
+  private get dataSource(): DataSource {
+    return getTenantDataSource(this.request);
+  }
+
+  private get movementRepository(): Repository<Movement> {
+    return this.dataSource.getRepository(Movement);
+  }
+
+  private get productRepository(): Repository<Product> {
+    return this.dataSource.getRepository(Product);
+  }
+
+  private get technicianRepository(): Repository<Technician> {
+    return this.dataSource.getRepository(Technician);
+  }
+
+  private get inventoryBatchRepository(): Repository<InventoryBatch> {
+    return this.dataSource.getRepository(InventoryBatch);
+  }
 
   async findTechnicians() {
     return this.technicianRepository.find({

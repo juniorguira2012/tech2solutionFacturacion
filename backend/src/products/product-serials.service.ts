@@ -1,22 +1,35 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Inject, Injectable, NotFoundException, BadRequestException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
 import { Repository, DataSource } from 'typeorm';
 import { Movement } from '../movements/entities/movement.entity';
 import { ProductSerial, SerialStatus } from './entities/product-serial.entity';
 import { Product } from './entities/product.entity';
 import { UpdateProductSerialDto } from './dto/update-product-serial.dto';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class ProductSerialsService {
   constructor(
-    @InjectRepository(ProductSerial)
-    private readonly serialRepository: Repository<ProductSerial>,
-    @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>,
-    @InjectRepository(Movement)
-    private readonly movementRepository: Repository<Movement>,
-    private readonly dataSource: DataSource,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly rootDataSource: DataSource,
   ) {}
+
+  private get dataSource(): DataSource {
+    return getTenantDataSource(this.request);
+  }
+
+  private get serialRepository(): Repository<ProductSerial> {
+    return this.dataSource.getRepository(ProductSerial);
+  }
+
+  private get productRepository(): Repository<Product> {
+    return this.dataSource.getRepository(Product);
+  }
+
+  private get movementRepository(): Repository<Movement> {
+    return this.dataSource.getRepository(Movement);
+  }
 
   private async addTechniciansToSerials(serials: ProductSerial[]) {
     if (serials.length === 0) return serials;

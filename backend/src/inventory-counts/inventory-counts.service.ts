@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable, NotFoundException, BadRequestException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
+import { DataSource, Repository } from 'typeorm';
 import { InventoryCount, ConteoEstado } from './entities/inventory-count.entity';
 import { CountItem } from './entities/count-item.entity';
 import { Product } from '../products/entities/product.entity';
@@ -8,19 +9,34 @@ import { CreateInventoryCountDto } from './dto/create-inventory-count.dto';
 import { AddCountItemDto } from './dto/add-count-item.dto';
 import { UpdateCountItemDto } from './dto/update-count-item.dto';
 import { AuditLog } from './entities/audit-log.entity';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class InventoryCountsService {
   constructor(
-    @InjectRepository(InventoryCount)
-    private readonly inventoryCountRepository: Repository<InventoryCount>,
-    @InjectRepository(CountItem)
-    private readonly countItemRepository: Repository<CountItem>,
-    @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>,
-    @InjectRepository(AuditLog)
-    private readonly auditLogRepository: Repository<AuditLog>,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private get activeDataSource(): DataSource {
+    return getTenantDataSource(this.request);
+  }
+
+  private get inventoryCountRepository(): Repository<InventoryCount> {
+    return this.activeDataSource.getRepository(InventoryCount);
+  }
+
+  private get countItemRepository(): Repository<CountItem> {
+    return this.activeDataSource.getRepository(CountItem);
+  }
+
+  private get productRepository(): Repository<Product> {
+    return this.activeDataSource.getRepository(Product);
+  }
+
+  private get auditLogRepository(): Repository<AuditLog> {
+    return this.activeDataSource.getRepository(AuditLog);
+  }
 
   async create(
     createInventoryCountDto: CreateInventoryCountDto,

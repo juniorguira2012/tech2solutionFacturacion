@@ -1,16 +1,22 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable, ConflictException, NotFoundException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
+import { DataSource, Repository } from 'typeorm';
 import { UnidadMedida } from './entities/units-of-measure.entity'; // Ajusta la ruta a tu entidad si es necesario
 import { CreateUnitsOfMeasureDto } from './dto/create-units-of-measure.dto';
 import { UpdateUnitsOfMeasureDto } from './dto/update-units-of-measure.dto';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class UnitsOfMeasureService {
   constructor(
-    @InjectRepository(UnidadMedida)
-    private readonly repository: Repository<UnidadMedida>,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private get repository(): Repository<UnidadMedida> {
+    return getTenantDataSource(this.request).getRepository(UnidadMedida);
+  }
 
   async create(createDto: CreateUnitsOfMeasureDto) {
     // Validamos si ya existe el código para evitar choques feos en Postgres

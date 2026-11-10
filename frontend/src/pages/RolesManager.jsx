@@ -69,7 +69,7 @@ const RolesManager = () => {
 
   const fetchRoles = useCallback(async () => {
       try {
-        // 💡 Usamos axiosClient.get para inyectar automáticamente el token y el x-tenant-id ('onered')
+        // axiosClient agrega el token y el subdominio actual del tenant.
         const res = await axiosClient.get('/roles');
         const data = res.data;
         const configMap = {};

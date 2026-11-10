@@ -1,6 +1,5 @@
 // src/app.module.ts
-import { Module, NestModule, MiddlewareConsumer, RequestMethod, Logger } from '@nestjs/common';
-import { TenantMiddleware } from './common/middlewares/tenant.middleware';
+import { Module, NestModule, MiddlewareConsumer, Logger } from '@nestjs/common';
 import * as path from 'path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
@@ -26,6 +25,8 @@ import { InventoryBatchesModule } from './inventory-batches/inventory-batches.mo
 import { ProjectsModule } from './projects/projects.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { TenantsService } from './tenants/tenants.service';
+import { Tenant } from './tenants/entities/tenant.entity';
+import { TenantMiddleware } from './tenants/tenant.middleware';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { TenantsService } from './tenants/tenants.service';
         };
       },
     }),
+    TypeOrmModule.forFeature([Tenant]),
     ScheduleModule.forRoot(),
     ProductsModule,
     InventoryCountsModule,
@@ -83,7 +85,7 @@ import { TenantsService } from './tenants/tenants.service';
     TenantsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, TenantMiddleware],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

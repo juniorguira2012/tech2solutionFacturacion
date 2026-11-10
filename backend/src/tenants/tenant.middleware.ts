@@ -1,14 +1,27 @@
 // src/tenants/tenant.middleware.ts
-import { Injectable, NestMiddleware, UnauthorizedException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NestMiddleware, UnauthorizedException, NotFoundException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Tenant } from './entities/tenant.entity';
 
+declare module 'express-serve-static-core' {
+  interface Request {
+    tenant?: Tenant;
+    tenantDataSource?: DataSource;
+    tenantDatabase?: string;
+  }
+}
+
 // Extender la interfaz Request de Express para tipar el tenant y su DataSource
 export interface TenantRequest extends Request {
-  tenant?: Tenant;
-  tenantDataSource?: DataSource;
+}
+
+export function getTenantDataSource(request: Request): DataSource {
+  if (!request.tenantDataSource) {
+    throw new InternalServerErrorException('No se resolvió la base de datos del tenant para esta solicitud.');
+  }
+  return request.tenantDataSource;
 }
 
 @Injectable()
@@ -22,7 +35,9 @@ export class TenantMiddleware implements NestMiddleware {
   ) {}
 
   async use(req: TenantRequest, res: Response, next: NextFunction) {
-    const subdomain = (req.headers['x-tenant-subdomain'] || req.headers['x-tenant-id']) as string;
+    const subdomain = String(
+      req.headers['x-tenant-subdomain'] || req.headers['x-tenant-id'] || '',
+    ).trim().toLowerCase();
 
     // 🔍 Imprimimos en consola cada vez que el middleware intercepta una llamada
     console.log(`🔍 [TenantMiddleware] Ruta: ${req.method} ${req.url} | Subdominio recibido:`, subdomain);
@@ -52,7 +67,7 @@ export class TenantMiddleware implements NestMiddleware {
         ...mainOptions,
         database: tenant.dbName,
         name: `tenant_${tenant.dbName}`,
-        synchronize: true,
+        synchronize: false,
         entities: mainOptions.entities, // 👈 CRUCIAL: Hereda todas las entidades del módulo principal (User, Role, Product, Client, etc.)
       });
 

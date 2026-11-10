@@ -176,8 +176,6 @@ export const AuthProvider = ({ children }) => {
   // Función de Login
   const login = useCallback(async (identifier, password) => {
     try {
-      localStorage.setItem('current_tenant_subdomain', 'onered');
-
       const response = await axiosClient.post('/auth/login', {
         email: identifier,
         identifier: identifier,

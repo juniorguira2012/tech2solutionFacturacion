@@ -1,14 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable, NotFoundException, Scope } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import type { Request } from 'express';
+import { DataSource, Repository } from 'typeorm';
 import { Client } from '../client/entities/client.entity';
+import { getTenantDataSource } from '../tenants/tenant.middleware';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class ClientsService {
   constructor(
-    @InjectRepository(Client)
-    private clientsRepository: Repository<Client>,
+    @Inject(REQUEST) private readonly request: Request,
+    private readonly dataSource: DataSource,
   ) {}
+
+  private get clientsRepository(): Repository<Client> {
+    return getTenantDataSource(this.request).getRepository(Client);
+  }
 
   findAll(): Promise<Client[]> {
     return this.clientsRepository.find({

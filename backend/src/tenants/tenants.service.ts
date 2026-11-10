@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Tenant } from './entities/tenant.entity';
 import { CreateTenantDto } from './dto/create-tenant.dto';
+import { User } from '../user/dto/entities/user.entity';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -69,7 +70,11 @@ export class TenantsService {
   }
 
   async create(createTenantDto: CreateTenantDto) {
-    const { name, subdomain, adminEmail } = createTenantDto;
+    const { name, adminEmail, adminPassword } = createTenantDto;
+    const subdomain = createTenantDto.subdomain.trim().toLowerCase();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(subdomain)) {
+      throw new BadRequestException('El subdominio solo puede contener letras, números y guiones.');
+    }
     const dbName = `${subdomain.replace(/-/g, '_')}_db`;
 
     const existing = await this.tenantRepository.findOne({
@@ -87,14 +92,18 @@ export class TenantsService {
       email: adminEmail,
       isActive: true,
     });
-    const savedTenant = await this.tenantRepository.save(tenant);
-
     try {
       await this.createTenantDatabase(dbName);
-      await this.initializeTenantSchema(dbName);
+      await this.initializeTenantSchema(dbName, adminEmail, adminPassword);
     } catch (error) {
-      throw new InternalServerErrorException(`Error al aprovisionar la base de datos del tenant: ${error.message}`);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      throw new InternalServerErrorException(`Error al aprovisionar la base de datos del tenant: ${message}`);
     }
+
+    const savedTenant = await this.tenantRepository.save(tenant);
 
     return {
       message: `Tenant '${name}' creado y base de datos '${dbName}' inicializada exitosamente.`,
@@ -113,15 +122,16 @@ export class TenantsService {
         [sanitizedDbName],
       );
 
-      if (dbExists.length === 0) {
-        await queryRunner.query(`CREATE DATABASE "${sanitizedDbName}";`);
+      if (dbExists.length > 0) {
+        throw new BadRequestException(`La base de datos '${sanitizedDbName}' ya existe y no se reutilizará para un tenant nuevo.`);
       }
+      await queryRunner.query(`CREATE DATABASE "${sanitizedDbName}";`);
     } finally {
       await queryRunner.release();
     }
   }
 
-  private async initializeTenantSchema(dbName: string) {
+  private async initializeTenantSchema(dbName: string, adminEmail: string, adminPassword: string) {
     const mainOptions = this.dataSource.options as any;
     
     const tenantDataSource = new DataSource({
@@ -133,7 +143,33 @@ export class TenantsService {
     });
     
     await tenantDataSource.initialize();
-    await tenantDataSource.destroy();
+
+    try {
+      // 🌱 SEED AUTOMÁTICO DEL USUARIO ADMINISTRADOR INICIAL
+      const userRepository = tenantDataSource.getRepository(User);
+      
+      const existingAdmin = await userRepository.findOne({ where: { rol: 'admin' } });
+      
+      if (!existingAdmin) {
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
+        
+        await userRepository.save({
+          nombre: 'Administrador General',
+          email: adminEmail.trim().toLowerCase(),
+          password: hashedPassword,
+          rol: 'admin',
+          isActive: true,
+        });
+        
+        console.log(`✅ Usuario administrador sembrado con éxito en la BD: ${dbName} (${adminEmail})`);
+      }
+    } catch (seedError) {
+      const message = seedError instanceof Error ? seedError.message : String(seedError);
+      console.error('⚠️ No se pudo sembrar el usuario admin inicial:', message);
+      throw seedError;
+    } finally {
+      await tenantDataSource.destroy();
+    }
   }
 
   async updateStatus(id: string, isActive: boolean) {
@@ -183,14 +219,15 @@ export class TenantsService {
       }
     }
 
-    if (updateData.subdomain && updateData.subdomain !== tenant.subdomain) {
+    const subdomain = updateData.subdomain?.trim().toLowerCase();
+    if (subdomain && subdomain !== tenant.subdomain) {
       const existing = await this.tenantRepository.findOne({
-        where: { subdomain: updateData.subdomain },
+        where: { subdomain },
       });
       if (existing && existing.id !== id) {
         throw new BadRequestException('El subdominio ya está en uso por otro tenant.');
       }
-      tenant.subdomain = updateData.subdomain;
+      tenant.subdomain = subdomain;
     }
 
     const updatedTenant = await this.tenantRepository.save(tenant);

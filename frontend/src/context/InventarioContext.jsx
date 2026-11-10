@@ -436,7 +436,7 @@ const cargarMovimientos = useCallback(async (page = 1, tipo = 'todos', fechaInic
  
   const registrarMovimiento = async (datosMovimiento) => {
     try {
-      // 💡 Usamos axiosClient.post para que inyecte automáticamente el token y el x-tenant-id ('onered')
+      // axiosClient agrega el token y el subdominio actual del tenant.
       const res = await axiosClient.post('/movements', datosMovimiento);
       const data = res.data;
 
@@ -454,7 +454,7 @@ const cargarMovimientos = useCallback(async (page = 1, tipo = 'todos', fechaInic
 
   const crearTecnico = async (nuevoTecnico) => {
     try {
-      // 💡 Usamos axiosClient.post para que inyecte automáticamente el token y el x-tenant-id ('onered')
+      // axiosClient agrega el token y el subdominio actual del tenant.
       const res = await axiosClient.post('/movements/technicians', nuevoTecnico);
 
       const data = res.data;
