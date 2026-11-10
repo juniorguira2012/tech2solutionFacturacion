@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Shield, Save, CheckCircle, Lock, Eye, Edit3, RotateCcw, ShieldCheck, AlertCircle, Plus, Trash2, AlertTriangle, FilePlus, FilePen, FileX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUsuarios } from '../context/UsuariosContext';
+import axiosClient from '../api/axiosClient'; // Ajusta la ruta relativa según corresponda
 
 export const modulos = [
     { id: 'ventas', nombre: 'Módulo de Ventas', desc: 'Acceso al POS y facturación', actions: ['view', 'create', 'edit', 'delete'] },
@@ -66,17 +67,16 @@ const RolesManager = () => {
     : (import.meta.env.VITE_API_URL || '/api');
 
   const fetchRoles = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/roles`);
-      if (res.ok) {
-        const data = await res.json();
+      try {
+        // 💡 Usamos axiosClient.get para inyectar automáticamente el token y el x-tenant-id ('onered')
+        const res = await axiosClient.get('/roles');
+        const data = res.data;
         const configMap = {};
         
         data.forEach(r => { 
           configMap[r.name] = r.config; 
         });
 
-        // Siempre nos aseguramos de que el rol 'admin' tenga todos los permisos.
         const adminPermissions = {};
         modulos.forEach(modulo => {
           const allActions = { view: true, create: true, edit: true, delete: true };
@@ -91,11 +91,6 @@ const RolesManager = () => {
           adminPermissions[modulo.id] = modulePerms;
         });
 
-        // 🚀 CORRECCIÓN: Se alinea la estructura de permisos del admin con la de los demás roles.
-        // En lugar de { modules: {...} }, se asigna directamente el objeto de permisos.
-        // Esto asegura que la UI (checkboxes) refleje correctamente los permisos del admin.
-        // La lógica de `AuthContext` ya maneja la asignación de permisos de forma correcta para el acceso.
-        // Esta corrección es puramente para la consistencia visual en esta pantalla.
         configMap['admin'] = { modules: adminPermissions, viewScope: 'all' };
         
         setRolesConfig(configMap);
@@ -104,30 +99,24 @@ const RolesManager = () => {
         if (primerosRoles.length > 0) {
           setRolSeleccionado(primerosRoles.includes('admin') ? 'admin' : primerosRoles[0]);
         }
+      } catch (error) {
+        console.error("Error al cargar roles de la DB:", error.response?.data || error.message);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error al cargar roles de la DB:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [API_BASE_URL]);
+    }, []);
 
   useEffect(() => { fetchRoles(); }, [fetchRoles]);
 
   const guardarConfiguracion = async () => {
     if (!rolSeleccionado) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/roles/update-config`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('posfactura_token') || ''}`,
-          'x-user-id': usuario?.id || '',
-          'x-user-role': usuario?.rol || ''
-        },
-        body: JSON.stringify({ name: rolSeleccionado, config: rolesConfig[rolSeleccionado] })
+      // 💡 Usamos axiosClient.post
+      await axiosClient.post('/roles/update-config', {
+        name: rolSeleccionado,
+        config: rolesConfig[rolSeleccionado]
       });
-      if (!res.ok) throw new Error("Error al guardar");
+
       await recargarRoles();
       localStorage.removeItem('posfactura_roles_config');
       await recargarPermisos();
@@ -169,13 +158,8 @@ const RolesManager = () => {
   const ejecutarEliminacion = async (rolABorrar) => {
     if (rolABorrar === 'admin') return;
     try {
-      await fetch(`${API_BASE_URL}/roles/${rolABorrar}`, { 
-        method: 'DELETE',
-        headers: { 
-          'x-user-id': usuario?.id || '',
-          'x-user-role': usuario?.rol || '' 
-        }
-      });
+      // 💡 Usamos axiosClient.delete
+      await axiosClient.delete(`/roles/${rolABorrar}`);
 
       const nuevaConfig = { ...rolesConfig };
       delete nuevaConfig[rolABorrar];
@@ -189,7 +173,7 @@ const RolesManager = () => {
       setDeleteModal({ show: false, rol: null });
     }
   };
-
+  
   const handlePermissionChange = (moduleId, action, isChecked, subModuleId = null) => {
     // 🛡️ GUARDA DE SEGURIDAD: El rol 'admin' es intocable.
     if (rolSeleccionado === 'admin' || !rolSeleccionado || !rolesConfig[rolSeleccionado]) return;

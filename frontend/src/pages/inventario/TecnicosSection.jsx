@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle, ClipboardList, Edit2, Mail, PackageSearch, Phone, Search, Trash2, UserCheck, UserPlus, Wrench, X, RotateCcw, ChevronDown, ChevronUp, Undo2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useInventario } from '../../context/InventarioContext';
+import axiosClient from '../../api/axiosClient'; // Ajusta la ruta relativa según dónde esté TecnicosSection.jsx
 
 const TecnicosSection = ({ mostrarToast, permisos }) => {
   // 🛡️ Extraemos los permisos específicos para esta sección
@@ -90,45 +91,43 @@ const TecnicosSection = ({ mostrarToast, permisos }) => {
   const [expandedTechnician, setExpandedTechnician] = useState(null);
 
 useEffect(() => {
-  if (!busquedaProducto.trim()) {
-    setResultadosBusqueda([]);
-    setMostrarDropdown(false);
-    return;
-  }
-
-  const timer = setTimeout(async () => {
-    try {
-      setCargandoBusqueda(true);
-      
-      // 💡 Ajustamos para usar la URL completa o la variable de entorno de Vite
-      const urlBase = API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-      const cleanBase = urlBase.replace(/\/$/, '');
-      const endpoint = cleanBase.endsWith('/products') ? cleanBase : `${cleanBase}/products`;
-      
-      const headers = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
-
-      const res = await fetch(
-        `${endpoint}?page=1&limit=10&isActive=true&search=${encodeURIComponent(busquedaProducto)}`,
-        { headers }
-      );
-      
-      const responseData = await res.json().catch(() => ({}));
-
-      const lista = Array.isArray(responseData)
-        ? responseData
-        : (responseData.data || responseData.items || responseData.productos || []);
-
-      setResultadosBusqueda(lista);
-      setMostrarDropdown(true);
-    } catch (error) {
-      console.error('Error al buscar productos para despacho:', error);
-    } finally {
-      setCargandoBusqueda(false);
+    if (!busquedaProducto.trim()) {
+      setResultadosBusqueda([]);
+      setMostrarDropdown(false);
+      return;
     }
-  }, 300);
 
-  return () => clearTimeout(timer);
-}, [busquedaProducto, API_URL, getAuthHeaders]);
+    const timer = setTimeout(async () => {
+      try {
+        setCargandoBusqueda(true);
+        
+        // 💡 Usamos axiosClient.get para inyectar automáticamente token y x-tenant-id
+        const res = await axiosClient.get('/products', {
+          params: {
+            page: 1,
+            limit: 10,
+            isActive: 'true',
+            search: busquedaProducto.trim()
+          }
+        });
+
+        const responseData = res.data;
+        const lista = Array.isArray(responseData)
+          ? responseData
+          : (responseData.data || responseData.items || responseData.productos || []);
+
+        setResultadosBusqueda(lista);
+        setMostrarDropdown(true);
+      } catch (error) {
+        console.error('Error al buscar productos para despacho:', error);
+        setResultadosBusqueda([]);
+      } finally {
+        setCargandoBusqueda(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [busquedaProducto]);
 
   // // 4. Productos filtrados seguros
   // const productosFiltrados = useMemo(() => {

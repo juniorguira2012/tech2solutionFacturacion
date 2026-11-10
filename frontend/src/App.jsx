@@ -11,7 +11,7 @@ import { UsuariosProvider } from './context/UsuariosContext';
 
 import {AdminLogin } from './features/admin/pages/AdminLogin';
 import {AdminDashboard} from './features/admin/pages/AdminDashboard';
-import {MasterProtectedRoute} from './components/MasterProtectedRoute';
+import {MasterProtectedRoute} from './features/admin/components/MasterProtectedRoute';
 
 import Home from './pages/Home';
 import Ventas from './pages/Ventas';

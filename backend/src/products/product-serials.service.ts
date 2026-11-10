@@ -135,13 +135,11 @@ export class ProductSerialsService {
     }
   }
 
-  // ✅ AGREGADO LÍMITE DE SEGURIDAD PARA CONSULTAS POR PRODUCTO
-  async findByProductId(productId: number, limit: number = 50) {
+  async findByProductId(productId: number) {
     const serials = await this.serialRepository.find({
-      where: { productoId: productId },
+      where: { productoId: productId }, // 👈 Usamos productoId como espera la entidad
       relations: ['producto'],
-      order: { createdAt: 'DESC' },
-      take: limit,
+      order: { createdAt: 'DESC' as const },
     });
     return this.addTechniciansToSerials(serials);
   }

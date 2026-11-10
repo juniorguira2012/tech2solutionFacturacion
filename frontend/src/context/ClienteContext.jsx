@@ -1,4 +1,3 @@
-// ClienteContext.jsx
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
@@ -11,96 +10,80 @@ export const ClienteProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const { usuario } = useAuth();
 
-  // Construimos la URL de la API basándonos en la configuración de entorno o fallback local
-  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('ventas.muebleshabitat.com') 
-    ? '/api' 
-    : (import.meta.env.VITE_API_URL || '/api');
-
-  const API_URL = `${API_BASE_URL}/clients`;
-
-  const getAuthHeaders = useCallback(() => {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-    const token = localStorage.getItem('posfactura_token'); // Asumiendo que el token se guarda con esta clave
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-    if (usuario && usuario.id) {
-      headers['x-user-id'] = usuario.id;
-      headers['x-user-role'] = usuario.rol;
-    }
-    return headers;
-  }, [usuario]);
-
-  // 1. Cargar clientes desde la base de datos al iniciar
+  // 1. Cargar clientes desde la base de datos al iniciar utilizando axiosClient
   const cargarClientes = useCallback(async () => {
     if (!usuario) return;
     setLoading(true);
     try {
-      const res = await axiosClient.get(API_URL, { headers: getAuthHeaders() });
-      const clientesActivos = Array.isArray(res.data) ? res.data.filter(c => c.isActive !== false) : [];
+      // 🚀 axiosClient ya maneja baseURL, token, tenant y cabeceras automáticamente
+      const res = await axiosClient.get('/clients');
+      const data = res.data;
+      const clientesArray = Array.isArray(data) ? data : (data?.data || []);
+      const clientesActivos = clientesArray.filter(c => c.isActive !== false);
+      
       setClientes(clientesActivos);
     } catch (err) {
-      console.error("Error en cargarClientes:", err);
+      console.error("Error en cargarClientes:", err.response?.data?.message || err.message);
+      setClientes([]);
     } finally {
       setLoading(false);
     }
-  }, [usuario, API_URL, getAuthHeaders]);
+  }, [usuario]);
 
   useEffect(() => {
     cargarClientes();
   }, [cargarClientes]);
 
-  // 2. Agregar cliente en la DB
+  // 2. Agregar cliente en la DB con axiosClient
   const agregarCliente = async (nuevo) => {
     try {
-      const res = await axiosClient.post(API_URL, nuevo, { headers: getAuthHeaders() });
-      if (!res.ok) throw new Error('Error al crear cliente');
-      const data = await res.json();
+      const res = await axiosClient.post('/clients', nuevo);
+      const data = res.data?.data || res.data;
+      
       setClientes(prev => [...prev, data].sort((a, b) => a.nombre.localeCompare(b.nombre)));
       return data;
     } catch (err) {
-      console.error(err);
-      throw err;
+      const errorData = err.response?.data || {};
+      const errorMessage = errorData.message || err.message;
+      const mensajeObj = Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage;
+      
+      console.error("Error al crear cliente:", mensajeObj);
+      throw new Error(mensajeObj || 'Error al crear cliente');
     }
   };
 
-  // 3. Actualizar cliente en la DB
+  // 3. Actualizar cliente en la DB con axiosClient
   const actualizarCliente = async (editado) => {
     try {
       const { id, ...datos } = editado;
-      const res = await fetch(`${API_URL}/${id}`, {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(datos)
-      });
-      if (!res.ok) throw new Error('Error al actualizar cliente');
-      const data = await res.json();
+      const res = await axiosClient.patch(`/clients/${id}`, datos);
+      const data = res.data?.data || res.data;
+      
       setClientes(prev => prev.map(c => c.id === data.id ? data : c).sort((a, b) => a.nombre.localeCompare(b.nombre)));
       return data;
     } catch (err) {
-      console.error(err);
-      throw err;
+      const errorData = err.response?.data || {};
+      const errorMessage = errorData.message || err.message;
+      const mensajeObj = Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage;
+
+      console.error("Error al actualizar cliente:", mensajeObj);
+      throw new Error(mensajeObj || 'Error al actualizar cliente');
     }
   };
 
-  // 4. Eliminar cliente en la DB
+  // 4. Eliminar cliente en la DB con axiosClient
   const eliminarCliente = async (id) => {
     try {
-      const res = await fetch(`${API_URL}/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-      const data = await res.json().catch(() => ({})); // Siempre intentar leer el JSON
-      if (!res.ok) { // Si la respuesta no es OK, lanzar un error
-        throw new Error(data.message || `Error al eliminar cliente: ${res.status}`);
-      }
+      await axiosClient.delete(`/clients/${id}`);
       setClientes(prev => prev.filter(c => c.id !== id));
       return true;
     } catch (err) {
-      console.error(err);
-      throw err; // Propaga el error para que el componente lo capture
+      const errorData = err.response?.data || {};
+      const errorMessage = errorData.message || err.message;
+      const mensajeObj = Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage;
+
+      console.error("Error al eliminar cliente:", mensajeObj);
+      throw new Error(mensajeObj || 'Error al eliminar cliente');
     }
   };
 

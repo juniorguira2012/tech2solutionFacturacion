@@ -28,30 +28,25 @@ export const UsuariosProvider = ({ children }) => {
     };
   }, [usuario]);
 
-  // 1. Cargar usuarios desde la base de datos (Backend)
   const cargarUsuarios = useCallback(async () => {
     if (!usuario) return;
     setLoading(true);
     try {
-      const res = await axiosClient.get(API_URL, { headers: getAuthHeaders() });
+      // 💡 Con axiosClient no necesitamos pasar getAuthHeaders manualmente
+      const res = await axiosClient.get(API_URL);
       setUsuarios(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Error en cargarUsuarios:", err);
     } finally {
       setLoading(false);
     }
-  }, [usuario, API_URL, getAuthHeaders]);
+  }, [usuario, API_URL]);
 
   const cargarRoles = useCallback(async () => {
     if (!usuario) return;
     try {
-      // 💡 Cambiamos fetch por axiosClient para heredar automáticamente las cabeceras del tenant y token
-      const res = await axiosClient.get(`${API_BASE_URL}/roles`, {
-        headers: {
-          'x-user-id': usuario?.id || '',
-          'x-user-role': usuario?.rol || '',
-        }
-      });
+      // 💡 axiosClient inyecta el token y el tenant automáticamente
+      const res = await axiosClient.get(`${API_BASE_URL}/roles`);
       setRoles(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Error al cargar roles:", err);
@@ -66,13 +61,10 @@ export const UsuariosProvider = ({ children }) => {
   // 2. Agregar usuario en la DB
   const agregarUsuario = async (nuevo) => {
     try {
-      const res = await axiosClient.post(API_URL, nuevo, { headers: getAuthHeaders() });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        const mensaje = Array.isArray(errorData.message) ? errorData.message.join(', ') : errorData.message;
-        throw new Error(mensaje || 'Error al crear usuario');
-      }
-      const data = await res.json();
+      // 💡 Con axiosClient, la respuesta exitosa viene directamente en res.data
+      const res = await axiosClient.post(API_URL, nuevo);
+      const data = res.data;
+
       setUsuarios(prev => {
         const existeEnLista = prev.some(u => u.id === data.id);
         if (existeEnLista) {
@@ -82,31 +74,34 @@ export const UsuariosProvider = ({ children }) => {
       });
       return data;
     } catch (err) {
-      console.error("Error al agregar usuario:", err);
-      throw err;
+      const errorData = err.response?.data || {};
+      const errorMessage = errorData.message || err.message;
+      const mensaje = Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage;
+      
+      console.error("Error al agregar usuario:", mensaje);
+      throw new Error(mensaje || 'Error al crear usuario');
     }
   };
 
   // 3. Actualizar usuario en la DB
-  const actualizarUsuario = async (editado) => {
+  const actualizarUsuario = async (id, payload) => {
     try {
-      const { id, ...datosAEnviar } = editado;
-      const res = await axiosClient.patch(`${API_URL}/${id}`, datosAEnviar, { headers: getAuthHeaders() });
+      // 🛡️ Blindaje contra [object Object] en el parámetro
+      const cleanId = typeof id === 'object' ? id.id : id;
+      const res = await axiosClient.patch(`/users/${cleanId}`, payload);
+      const data = res.data;
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        const mensaje = Array.isArray(errorData.message) ? errorData.message.join(', ') : errorData.message;
-        throw new Error(mensaje || 'Error al actualizar usuario');
-      }
-      const data = await res.json();
-      setUsuarios(prev => prev.map(u => u.id === data.id ? data : u));
-      return true;
+      setUsuarios(prev => prev.map(u => Number(u.id) === Number(cleanId) ? data : u));
+      return data;
     } catch (err) {
-      console.error("Error al actualizar usuario:", err);
-      throw err;
+      const errorData = err.response?.data || {};
+      const errorMessage = errorData.message || err.message;
+      const message = Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage;
+      
+      console.error("Error al actualizar usuario:", message);
+      throw new Error(message || 'Error al actualizar usuario');
     }
   };
-
   // 4. Desactivar usuario sin borrarlo de la DB
   const eliminarUsuario = async (id) => {
     const targetUser = usuarios.find(u => u.id === id);
@@ -114,22 +109,19 @@ export const UsuariosProvider = ({ children }) => {
 
     if (id === usuario?.id) return false;
 
-    // Validación de Super Usuario para eliminar otros Admins
     if (targetUser?.rol === 'admin' && usuario?.email !== SUPER_USER_EMAIL) {
       return false;
     }
 
     try {
-      const res = await fetch(`${API_URL}/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-      if (!res.ok) throw new Error('No se pudo desactivar el usuario');
-      const data = await res.json();
+      // 💡 Migramos también el delete a axiosClient
+      const res = await axiosClient.delete(`${API_URL}/${id}`);
+      const data = res.data;
+
       setUsuarios(prev => prev.map(u => u.id === data.id ? data : u));
       return true;
     } catch (err) {
-      console.error(err);
+      console.error("Error al desactivar usuario:", err);
       return false;
     }
   };

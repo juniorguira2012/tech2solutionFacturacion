@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Cable, DollarSign, Edit3, Plus, Ruler, Trash2, TrendingUp, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import AccessDeniedAlert from '../components/AccessDeniedAlert';
+import axiosClient from '../api/axiosClient';
 
 const initialForm = {
   nombre: '', descripcion: '', cliente: '', zona: '', estado: 'planificado', presupuesto: 0, inversion: 0,
@@ -27,29 +28,27 @@ const Proyectos = () => {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
-  const API_BASE_URL = import.meta.env.VITE_API_URL?.includes('ventas.muebleshabitat.com')
-    ? '/api' : (import.meta.env.VITE_API_URL || '/api');
-
-  const headers = () => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${localStorage.getItem('posfactura_token') || ''}`,
-  });
-
-  const cargarProyectos = async () => {
+  const cargarProyectos = useCallback(async () => {
+    if (!usuario) return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/projects`, { headers: headers() });
-      if (!response.ok) throw new Error('No se pudieron cargar los proyectos');
-      setProyectos(await response.json());
+      const response = await axiosClient.get('/projects');
+      const data = response.data;
+      const proyectosArray = Array.isArray(data) ? data : (data?.data || []);
+      
+      setProyectos(proyectosArray);
       setError('');
     } catch (loadError) {
-      setError(loadError.message);
+      const errMessage = loadError.response?.data?.message || loadError.message;
+      setError(Array.isArray(errMessage) ? errMessage.join(', ') : errMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, [usuario]);
 
-  useEffect(() => { if (usuario) cargarProyectos(); }, [usuario]);
+  useEffect(() => { 
+    cargarProyectos(); 
+  }, [cargarProyectos]);
 
   const visibles = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -76,23 +75,42 @@ const Proyectos = () => {
     event.preventDefault();
     setSaving(true);
     try {
-      const url = `${API_BASE_URL}/projects${editingId ? `/${editingId}` : ''}`;
-      const response = await fetch(url, { method: editingId ? 'PATCH' : 'POST', headers: headers(), body: JSON.stringify({
+      const payload = {
         ...form,
-        presupuesto: Number(form.presupuesto), inversion: Number(form.inversion),
-        kilometrosPlanificados: Number(form.kilometrosPlanificados), kilometrosInstalados: Number(form.kilometrosInstalados),
-        cantidadFibraPlanificada: Number(form.cantidadFibraPlanificada), cantidadFibraUsada: Number(form.cantidadFibraUsada),
-      }) });
-      if (!response.ok) throw new Error('No se pudo guardar el proyecto');
-      await cargarProyectos(); setModalOpen(false); setForm(initialForm);
-    } catch (saveError) { setError(saveError.message); } finally { setSaving(false); }
+        presupuesto: Number(form.presupuesto), 
+        inversion: Number(form.inversion),
+        kilometrosPlanificados: Number(form.kilometrosPlanificados), 
+        kilometrosInstalados: Number(form.kilometrosInstalados),
+        cantidadFibraPlanificada: Number(form.cantidadFibraPlanificada), 
+        cantidadFibraUsada: Number(form.cantidadFibraUsada),
+      };
+
+      if (editingId) {
+        await axiosClient.patch(`/projects/${editingId}`, payload);
+      } else {
+        await axiosClient.post('/projects', payload);
+      }
+
+      await cargarProyectos(); 
+      setModalOpen(false); 
+      setForm(initialForm);
+    } catch (saveError) { 
+      const errMessage = saveError.response?.data?.message || saveError.message;
+      setError(Array.isArray(errMessage) ? errMessage.join(', ') : errMessage); 
+    } finally { 
+      setSaving(false); 
+    }
   };
 
   const eliminar = async id => {
     if (!window.confirm('¿Eliminar este proyecto?')) return;
-    const response = await fetch(`${API_BASE_URL}/projects/${id}`, { method: 'DELETE', headers: headers() });
-    if (response.ok) setProyectos(prev => prev.filter(project => project.id !== id));
-    else setError('No se pudo eliminar el proyecto');
+    try {
+      await axiosClient.delete(`/projects/${id}`);
+      setProyectos(prev => prev.filter(project => project.id !== id));
+    } catch (err) {
+      const errMessage = err.response?.data?.message || err.message;
+      setError(Array.isArray(errMessage) ? errMessage.join(', ') : errMessage);
+    }
   };
 
   if (!permisos.view) return <AccessDeniedAlert modulo="los proyectos de fibra" />;

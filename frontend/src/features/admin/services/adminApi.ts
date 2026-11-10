@@ -31,12 +31,35 @@ export const adminApi = {
   },
   // En src/services/adminApi.ts
 
-updateTenant: async (id: string, data: { name?: string; subdomain?: string }): Promise<Tenant> => {
-  const { data: response } = await API.put(`/tenants/${id}`, data);
-  return response;
-},
+  updateTenant: async (id: string, data: { name?: string; subdomain?: string }): Promise<Tenant> => {
+    const { data: response } = await API.put(`/tenants/${id}`, data);
+    return response;
+  },
 
   resetTenantPassword: async (tenantId: string, newPassword: string): Promise<void> => {
     await API.post(`/tenants/${tenantId}/reset-password`, { newPassword });
   },
+
+
+  async updateAdminProfile(data: { id: string; name?: string; email?: string; newPassword?: string }) {
+    // 👇 Leemos 'master_token' tal como lo guardaste en el login
+    const token = localStorage.getItem('master_token'); 
+
+    const response = await fetch('http://localhost:3000/api/admin/auth/profile', { // 👈 Añadimos '/api' si tu backend usa ese prefijo global
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      // Opcional: puedes leer el error exacto que manda el backend
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Error al actualizar el perfil del administrador');
+    }
+
+    return await response.json();
+  }
 };

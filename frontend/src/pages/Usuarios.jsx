@@ -130,7 +130,8 @@ const Usuarios = () => {
   const toggleEstadoRapido = async (user) => {
     if (user.id === 1 || user.id === usuario.id) return;
     try {
-      await actualizarUsuario({ ...user, isActive: !user.isActive });
+      // 💡 Pasamos el id por separado y el objeto con el campo a actualizar
+      await actualizarUsuario(user.id, { isActive: !user.isActive });
       mostrarToast(`Usuario ${!user.isActive ? 'activado' : 'suspendido'}`);
     } catch {
       mostrarToast("Error al cambiar estado", "error");
@@ -174,11 +175,12 @@ const Usuarios = () => {
     try {
       if (editandoId) {
         // Clonamos los datos y eliminamos el password si está vacío
-        const datosActualizados = { ...formUsuario, id: editandoId };
+        const datosActualizados = { ...formUsuario };
         if (!datosActualizados.password || datosActualizados.password.trim() === "") {
           delete datosActualizados.password;
         }
-        await actualizarUsuario(datosActualizados);
+        // 💡 Pasamos el editandoId (el id numérico) como primer argumento y los datos como segundo
+        await actualizarUsuario(editandoId, datosActualizados);
         mostrarToast("Usuario actualizado correctamente");
       } else {
         await agregarUsuario(formUsuario);

@@ -5,6 +5,8 @@ import { adminApi } from '../services/adminApi';
 import { CreateTenantModal } from '../components/CreateTenantModal';
 import { AdminStatsCards } from '../components/AdminStatsCards';
 import { TenantTable } from '../components/TenantTable';
+import { ProfileDropdown } from '../components/ProfileDropdown';
+import { AdminSettingsModal } from '../components/AdminSettingsModal';
 
 export const AdminDashboard: React.FC = () => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -22,6 +24,18 @@ export const AdminDashboard: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editSubdomain, setEditSubdomain] = useState('');
   const [editEmail, setEditEmail] = useState('');
+
+  // Estado para confirmar acción de cambiar estado (activo/suspendido)
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState<boolean>(false);
+  const [tenantToToggle, setTenantToToggle] = useState<Tenant | null>(null);
+
+  // Estados para Configuración del Master Admin
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [adminName, setAdminName] = useState<string>('Master Admin');
+  const [adminEmail, setAdminEmail] = useState<string>('techtwosolution2@gmail.com');
+  const [adminNewPassword, setAdminNewPassword] = useState<string>('');
+
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Form state para resetear contraseña
   const [newPassword, setNewPassword] = useState('');
@@ -41,6 +55,42 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => {
     fetchTenants();
   }, []);
+
+  const handleUpdateAdminSettings = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  try {
+    // 1. Obtener el usuario admin actual desde el localStorage (donde guardaste el login)
+    const adminUser = JSON.parse(localStorage.getItem('master_user') || '{}');
+    
+    if (!adminUser.id) {
+      throw new Error('No se encontró la sesión del administrador.');
+    }
+
+    // 2. Llamada real al backend que creamos
+    await adminApi.updateAdminProfile({
+      id: adminUser.id,
+      name: adminName,         // El estado o valor actual del input de nombre
+      email: adminEmail,       // El estado o valor actual del input de correo
+      newPassword: adminNewPassword, // La nueva contraseña (si se escribió)
+    });
+
+    // 3. Feedback visual exitoso
+    setNotification({ type: 'success', message: '¡Perfil de administrador actualizado con éxito!' });
+    
+    // Limpiar campo de contraseña y cerrar modal
+    setAdminNewPassword('');
+    setIsSettingsModalOpen(false);
+
+    // Opcional: Ocultar la notificación flotante después de 4 segundos
+    setTimeout(() => setNotification(null), 4000);
+
+  } catch (error: any) {
+    console.error('Error al actualizar la configuración:', error);
+    const errorMsg = error.response?.data?.message || 'Error al actualizar el perfil de administrador.';
+    setNotification({ type: 'error', message: errorMsg });
+  }
+};
 
   // 1. Crear Tenant (Recibe los datos directamente desde el componente CreateTenantModal)
   const handleCreateTenant = async (formData: { name: string; subdomain: string; adminEmail: string; adminPassword: string }) => {
@@ -95,33 +145,93 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // 4. Cambiar Estado (Activo / Suspendido)
-  const handleToggleStatus = async (id: string, currentStatus: boolean) => {
-    try {
-      await adminApi.updateTenantStatus(id, !currentStatus);
-      fetchTenants();
-    } catch (error) {
-      console.error('Error al cambiar estado:', error);
-    }
-  };
+  // 1. Abre el modal de confirmación en lugar de ejecutar la acción de golpe
+const confirmToggleStatus = (tenant: Tenant) => {
+  setTenantToToggle(tenant);
+  setIsConfirmModalOpen(true);
+};
+
+// 2. Esta función se ejecuta SÓLO cuando el usuario confirma en el modal
+const handleToggleStatus = async () => {
+  if (!tenantToToggle) return;
+
+  try {
+    const newStatus = !tenantToToggle.isActive;
+    await adminApi.updateTenantStatus(tenantToToggle.id, newStatus);
+    
+    // Cerramos el modal y refrescamos la lista
+    setIsConfirmModalOpen(false);
+    setTenantToToggle(null);
+    fetchTenants();
+  } catch (error) {
+    console.error('Error al cambiar estado:', error);
+    alert('Error al actualizar el estado del tenant');
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+              {/* Banner de notificación flotante */}
+      {notification && (
+          <div className={`fixed top-5 right-5 z-50 p-4 rounded-xl shadow-lg border flex items-center gap-3 transition-all duration-300 ${
+            notification.type === 'success' 
+              ? 'bg-emerald-900/90 border-emerald-500 text-emerald-100' 
+              : 'bg-rose-900/90 border-rose-500 text-rose-100'
+          }`}>
+            <span>{notification.type === 'success' ? '✅' : '❌'}</span>
+            <p className="text-sm font-medium">{notification.message}</p>
+          </div>
+        )}
       <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Header Principal */}
-        <div className="flex justify-between items-center">
+       <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Tech2Solution - Master Admin</h1>
             <p className="text-gray-500 mt-1">Panel de supervisión y control de tenants ERP</p>
           </div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow transition"
-          >
-            + Nuevo Tenant
-          </button>
+          
+
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow transition"
+            >
+              + Nuevo Tenant
+            </button>
+          
+
+            {/*Menú Desplegable de Perfil */}
+            <ProfileDropdown 
+              userName="Master Admin"
+              userEmail="techtwosolution2@gmail.com"
+              onLogout={() => {
+                // 1. Limpiamos las credenciales de Master Admin
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('master_user');
+                
+                // 2. Redirigimos al login exclusivo de Super Admin (ajusta la ruta según tu React Router)
+                window.location.href = '/admin/login'; 
+              }}
+              onOpenSettings={() => {
+                setIsSettingsModalOpen(true);
+              }}
+            />
+          </div>
         </div>
+          <AdminSettingsModal 
+            isOpen={isSettingsModalOpen}
+            onClose={() => {
+              setIsSettingsModalOpen(false);
+              setAdminNewPassword('');
+            }}
+            adminName={adminName}
+            setAdminName={setAdminName}
+            adminEmail={adminEmail}
+            setAdminEmail={setAdminEmail}
+            adminNewPassword={adminNewPassword}
+            setAdminNewPassword={setAdminNewPassword}
+            onSubmit={handleUpdateAdminSettings}
+          />
 
         {/* Tarjetas de Estadísticas */}
         <AdminStatsCards tenants={tenants} />
@@ -130,7 +240,10 @@ export const AdminDashboard: React.FC = () => {
         <TenantTable 
           tenants={tenants} 
           loading={loading} 
-          onToggleStatus={handleToggleStatus}
+          onToggleStatus={(id, currentStatus) => {
+            const tenant = tenants.find(t => t.id === id);
+            if (tenant) confirmToggleStatus(tenant);
+          }}
           onEdit={(tenant) => {
             setSelectedTenant(tenant);
             setEditName(tenant.name);
@@ -151,7 +264,7 @@ export const AdminDashboard: React.FC = () => {
           onCreateTenant={handleCreateTenant}
         />
 
-{/* --- MODAL EDITAR TENANT --- */}
+        {/* --- MODAL EDITAR TENANT --- */}
         {isEditModalOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
@@ -177,7 +290,6 @@ export const AdminDashboard: React.FC = () => {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                 </div>
-                {/* 👈 Nuevo campo de Correo */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico Admin</label>
                   <input
@@ -253,6 +365,48 @@ export const AdminDashboard: React.FC = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+
+        )}
+        
+        {/* --- MODAL DE CONFIRMACIÓN PARA CAMBIO DE ESTADO --- */}
+        {isConfirmModalOpen && tenantToToggle && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl max-w-sm w-full p-6 shadow-xl text-center space-y-4">
+              <div className={`mx-auto flex items-center justify-center h-12 w-12 rounded-full ${tenantToToggle.isActive ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                {tenantToToggle.isActive ? '⚠️' : '✅'}
+              </div>
+              
+              <h3 className="text-lg font-bold text-gray-900">
+                {tenantToToggle.isActive ? '¿Suspender Tenant?' : '¿Activar Tenant?'}
+              </h3>
+              
+              <p className="text-sm text-gray-500">
+                Estás a punto de {tenantToToggle.isActive ? 'suspender el acceso para' : 'activar nuevamente a'} <strong>{tenantToToggle.name}</strong> ({tenantToToggle.subdomain}).
+              </p>
+
+              <div className="flex justify-center space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsConfirmModalOpen(false);
+                    setTenantToToggle(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToggleStatus}
+                  className={`px-4 py-2 text-white rounded-lg shadow transition text-sm font-medium ${
+                    tenantToToggle.isActive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  Sí, {tenantToToggle.isActive ? 'Suspender' : 'Activar'}
+                </button>
+              </div>
             </div>
           </div>
         )}

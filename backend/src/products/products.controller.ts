@@ -34,21 +34,20 @@ export class ProductsController {
     return this.productsService.create(createProductDto);
   }
 
+  // 1. Rutas específicas primero (sin parámetros dinámicos ambiguos)
   @Get('summary/inventory')
   getInventorySummary() {
     return this.productsService.getInventorySummary();
   }
 
-  // ─── 3. OBTENER TODOS ──────────────────────────────────────────────────
-  // src/products/products.controller.ts
-@Get()
+  // 2. Ruta general de listado
+  @Get()
   async findAll(
     @Query('page') page?: string | number,
     @Query('limit') limit?: string | number,
     @Query('isActive') isActive?: string,
     @Query('search') search?: string,
   ) {
-    // 1. Transformamos de forma segura los parámetros que vienen como string desde la URL
     const pageNum = page !== undefined ? Number(page) : 1;
     const limitNum = limit !== undefined ? Number(limit) : 20;
 
@@ -65,12 +64,7 @@ export class ProductsController {
     });
   }
 
-  @Get(':id/serials')
-  async getProductSerials(@Param('id', ParseIntPipe) id: number) {
-    return this.productsService.findSerialsByProduct(id);
-  }
-
-  // ─── 4. OBTENER UNO POR ID ─────────────────────────────────────────────
+  // 3. Ruta genérica con parámetro al final
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.productsService.findOne(+id);

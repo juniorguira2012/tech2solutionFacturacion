@@ -7,7 +7,7 @@ import {
 import { useInventario } from '../../context/InventarioContext';
 import { useAuth } from '../../context/AuthContext';
 import ProductoModal from './ProductoModal';
-
+import axiosClient from '../../api/axiosClient'; // Ajusta la ruta según tu estructura
 //Modal de Confirmación
 const ConfirmModal = ({ isOpen, onConfirm, onCancel, titulo, descripcion, tipo = 'danger' }) => {
   if (!isOpen) return null;
@@ -62,41 +62,33 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => {
     const [loadingSeriales, setLoadingSeriales] = useState({});
     const [mostrarSeriales, setMostrarSeriales] = useState({});
 
-const cargarSerialesBajoDemanda = async (e, prodId) => {
+// Asegúrate de que tu función de carga de seriales use axiosClient y un try/catch limpio:
+  const cargarSerialesBajoDemanda = async (e, prodId) => {
     e?.stopPropagation();
-
     if (!prodId) return;
 
-    // 1. Alternamos visibilidad solo para este ID
     const estaMostrando = !!mostrarSeriales[prodId];
     setMostrarSeriales((prev) => ({ ...prev, [prodId]: !estaMostrando }));
 
-    // 2. Si vamos a mostrar y aún no hemos cargado sus seriales, los pedimos a la API
     if (!estaMostrando && !serialesProducto[prodId]) {
       setLoadingSeriales((prev) => ({ ...prev, [prodId]: true }));
 
       try {
-        // Ajusta la URL de tu endpoint si difiere ligeramente
-        const res = await api.get(`/seriales/producto/${prodId}`);
+        // 🚀 Debe usar axiosClient.get para enviar automáticamente las cabeceras de autorización, tenant y permisos
+        const res = await axiosClient.get(`/product-serials/product/${prodId}`);
         
         setSerialesProducto((prev) => ({
           ...prev,
           [prodId]: res.data || [],
         }));
       } catch (err) {
-        console.error("Error al cargar seriales del producto:", err);
+        const errorMsg = err.response?.data?.message || err.message;
+        console.error("Error al cargar seriales del producto:", errorMsg);
       } finally {
         setLoadingSeriales((prev) => ({ ...prev, [prodId]: false }));
       }
     }
   };
-
-  useEffect(() => {
-    if (typeof setTerminoBusqueda === 'function') {
-      setTerminoBusqueda('');
-      cargarProductosPrioritarios(1, '');
-    }
-  }, []);
 
   const {
     productos,
@@ -214,7 +206,7 @@ const abrirEditar = async (prod) => {
   let serialesDisponiblesParaTabla = serialesHistoricosTotales;
   if (prod.isSerialized) {
     try { 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('posfactura_token');
       // // Ajusta la URL de tu endpoint local
       // const res = await fetch(`http://localhost:3000/api/products/${prod.id}/serials`, {
       //   headers: { 'Authorization': `Bearer ${token}` }
@@ -226,15 +218,30 @@ const abrirEditar = async (prod) => {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
       //Nota: Como API_URL ya incluye '/api', aquí solo concatenamos '/products/...'
-      const res = await fetch(`${API_URL}/products/${prod.id}/serials`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`${API_URL}/product-serials/product/${prod.id}`, {
+        headers: {
+          'x-tenant-id': localStorage.getItem('current_tenant_subdomain') || localStorage.getItem('posfactura_tenant') || 'onered',
+          'Authorization': `Bearer ${token}`,
+        }
       });
+      if (!res.ok) throw new Error(`Error ${res.status} al cargar seriales`);
       if (res.ok) {
         const dataSeriales = await res.json();
-        serialesDisponiblesParaTabla = Array.isArray(dataSeriales) ? dataSeriales : (dataSeriales.seriales || []);
+        serialesHistoricosTotales = Array.isArray(dataSeriales)
+          ? dataSeriales
+          : Array.isArray(dataSeriales?.data)
+            ? dataSeriales.data
+            : Array.isArray(dataSeriales?.seriales)
+              ? dataSeriales.seriales
+              : [];
+        serialesDisponiblesParaTabla = serialesHistoricosTotales.filter(
+          serial => serial.status === 'disponible',
+        );
       }
     } catch (error) {
-      console.error("Error al obtener los seriales disponibles:", error);
+      console.error("Error al obtener los seriales del producto:", error);
+      mostrarToast(error.message || "No se pudieron cargar los seriales del producto", "error");
+      return;
     }
   }
 
@@ -282,10 +289,11 @@ const abrirEditar = async (prod) => {
     _originalData: datosIniciales,
   });
 
-  setIsEditing(true);
-  setIsModalOpen(true);
-};
-    const handleUpdateSerial = async (serialId, nuevoNumero) => {
+    setIsEditing(true);
+    setIsModalOpen(true);
+  };
+
+  const handleUpdateSerial = async (serialId, nuevoNumero) => {
       // Esta función ahora solo llama al contexto. La actualización del estado
       // del formulario se manejará dentro del componente del modal.
       try {

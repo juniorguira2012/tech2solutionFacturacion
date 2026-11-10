@@ -255,13 +255,14 @@ const AlmacenSection = ({ mostrarToast, permisos }) => {
 
   const handleGuardarAlmacen = async (e) => {
     e.preventDefault();
-    // 🛡️ Verificación de permiso
-    if ((isEditingAlmacen && !permisosAlmacen?.edit) || (!isEditingAlmacen && !permisosAlmacen?.create)) {
-      mostrarToast("No tienes permiso para realizar esta acción", "error");
-      return;
-    }
+
     try {
       if (isEditingAlmacen) {
+        if (!editandoAlmacenId) {
+          mostrarToast("Error: No se ha seleccionado un almacén válido para editar", "error");
+          return;
+        }
+
         await actualizarAlmacen({ id: editandoAlmacenId, ...almacenFormData });
         mostrarToast("Almacén actualizado");
       } else {
@@ -270,7 +271,7 @@ const AlmacenSection = ({ mostrarToast, permisos }) => {
       }
       handleCerrarAlmacenModal();
     } catch (error) {
-      mostrarToast("Error al conectar con el servidor", "error");
+      mostrarToast(error.message || "No se pudo guardar el almacén", "error");
     }
   };
 
@@ -288,7 +289,6 @@ const AlmacenSection = ({ mostrarToast, permisos }) => {
   };
 
   const handleEliminarUbicacion = (almacen, idx) => {
-    // 🛡️ Verificación de permiso
     if (!permisosAlmacen?.delete) {
       mostrarToast("No tienes permiso para eliminar ubicaciones", "error");
       return;
@@ -301,10 +301,11 @@ const AlmacenSection = ({ mostrarToast, permisos }) => {
       onConfirm: async () => {
         try {
           const nuevasUbicaciones = almacen.ubicaciones.filter((_, i) => i !== idx);
+          // 💡 Separamos el id del objeto de actualización
           await actualizarAlmacen({ id: almacen.id, ubicaciones: nuevasUbicaciones });
           mostrarToast("Ubicación eliminada");
         } catch (error) {
-          mostrarToast("Error al eliminar ubicación", "error");
+          mostrarToast(error.message || "Error al eliminar ubicación", "error");
         } finally {
           cerrarConfirm();
         }

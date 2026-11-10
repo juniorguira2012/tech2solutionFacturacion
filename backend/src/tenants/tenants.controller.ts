@@ -27,7 +27,7 @@ export class TenantsController {
   @Put(':id')
   update(
     @Param('id') id: string, 
-    @Body() updateData: { name?: string; subdomain?: string }
+    @Body() updateData: { name?: string; subdomain?: string; email?: string } // 👈 Añadimos email aquí
   ) {
     return this.tenantsService.update(id, updateData);
   }

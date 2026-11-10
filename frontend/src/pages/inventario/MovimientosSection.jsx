@@ -1,6 +1,7 @@
 // components/inventario/MovimientosSection.jsx
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ArrowLeftRight, List, Download, Truck, RefreshCw, Trash2, Search, X, UserCheck, Check, Tag } from 'lucide-react';
+import axiosClient from '../../api/axiosClient';
 import { useInventario } from '../../context/InventarioContext';
 import { useVentas } from '../../context/VentasContext';
 import { useAuth } from '../../context/AuthContext';
@@ -79,6 +80,12 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   const [itemsEnCarritoMovimiento, setItemsEnCarritoMovimiento] = useState([]);
   const [busquedaCarrito, setBusquedaCarrito] = useState('');
   const [resultadosBusquedaCarrito, setResultadosBusquedaCarrito] = useState([]); 
+  const [cargandoBusquedaCarrito, setCargandoBusquedaCarrito] = useState(false);
+  const [cargandoMasProductosCarrito, setCargandoMasProductosCarrito] = useState(false);
+  const [errorBusquedaCarrito, setErrorBusquedaCarrito] = useState('');
+  const [paginaBusquedaCarrito, setPaginaBusquedaCarrito] = useState(1);
+  const [ultimaPaginaBusquedaCarrito, setUltimaPaginaBusquedaCarrito] = useState(1);
+  const busquedaCarritoRequestId = useRef(0);
   const [resultadosBusquedaFactura, setResultadosBusquedaFactura] = useState([]);
 
   const [subTipoDevolucion, setSubTipoDevolucion] = useState('producto'); 
@@ -93,18 +100,101 @@ const MovimientosSection = ({ mostrarToast, permisos, accionInicial }) => {
   const [serialesSeleccionados, setSerialesSeleccionados] = useState([]);
   const [busquedaSerial, setBusquedaSerial] = useState('');
 
-  // Lógica de búsqueda para el carrito de movimientos masivos
+  // Busca en el catálogo del servidor, no solo en la página de productos cargada.
   useEffect(() => {
-    if (!busquedaCarrito.trim()) {
+    const termino = busquedaCarrito.trim();
+    const requestId = ++busquedaCarritoRequestId.current;
+
+    if (termino.length < 2) {
       setResultadosBusquedaCarrito([]);
+      setCargandoBusquedaCarrito(false);
+      setCargandoMasProductosCarrito(false);
+      setErrorBusquedaCarrito('');
+      setPaginaBusquedaCarrito(1);
+      setUltimaPaginaBusquedaCarrito(1);
       return;
     }
-    const filtrados = (productos || []).filter(p => 
-      p.nombre?.toLowerCase().includes(busquedaCarrito.toLowerCase()) || 
-      (p.codigo && p.codigo.toLowerCase().includes(busquedaCarrito.toLowerCase()))
-    );
-    setResultadosBusquedaCarrito(filtrados);
-  }, [busquedaCarrito, productos]);
+
+    setResultadosBusquedaCarrito([]);
+    setCargandoBusquedaCarrito(true);
+    setCargandoMasProductosCarrito(false);
+    setErrorBusquedaCarrito('');
+    setPaginaBusquedaCarrito(1);
+    setUltimaPaginaBusquedaCarrito(1);
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await axiosClient.get('/products', {
+          params: { search: termino, page: 1, limit: 50 },
+          signal: controller.signal,
+        });
+        if (requestId !== busquedaCarritoRequestId.current) return;
+
+        const responseData = res.data;
+        const lista = Array.isArray(responseData?.data)
+          ? responseData.data
+          : Array.isArray(responseData)
+            ? responseData
+            : [];
+        setResultadosBusquedaCarrito(lista);
+        setPaginaBusquedaCarrito(Number(responseData?.meta?.page) || 1);
+        setUltimaPaginaBusquedaCarrito(Number(responseData?.meta?.lastPage) || 1);
+      } catch (error) {
+        if (error.code !== 'ERR_CANCELED' && requestId === busquedaCarritoRequestId.current) {
+          console.error('Error buscando productos para el carrito:', error);
+          setErrorBusquedaCarrito('No se pudieron buscar los productos. Inténtalo de nuevo.');
+        }
+      } finally {
+        if (requestId === busquedaCarritoRequestId.current) {
+          setCargandoBusquedaCarrito(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [busquedaCarrito]);
+
+  const cargarMasProductosCarrito = async () => {
+    const termino = busquedaCarrito.trim();
+    const siguientePagina = paginaBusquedaCarrito + 1;
+    if (cargandoMasProductosCarrito || siguientePagina > ultimaPaginaBusquedaCarrito) return;
+
+    const requestId = ++busquedaCarritoRequestId.current;
+    setCargandoMasProductosCarrito(true);
+    setErrorBusquedaCarrito('');
+
+    try {
+      const res = await axiosClient.get('/products', {
+        params: { search: termino, page: siguientePagina, limit: 50 },
+      });
+      if (requestId !== busquedaCarritoRequestId.current || termino !== busquedaCarrito.trim()) return;
+
+      const responseData = res.data;
+      const lista = Array.isArray(responseData?.data)
+        ? responseData.data
+        : Array.isArray(responseData)
+          ? responseData
+          : [];
+      setResultadosBusquedaCarrito(actuales => {
+        const idsActuales = new Set(actuales.map(producto => producto.id));
+        return [...actuales, ...lista.filter(producto => !idsActuales.has(producto.id))];
+      });
+      setPaginaBusquedaCarrito(Number(responseData?.meta?.page) || siguientePagina);
+      setUltimaPaginaBusquedaCarrito(Number(responseData?.meta?.lastPage) || siguientePagina);
+    } catch (error) {
+      if (requestId === busquedaCarritoRequestId.current) {
+        console.error('Error cargando más productos para el carrito:', error);
+        setErrorBusquedaCarrito('No se pudieron cargar más productos. Inténtalo de nuevo.');
+      }
+    } finally {
+      if (requestId === busquedaCarritoRequestId.current) {
+        setCargandoMasProductosCarrito(false);
+      }
+    }
+  };
 
   // Lógica de búsqueda de facturas para el dropdown
   useEffect(() => {
@@ -536,8 +626,8 @@ return (
       <div className="flex flex-col lg:flex-row gap-3">
         <div className="relative lg:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={busquedaKardex}
             onChange={(e) => setBusquedaKardex(e.target.value)}
             placeholder="Buscar producto por nombre o código..." 
@@ -752,9 +842,6 @@ return (
           </div>
         </div>
       )}
-
-      
-
       {/* MODAL ÚNICO DE FLUJOS DINÁMICOS */}
       {modalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
@@ -822,27 +909,68 @@ return (
                     )}
                   </div>
 
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input 
-                      type="text" 
-                      placeholder={tipoMovimiento === 'despachar' ? "Buscar producto para despachar..." : "Buscar producto para recibir..."}
-                      className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white"
-                      value={busquedaCarrito}
-                      onChange={(e) => setBusquedaCarrito(e.target.value)}
-                    />
-                    {resultadosBusquedaCarrito.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 max-h-48 overflow-y-auto p-2">
+              {/* BUSCADOR PARA EL CARRITO DE MOVIMIENTOS */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="text"
+                  placeholder={tipoMovimiento === 'despachar' ? "Buscar producto para despachar..." : "Buscar producto para recibir..."}
+                  className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 outline-none focus:border-brand font-bold text-xs bg-white"
+                  value={busquedaCarrito}
+                  onChange={(e) => setBusquedaCarrito(e.target.value)}
+                />
+                {busquedaCarrito.trim().length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 max-h-48 overflow-y-auto p-2">
+                    {busquedaCarrito.trim().length < 2 ? (
+                      <p className="px-4 py-3 text-center text-[10px] font-bold text-slate-400">
+                        Escribe al menos 2 caracteres para buscar.
+                      </p>
+                    ) : (
+                      <>
+                        {cargandoBusquedaCarrito && (
+                          <p className="px-4 py-3 text-center text-[10px] font-bold text-slate-400">
+                            Buscando productos...
+                          </p>
+                        )}
+                        {errorBusquedaCarrito && (
+                          <p className="px-4 py-3 text-center text-[10px] font-bold text-rose-500">
+                            {errorBusquedaCarrito}
+                          </p>
+                        )}
+                        {!cargandoBusquedaCarrito && !errorBusquedaCarrito && resultadosBusquedaCarrito.length === 0 && (
+                          <p className="px-4 py-3 text-center text-[10px] font-bold text-slate-400">
+                            No se encontraron productos.
+                          </p>
+                        )}
                         {resultadosBusquedaCarrito.map(prod => (
-                          <div key={prod.id} onClick={() => agregarAlCarritoMovimiento(prod)} className="flex justify-between items-center px-4 py-2 hover:bg-indigo-50 rounded-xl cursor-pointer transition-colors">
+                          <div
+                            key={prod.id}
+                            onClick={() => {
+                              agregarAlCarritoMovimiento(prod);
+                              setBusquedaCarrito("");
+                              setResultadosBusquedaCarrito([]);
+                            }}
+                            className="flex justify-between items-center px-4 py-2 hover:bg-indigo-50 rounded-xl cursor-pointer transition-colors"
+                          >
                             <span className="text-[10px] font-black text-slate-700 uppercase">{prod.nombre} ({prod.codigo})</span>
                             <span className="text-[9px] font-bold text-brand">STOCK: {prod.stock}</span>
                           </div>
                         ))}
-                      </div>
+                        {paginaBusquedaCarrito < ultimaPaginaBusquedaCarrito && (
+                          <button
+                            type="button"
+                            onClick={cargarMasProductosCarrito}
+                            disabled={cargandoMasProductosCarrito}
+                            className="w-full px-4 py-2 mt-1 text-[10px] font-black text-brand uppercase hover:bg-indigo-50 rounded-xl disabled:opacity-50"
+                          >
+                            {cargandoMasProductosCarrito ? 'Cargando...' : 'Ver más resultados'}
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
-
+                )}
+              </div>
                   <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                     <div className="max-h-64 overflow-y-auto">
                       <table className="w-full text-left">
