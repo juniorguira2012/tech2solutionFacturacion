@@ -394,7 +394,7 @@ export class MovementsService {
           nuevoStock = allStocks.reduce((sum, s) => sum + Number(s.cantidad), 0);
 
           if (createMovementDto.costoUnitario !== undefined && createMovementDto.costoUnitario !== null) {
-            producto.precio = Number(createMovementDto.costoUnitario);
+            producto.costoCompra = Number(createMovementDto.costoUnitario);
           }
           
         } else {
@@ -406,7 +406,7 @@ export class MovementsService {
 
       await queryRunner.manager.update(Product, producto.id, { 
         stock: nuevoStock,
-        precio: producto.precio 
+        costoCompra: producto.costoCompra,
       });
 
       const movement = queryRunner.manager.create(Movement, {
@@ -421,7 +421,7 @@ export class MovementsService {
         usuarioId: usuarioId ? String(usuarioId) : undefined,
         almacenOrigen: almacenOrigen || targetAlmacen,
         almacenDestino: almacenDestino || targetAlmacen,
-        costoUnitario: createMovementDto.costoUnitario ? Number(createMovementDto.costoUnitario) : undefined,
+        costoUnitario: createMovementDto.costoUnitario != null ? Number(createMovementDto.costoUnitario) : undefined,
         referencia: referencia || undefined,
       } as any);
 
@@ -579,7 +579,7 @@ export class MovementsService {
           serials: Array.isArray(serials) ? serials.map(s => String(s).trim()).filter(Boolean) : [],
           nuevoStock: Number(producto.stock),
           nota: `${nota || ''}${batchInfo ? ` | Lote: ${batchInfo}` : ''} | Almacén: ${almacenNormalizado}`,
-          costoUnitario: producto.precio ? Number(producto.precio) : undefined,
+          costoUnitario: producto.costoCompra ? Number(producto.costoCompra) : undefined,
           almacenOrigen: almacenNormalizado,
           almacenDestino: almacenNormalizado,
           referencia: referencia ? String(referencia) : undefined,

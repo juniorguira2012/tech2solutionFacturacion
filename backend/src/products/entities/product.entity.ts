@@ -36,6 +36,9 @@ export class Product {
   @Column('decimal', { precision: 10, scale: 2 })
   precio: number;
 
+  @Column('decimal', { precision: 10, scale: 2, default: 0 })
+  costoCompra: number;
+
   @Column({ default: 0 })
   stock: number;
 

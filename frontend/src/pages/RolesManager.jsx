@@ -26,6 +26,7 @@ export const modulos = [
         { id: 'unidades', nombre: 'Unidades de Medida', desc: 'Configuración de unidades (Kg, Lb, etc.)', actions: ['view', 'create', 'edit', 'delete'] },
         { id: 'campos', nombre: 'Campos Personalizados', desc: 'Añadir campos extra a productos', actions: ['view', 'create', 'edit', 'delete'] },
         { id: 'integraciones', nombre: 'Integraciones', desc: 'Conexión con sistemas externos', actions: ['view', 'edit'] },
+        { id: 'margenes', nombre: 'Márgenes y Rentabilidad', desc: 'Consulta de costos, márgenes y utilidad potencial del inventario', actions: ['view'] },
       ]
     },
     { id: 'clientes', nombre: 'Gestión de Clientes', desc: 'Control sobre la cartera de clientes', actions: ['view', 'create', 'edit', 'delete'] },

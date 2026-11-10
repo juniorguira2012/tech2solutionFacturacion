@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import {
   Package, Tags, ArrowLeftRight, CheckCircle, Edit3,
   ClipboardList, Bell, Layers3, AlertTriangle, RefreshCw, Warehouse,
-  Ruler, Braces, Plug, Truck, HandHelping, Wrench, Fingerprint
+  Ruler, Braces, Plug, Truck, HandHelping, Wrench, Fingerprint, TrendingUp
 } from 'lucide-react';
 import { useInventario } from '../context/InventarioContext';
 import { useAuth } from '../context/AuthContext';
@@ -21,6 +21,7 @@ import LotesSection from './inventario/LotesSection';
 import ComodatoSection from './inventario/ComodatoSection';
 import TecnicosSection from './inventario/TecnicosSection';
 import SerialesSection from './inventario/SerialesSection';
+import MargenesRentabilidadSection from './inventario/MargenesRentabilidadSection';
 import AccessDeniedAlert from '../components/AccessDeniedAlert'; 
 
 const Inventario = () => {
@@ -50,6 +51,7 @@ const Inventario = () => {
     { id: 'campos', label: 'Campos Personalizados', icon: Braces },
     { id: 'comodato', label: 'Comodato', icon: HandHelping },
     { id: 'integraciones', label: 'Integraciones', icon: Plug },
+    { id: 'margenes', label: 'Márgenes y Rentabilidad', icon: TrendingUp },
   ];
 
   // 🛡️ Filtramos las secciones que el usuario puede ver
@@ -219,6 +221,9 @@ const Inventario = () => {
           )}
           {seccionActiva === 'lotes' && (permisos.subModulos?.lotes?.view ?? true) && (
             <LotesSection mostrarToast={mostrarToast} permisos={permisos} />
+          )}
+          {seccionActiva === 'margenes' && (permisos.subModulos?.margenes?.view ?? true) && (
+            <MargenesRentabilidadSection />
           )}
         </div>
       </section>

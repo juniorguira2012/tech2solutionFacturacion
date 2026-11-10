@@ -1,0 +1,2 @@
+ALTER TABLE "products"
+ADD COLUMN IF NOT EXISTS "costoCompra" numeric(10, 2) NOT NULL DEFAULT 0;

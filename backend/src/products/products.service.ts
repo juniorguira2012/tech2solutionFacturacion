@@ -18,6 +18,12 @@ export interface FindAllParams {
   search?: string;
 }
 
+export interface ProfitabilityParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
 @Injectable({ scope: Scope.REQUEST })
 export class ProductsService {
   constructor(
@@ -233,7 +239,7 @@ export class ProductsService {
   }
 
   async update(id: number, updateProductDto: UpdateProductDto) {
-    const queryRunner = this.dataSource.createQueryRunner();
+    const queryRunner = this.getActiveDataSource().createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -460,6 +466,97 @@ export class ProductsService {
       productsPerCategory,
       totalProducts: parseInt(totalsResult.totalProducts, 10) || 0,
       totalStock: parseInt(totalsResult.totalStock, 10) || 0,
+    };
+  }
+
+  async getProfitabilityReport({ page = 1, limit = 20, search }: ProfitabilityParams = {}) {
+    const productRepo = await this.getRepository(Product);
+    const take = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    const currentPage = Math.max(Number(page) || 1, 1);
+    const query = productRepo
+      .createQueryBuilder('product')
+      .select([
+        'product.id',
+        'product.nombre',
+        'product.codigo',
+        'product.categoria',
+        'product.precio',
+        'product.costoCompra',
+        'product.stock',
+      ])
+      .where('product.isActive = :isActive', { isActive: true })
+      .orderBy('product.nombre', 'ASC')
+      .skip((currentPage - 1) * take)
+      .take(take);
+
+    if (search?.trim()) {
+      const term = `%${search.trim().toLowerCase()}%`;
+      query.andWhere(
+        '(LOWER(product.nombre) LIKE :term OR LOWER(product.codigo) LIKE :term OR LOWER(product.categoria) LIKE :term)',
+        { term },
+      );
+    }
+
+    const [products, total] = await query.getManyAndCount();
+    const summaryResult = await productRepo
+      .createQueryBuilder('product')
+      .select('COUNT(product.id)', 'totalProducts')
+      .addSelect('COUNT(CASE WHEN product.costoCompra > 0 THEN 1 END)', 'productsWithCost')
+      .addSelect('COUNT(CASE WHEN product.costoCompra <= 0 THEN 1 END)', 'productsWithoutCost')
+      .addSelect('COALESCE(SUM(product.stock), 0)', 'totalStock')
+      .addSelect(
+        'COALESCE(SUM(CASE WHEN product.costoCompra > 0 THEN product.stock * product.costoCompra ELSE 0 END), 0)',
+        'inventoryCostValue',
+      )
+      .addSelect(
+        'COALESCE(SUM(CASE WHEN product.costoCompra > 0 THEN product.stock * product.precio ELSE 0 END), 0)',
+        'inventorySaleValue',
+      )
+      .addSelect(
+        'COALESCE(SUM(CASE WHEN product.costoCompra > 0 THEN product.stock * (product.precio - product.costoCompra) ELSE 0 END), 0)',
+        'potentialProfit',
+      )
+      .where('product.isActive = :isActive', { isActive: true })
+      .getRawOne();
+
+    const inventorySaleValue = Number(summaryResult.inventorySaleValue) || 0;
+    const potentialProfit = Number(summaryResult.potentialProfit) || 0;
+
+    return {
+      data: products.map((product) => {
+        const price = Number(product.precio) || 0;
+        const cost = Number(product.costoCompra) || 0;
+        const hasCost = cost > 0;
+        const unitProfit = hasCost ? price - cost : null;
+
+        return {
+          id: product.id,
+          nombre: product.nombre,
+          codigo: product.codigo,
+          categoria: product.categoria,
+          precio: price,
+          costoCompra: cost,
+          stock: Number(product.stock) || 0,
+          utilidadUnitaria: unitProfit,
+          margenPorcentaje: hasCost && price > 0 ? ((price - cost) / price) * 100 : null,
+          utilidadPotencial: hasCost ? ((price - cost) * Number(product.stock)) : null,
+        };
+      }),
+      summary: {
+        totalProducts: Number(summaryResult.totalProducts) || 0,
+        productsWithCost: Number(summaryResult.productsWithCost) || 0,
+        productsWithoutCost: Number(summaryResult.productsWithoutCost) || 0,
+        totalStock: Number(summaryResult.totalStock) || 0,
+        inventoryCostValue: Number(summaryResult.inventoryCostValue) || 0,
+        inventorySaleValue,
+        potentialProfit,
+        marginPercentage: inventorySaleValue > 0 ? (potentialProfit / inventorySaleValue) * 100 : 0,
+      },
+      meta: {
+        total,
+        page: currentPage,
+        lastPage: Math.ceil(total / take) || 1,
+      },
     };
   }
 }

@@ -126,7 +126,7 @@ export class InventoryCountsService {
         codigo: product.codigo,
         cantidadSistema: product.stock,
         cantidadContada: addCountItemDto.cantidadContada ?? undefined,
-        precioUnitario: product.precio,
+        precioUnitario: product.costoCompra,
         unidadMedida: product.unidadMedida || 'Unidad',
       });
 

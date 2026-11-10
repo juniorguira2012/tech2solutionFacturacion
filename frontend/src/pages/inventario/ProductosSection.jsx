@@ -169,7 +169,7 @@ const ProductosSection = ({ mostrarToast, permisos, productoInicial }) => {
 
   // Estado inicial del formulario, definido en un solo lugar para reutilización
   const [formData, setFormData] = useState({
-    nombre: '', categoria: 'General', precio: '', stock: '', codigo: '',
+    nombre: '', categoria: 'General', precio: '', costoCompra: '', stock: '', codigo: '',
     modelo: '', serie: '', stockMinimo: '5', // <-- Valor inicial para el nuevo campo
     isSerialized: false, // ... (resto de campos)
     serialsInput: '', // Para nuevos seriales
@@ -263,6 +263,7 @@ const abrirEditar = async (prod) => {
     nombre: prod.nombre || '',
     categoria: prod.categoria || '',
     precio: Number(prod.precio ?? 0),
+    costoCompra: Number(prod.costoCompra ?? 0),
     stock: Number(prod.stock ?? 0),
     stockMinimo: String(prod.stockMinimo ?? '5'),
     codigo: prod.codigo || '',
@@ -542,6 +543,7 @@ const handleSave = async (e) => {
     almacen: formData.almacen || 'Principal',
     id: isEditing && !isNaN(idNumerico) ? idNumerico : undefined, 
     precio: parseFloat(formData.precio) || 0,     
+    costoCompra: parseFloat(formData.costoCompra) || 0,
     stockMinimo: parseInt(formData.stockMinimo, 10) || 0, 
     proveedorId: datosBase.proveedorId ? Number(datosBase.proveedorId) : undefined,
     ...(!formData.isSerialized && { stock: parseInt(formData.stock) || 0 }),
@@ -621,7 +623,7 @@ const handleEliminar = (prod) => {
     setIsEditing(false);
     // Reseteamos el formulario. La categoría ahora inicia vacía y stockMinimo con su default.
     setFormData({ 
-      nombre: '', categoria: '', precio: '', stock: '', codigo: '', modelo: '', serie: '',
+      nombre: '', categoria: '', precio: '', costoCompra: '', stock: '', codigo: '', modelo: '', serie: '',
       isSerialized: false, serialsInput: '', serialesExistentes: [], almacen: 'Principal', 
       pasillo: '', fila: '', unidadMedida: 'Unidad', proveedorId: '', movimientoInventario: 'Entrada', stockMinimo: '5',
       descripcion: '', imagen: '', camposPersonalizados: [] 

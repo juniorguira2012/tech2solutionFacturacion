@@ -153,10 +153,14 @@ const ProductoModal = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
             <div>
-              <label className="text-[10px] font-black text-indigo-400 uppercase ml-1">Precio *</label>
+              <label className="text-[10px] font-black text-indigo-400 uppercase ml-1">Precio de Venta *</label>
               <input type="number" step="0.01" required className="w-full px-5 py-3 rounded-2xl border-indigo-100 border outline-none font-black text-sm" value={formData.precio} onChange={(e) => setFormData({...formData, precio: e.target.value})}/>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-emerald-600 uppercase ml-1">Costo de Compra *</label>
+              <input type="number" min="0" step="0.01" required className="w-full px-5 py-3 rounded-2xl border-emerald-100 border outline-none font-black text-sm" value={formData.costoCompra} onChange={(e) => setFormData({...formData, costoCompra: e.target.value})}/>
             </div>
             <div>
               <label className="text-[10px] font-black text-red-400 uppercase ml-1">Alerta Stock Mínimo *</label>

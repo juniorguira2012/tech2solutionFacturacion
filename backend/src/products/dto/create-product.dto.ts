@@ -36,6 +36,12 @@ export class CreateProductDto {
   @Min(0)
   precio: number;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  costoCompra?: number;
+
   @Type(() => Number)
   @IsInt()
   @Min(0)

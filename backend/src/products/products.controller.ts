@@ -40,6 +40,19 @@ export class ProductsController {
     return this.productsService.getInventorySummary();
   }
 
+  @Get('profitability')
+  getProfitabilityReport(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.productsService.getProfitabilityReport({
+      page: page !== undefined ? Number(page) : 1,
+      limit: limit !== undefined ? Number(limit) : 20,
+      search,
+    });
+  }
+
   // 2. Ruta general de listado
   @Get()
   async findAll(
